@@ -12,6 +12,6 @@ cyan build -u
 cd build
 
 # amalg.lua -s main.lua -o ../build-lua/process.lua \
-#     globals dbUtils database userManager gameLogic gameState 
+#     globals dbUtils database 
 
 # FINAL RESULT is build/main.lua
