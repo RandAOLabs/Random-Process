@@ -45,11 +45,32 @@ function database.initializeDatabase(): boolean
       -- Providers DB Table
       [[
         CREATE TABLE IF NOT EXISTS Providers (
-          user_id TEXT PRIMARY KEY,
+          provider_id TEXT PRIMARY KEY,
           stake INTEGER,
           active INTEGER,
+          active_requests TEXT,
           random_balance INTEGER,
           created_at INTEGER
+        );
+      ]],
+      [[
+        CREATE TABLE IF NOT EXISTS RandomnessRequests (
+          request_id INTEGER PRIMARY KEY,
+          requester TEXT,
+          providers TEXT,
+          created_at INTEGER
+        );
+      ]],
+      [[
+        CREATE TABLE ProviderRequestResponse (
+          request_id INTEGER,                               
+          provider_id TEXT,                              
+          input_value TEXT,                               
+          output_value TEXT,                               
+          proof TEXT,                                      
+          entropy TEXT,                                     
+          PRIMARY KEY (request_id, provider_id),          
+          FOREIGN KEY (request_id) REFERENCES RandomRequest(request_id)
         );
       ]],
 

@@ -13,10 +13,9 @@ end
 
 _G.Owner = '123MyOwner321'
 _G.MainProcessId = '123xyzMySelfabc321'
-_G.AoCredProcessId = 'AoCred-123xyz'
-
+_G.InitalBalance = 10
+_G.EndBalance = 7
 _G.Processes = {
-  [_G.AoCredProcessId] = require 'aocred' (_G.AoCredProcessId)
 }
 
 _G.Handlers = require "handlers"
@@ -27,26 +26,28 @@ _G.ao = require "ao" (_G.MainProcessId) -- make global so that the main process 
 _G.ao.env = {
   Process = {
     Tags = {
-      ["Name"] = "GreeterProcess",
+      ["Name"] = "RandProcess",
       -- ... add other tags that would be passed in when the process is spawned
     }
   }
 }
 
 local process = require "process" -- require so that process handlers are loaded
+local json = require "json"
+local database = require "database"
+local providerManager = require "providerManager"
 -- local utils = require "utils"
 -- local bint = require ".bint" (512)
 
 
 local resetGlobals = function()
   -- according to initialization in process.lua
-  _G.Greetings = 0
-  _G.LastGreeting = nil
-  _G.LastBalance = nil
+  _G.DB = nil
+  _G.Configured = nil
 end
 
 
-describe("greetings", function()
+describe("updateProviderBalance", function()
   setup(function()
     -- to execute before this describe
   end)
@@ -55,44 +56,39 @@ describe("greetings", function()
     -- to execute after this describe
   end)
 
-  it("should have no LastGreeting", function()
-    assert.is_nil(_G.LastGreeting)
+  it("db should not be nil but stood up", function()
+    assert.is_not_nil(_G.DB)
   end)
 
-  it("should have a 0 Greetings count", function()
-    assert.are.equal(_G.Greetings, 0)
+  it("configured should be true", function()
+    assert.are.equal(_G.Configured, true)
   end)
 
-  it("should increment Greetings count on a Greet message", function()
-    ao.send({ Target = ao.id, Action = "Greet", Data = "Hello" })
-    assert.are.equal(_G.Greetings, 1)
+  it("should not have a provider who has not updated balance", function()
+    ao.send({ Target = ao.id, Action = "Get-Providers-Random-Balance", Data = json.encode({providerId = ao.id}) })
+    local _, err = providerManager.getProvider(ao.id)
+    assert.are.equal(err, "Provider not found")
   end)
 
-  it("should update LastGreeting on a Greet message", function()
-    local testGreeting = "HelloThere"
-    ao.send({ Target = ao.id, Action = "Greet", Data = testGreeting })
-    assert.are.equal(_G.LastGreeting, testGreeting)
+  it("should have a provider after updated balance", function()
+    local availableRandomValues = "7"
+    ao.send({ Target = ao.id, Action = "Update-Providers-Random-Balance", Data = json.encode(availableRandomValues) })
+    local _, err = providerManager.getProvider(ao.id)
+    assert.are_not.equal(err, "Provider not found")
   end)
 
-  it("should have no last balance at first", function()
-    assert.is_nil(_G.LastBalance)
-  end)
+  it("should update the provider balance after update", function()
+    -- Send a message to update the provider's random balance
+    ao.send({
+      Target = ao.id,
+      Action = "Update-Providers-Random-Balance",
+      Data = json.encode({availableRandomValues = 10})
+    })
 
-  it("should request and obtain last balance from aocred", function()
-    ao.send({ Target = _G.MainProcessId, Action = "RequestBalance" })
-    local mockBalance = _G.Processes[_G.AoCredProcessId].mockBalance
-    assert.are.equal(_G.LastBalance, mockBalance)
-  end)
-
-  it("should allow the owner to change the process name", function()
-    local newName = "NewName1"
-    ao.send({ Target = _G.MainProcessId, Action = "SetPublicName", Name = newName, From = _G.Owner })
-    assert.are.equal(_G.PublicName, newName)
-  end)
-
-  it("should prevent non-owners from changing the process name", function()
-    local newName = "NewName2"
-    ao.send({ Target = _G.MainProcessId, Action = "SetPublicName", Name = newName, From = 'ANON' })
-    assert.are_not.equal(_G.PublicName, newName)
+    -- Retrieve the provider and check for errors
+    local provider, _ = providerManager.getProvider(ao.id)
+    
+    -- Now, try to access and assert the value
+    assert.are.equal(10, provider.random_balance)
   end)
 end)

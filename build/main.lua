@@ -75,6 +75,7 @@ Handlers.add(
 "updateProviderBalance",
 Handlers.utils.hasMatchingTag("Action", "Update-Providers-Random-Balance"),
 wrapHandler(function(msg)
+   print("entered updateProviderBalance")
 
    local userId = msg.From
 
@@ -104,8 +105,29 @@ Handlers.add(
 "getProviderRandomBalance",
 Handlers.utils.hasMatchingTag("Action", "Get-Providers-Random-Balance"),
 wrapHandler(function(msg)
-   local data = (json.decode(msg.Data))
+   print("entered getProviderRandomBalance")
 
+   local data = (json.decode(msg.Data))
+   local providerId = data.providerId
+   local providerInfo, err = providerManager.getProvider(providerId)
+   local randomBalance = providerInfo.random_balance
+   if err == "" then
+      local responseData = { providerId = providerId, availibleRandomValues = randomBalance }
+      ao.send(sendResponse(msg.From, "Get-Providers-Random-Balance", responseData))
+   else
+      ao.send(sendResponse(msg.From, "Error", { message = "Provider not found: " .. err }))
+   end
+end))
+
+
+
+Handlers.add(
+"getOpenRandomRequests",
+Handlers.utils.hasMatchingTag("Action", "Get-Open-Random-Requests"),
+wrapHandler(function(msg)
+   print("entered getOpenRandomRequests")
+
+   local data = (json.decode(msg.Data))
    local providerId = data.providerId
    local providerInfo, err = providerManager.getProvider(providerId)
    local randomBalance = providerInfo.random_balance

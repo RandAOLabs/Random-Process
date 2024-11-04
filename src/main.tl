@@ -20,10 +20,23 @@ global record GetProviderRandomBalanceData
   providerId: string
 end
 
+global record GetOpenRandomRequestsData
+  providerId: string
+end
+
+-----------
+
 global record GetProviderRandomBalanceResponse
   providerId: string
   availibleRandomValues: integer
 end
+
+global record GetOpenRandomRequestsResponse
+  providerId: string
+  activeRequests: string
+end
+
+
 
 -- Initialize the database
 database.initializeDatabase()
@@ -75,7 +88,8 @@ Handlers.add(
   "updateProviderBalance",
   Handlers.utils.hasMatchingTag("Action", "Update-Providers-Random-Balance"),
   wrapHandler(function(msg: Message)
-
+  print("entered updateProviderBalance")
+  
   local userId = msg.From
     -- Stubbed create provider as we have not implemented staking
     createProvider(userId)
@@ -104,14 +118,35 @@ Handlers.add(
   "getProviderRandomBalance",
   Handlers.utils.hasMatchingTag("Action", "Get-Providers-Random-Balance"),
   wrapHandler(function(msg: Message)
+  print("entered getProviderRandomBalance")
+
   local data = (json.decode(msg.Data as string) as GetProviderRandomBalanceData)
-  
   local providerId = data.providerId
   local providerInfo, err = providerManager.getProvider(providerId)
   local randomBalance = providerInfo.random_balance
   if err == "" then
     local responseData: GetProviderRandomBalanceResponse = { providerId = providerId, availibleRandomValues = randomBalance }
-    ao.send(sendResponse(msg.From, "Get-Providers-Random-Balance", responseData))
+    ao.send(sendResponse(msg.From, "Get-Providers-Random-Balance-Response", responseData))
+  else
+    ao.send(sendResponse(msg.From, "Error", {message = "Provider not found: " .. err}))
+  end
+  end)
+)
+
+-- Handler for getting open randomness requests
+Handlers.add(
+  "getOpenRandomRequests",
+  Handlers.utils.hasMatchingTag("Action", "Get-Open-Random-Requests"),
+  wrapHandler(function(msg: Message)
+  print("entered getOpenRandomRequests")
+
+  local data = (json.decode(msg.Data as string) as GetOpenRandomRequestsData)
+  local providerId = data.providerId
+  local activeRequests, err = providerManager.getActiveRequests(providerId)
+
+  if err == "" then
+    local responseData: GetOpenRandomRequestsResponse = { providerId = providerId, activeRequests = activeRequests }
+    ao.send(sendResponse(msg.From, "Get-Open-Random-Requests-Response", responseData))
   else
     ao.send(sendResponse(msg.From, "Error", {message = "Provider not found: " .. err}))
   end

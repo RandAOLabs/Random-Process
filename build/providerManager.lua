@@ -13,6 +13,7 @@ Provider = {}
 
 
 
+
 local providerManager = {}
 
 function providerManager.createProvider(userId)
@@ -23,10 +24,10 @@ function providerManager.createProvider(userId)
       return false, "Database connection is not initialized"
    end
 
-   print("Preparing SQL statement for user creation")
+   print("Preparing SQL statement for provider creation")
    local stmt = DB:prepare([[
-    INSERT OR IGNORE INTO Providers (user_id, created_at)
-    VALUES (:user_id, :created_at);
+    INSERT OR IGNORE INTO Providers (provider_id, created_at)
+    VALUES (:provider_id, :created_at);
   ]])
 
    if not stmt then
@@ -34,9 +35,9 @@ function providerManager.createProvider(userId)
       return false, "Failed to prepare statement: " .. DB:errmsg()
    end
 
-   print("Binding parameters for user creation")
+   print("Binding parameters for provider creation")
    local bind_ok, bind_err = pcall(function()
-      stmt:bind_names({ user_id = userId, created_at = timestamp })
+      stmt:bind_names({ provider_id = userId, created_at = timestamp })
    end)
 
    if not bind_ok then
@@ -58,16 +59,23 @@ function providerManager.createProvider(userId)
 end
 
 function providerManager.getProvider(userId)
-   local stmt = DB:prepare("SELECT * FROM Providers WHERE user_id = :user_id")
-   stmt:bind_names({ user_id = userId })
-
+   local stmt = DB:prepare("SELECT * FROM Providers WHERE provider_id = :provider_id")
+   stmt:bind_names({ provider_id = userId })
    local result = dbUtils.queryOne(stmt)
+
    if result then
       return result, ""
    else
       return {}, "Provider not found"
    end
 end
+
+function providerManager.getActiveRequests(userId)
+
+   local provider = providerManager.getProvider(userId)
+
+end
+
 
 function providerManager.checkStakeStubbed(_userId)
    return true, ""
@@ -86,9 +94,9 @@ function providerManager.updateProviderBalance(userId, balance)
    local stmt = DB:prepare([[
     UPDATE Providers
     SET random_balance = :balance
-    WHERE user_id = :user_id;
+    WHERE provider_id = :provider_id;
   ]])
-   stmt:bind_names({ user_id = userId, balance = balance })
+   stmt:bind_names({ provider_id = userId, balance = balance })
 
    local ok = pcall(function()
       dbUtils.execute(stmt, "Failed to update provider balance")
@@ -109,10 +117,10 @@ function providerManager.updateProviderStatus(userId, active)
    stmt = DB:prepare([[
     UPDATE Providers
     SET active = :active
-    WHERE user_id = :user_id;
+    WHERE provider_id = :provider_id;
   ]])
 
-   stmt:bind_names({ user_id = userId, active = status })
+   stmt:bind_names({ provider_id = userId, active = status })
 
    local ok = pcall(function()
       dbUtils.execute(stmt, "Failed to update Provider status")

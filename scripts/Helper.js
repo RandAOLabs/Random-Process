@@ -3,7 +3,7 @@ import { message, result, createDataItemSigner, spawn } from "@permaweb/aoconnec
 
 // Load the wallet file
 const wallet = JSON.parse(readFileSync("./wallet.json").toString(),);
-const availableRandomValues = 4
+const availableRandoValues = 7
 const providerId = "ld4ncW8yLSkckjia3cw6qO7silUdEe1nsdiEvMoLg-0"
 const processId = "-a4AxyB87BImj4iqFFGYPHSmHVTMQIS6HS5_qQ3RcYQ"
 
@@ -26,7 +26,7 @@ async function updateBalance() {
           The "data" portion of the message
           If not specified a random string will be generated
         */
-        data: JSON.stringify({ availableRandomValues }),
+        data: JSON.stringify({ availableRandoValues }),
     })
 
     console.log(id)
