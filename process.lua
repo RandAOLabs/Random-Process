@@ -61,6 +61,7 @@ function database.initializeDatabase()
           request_id INTEGER PRIMARY KEY,
           requester TEXT,
           providers TEXT,
+          entropy: TEXT,
           created_at INTEGER
         );
       ]],
@@ -71,12 +72,10 @@ function database.initializeDatabase()
           input_value TEXT,
           output_value TEXT,
           proof TEXT,
-          entropy TEXT,
           PRIMARY KEY (request_id, provider_id),
           FOREIGN KEY (request_id) REFERENCES RandomRequest(request_id)
         );
       ]],
-
       }
 
       for _, sql in ipairs(tables) do
@@ -180,11 +179,16 @@ require("lsqlite3")
 
 Admin = "KLzn6IzhmML7M-XXFNSI29GVNd3xSHtH26zuKa1TWn8"
 
+
+
 RequiredStake = 10
+Cost = 10
 
 TokenTest = "pEbKJIK4PnClZrB_nZUvjPVDOHhp36PkvphrhN2_lDs"
 WrappedAR = "xU9zFkq3X2ZQ6olwNVvr1vUWIjc3kXTWr7xKQD6dh10"
 TokenInUse = TokenTest
+
+SuccessMessage = "200: Success"
 
 return {}
 end
@@ -193,11 +197,10 @@ end
 do
 local _ENV = _ENV
 package.preload[ "providerManager" ] = function( ... ) local arg = _G.arg;
-local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local os = _tl_compat and _tl_compat.os or os; local pcall = _tl_compat and _tl_compat.pcall or pcall
-
-require("globals")
+local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local os = _tl_compat and _tl_compat.os or os; local pcall = _tl_compat and _tl_compat.pcall or pcall; local table = _tl_compat and _tl_compat.table or table; require("globals")
 
 local dbUtils = require("dbUtils")
+local json = require("json")
 
 
 Provider = {}
@@ -206,6 +209,14 @@ Provider = {}
 
 
 
+
+
+
+ProviderList = {}
+
+
+
+RequestList = {}
 
 
 
@@ -265,12 +276,53 @@ function providerManager.getProvider(userId)
    end
 end
 
-function providerManager.getActiveRequests(userId)
 
-   local provider = providerManager.getProvider(userId)
+function providerManager.pushActiveRequests(providers, requestId)
 
+   local providerList = json.decode(providers)
+   local success = true
+   local err = ""
+
+   for _, value in ipairs(providerList.provider_ids) do
+      local provider = providerManager.getProvider(value)
+      local active_requests
+      if provider.active_requests then
+         active_requests = json.decode(provider.active_requests)
+         table.insert(active_requests.request_ids, requestId)
+      else
+         active_requests.request_ids = {}
+         table.insert(active_requests.request_ids, requestId)
+      end
+
+      local stringified_requests = json.encode(active_requests.request_ids)
+
+      local stmt = DB:prepare([[
+      UPDATE Providers
+      SET active_requests = :active_requests
+      WHERE provider_id = :provider_id;
+    ]])
+      stmt:bind_names({ provider_id = provider.provider_id, active_requests = stringified_requests })
+
+      local ok = pcall(function()
+         dbUtils.execute(stmt, "Failed to update provider active requests")
+      end)
+
+      if not ok then
+         print("Failed to update provider active requests" .. provider.provider_id)
+         success = false
+         err = err .. " " .. provider.provider_id
+      end
+   end
 end
 
+function providerManager.getActiveRequests(userId)
+   local provider = providerManager.getProvider(userId)
+   if provider.active_requests then
+      return provider.active_requests, ""
+   else
+      return "", "No active requests found"
+   end
+end
 
 function providerManager.checkStakeStubbed(_userId)
    return true, ""
@@ -332,12 +384,99 @@ return providerManager
 end
 end
 
-local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local debug = _tl_compat and _tl_compat.debug or debug; local xpcall = _tl_compat and _tl_compat.xpcall or xpcall
+do
+local _ENV = _ENV
+package.preload[ "randomManager" ] = function( ... ) local arg = _G.arg;
+local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local os = _tl_compat and _tl_compat.os or os; local pcall = _tl_compat and _tl_compat.pcall or pcall; require("globals")
+
+local dbUtils = require("dbUtils")
+local providerManager = require("providerManager")
+
+
+RandomRequestResponse = {}
+
+
+
+
+
+
+
+
+
+
+RandomRequest = {}
+
+
+
+
+
+
+
+local randomManager = {}
+
+function randomManager.nextId()
+   local id = CurrentRequestId or 0
+   CurrentRequestId = id + 1
+   return id
+end
+
+function randomManager.createRandomRequest(userId, providers)
+   local timestamp = os.time()
+   local requestId = randomManager.nextId()
+
+   if not DB then
+      print("Database connection not initialized")
+      return false, "Database connection is not initialized"
+   end
+
+   providerManager.pushActiveRequests(providers, requestId)
+
+   print("Preparing SQL statement for random request creation")
+   local stmt = DB:prepare([[
+    INSERT OR IGNORE INTO RandomnessRequests (request_id, requester, providers, created_at)
+    VALUES (:request_id, :requester, :providers, :created_at);
+  ]])
+
+   if not stmt then
+      print("Failed to prepare statement: " .. DB:errmsg())
+      return false, "Failed to prepare statement: " .. DB:errmsg()
+   end
+
+   print("Binding parameters for provider creation")
+   local bind_ok, bind_err = pcall(function()
+      stmt:bind_names({ request_id = requestId, requester = userId, providers = providers, created_at = timestamp })
+   end)
+
+   if not bind_ok then
+      print("Failed to bind parameters: " .. tostring(bind_err))
+      stmt:finalize()
+      return false, "Failed to bind parameters: " .. tostring(bind_err)
+   end
+
+   print("Executing provider creation statement")
+   local execute_ok, execute_err = dbUtils.execute(stmt, "Create random request")
+
+   if not execute_ok then
+      print("Random Request creation failed: " .. execute_err)
+   else
+      print("Random Request created successfully")
+   end
+
+   return execute_ok, execute_err
+end
+
+
+return randomManager
+end
+end
+
+local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local debug = _tl_compat and _tl_compat.debug or debug; local math = _tl_compat and _tl_compat.math or math; local xpcall = _tl_compat and _tl_compat.xpcall or xpcall
 
 require("globals")
 local json = require("json")
 local database = require("database")
 local providerManager = require("providerManager")
+local randomManager = require("randomManager")
 
 
 ResponseData = {}
@@ -354,7 +493,24 @@ GetProviderRandomBalanceData = {}
 
 
 
+GetOpenRandomRequestsData = {}
+
+
+
+CreateRandomRequestData = {}
+
+
+
+
+
 GetProviderRandomBalanceResponse = {}
+
+
+
+
+GetOpenRandomRequestsResponse = {}
+
+
 
 
 
@@ -427,7 +583,7 @@ wrapHandler(function(msg)
    local success, err = providerManager.updateProviderBalance(userId, balance)
 
    if success then
-      ao.send(sendResponse(msg.From, "Updated Provider Random Balance", balance))
+      ao.send(sendResponse(msg.From, "Updated Provider Random Balance", SuccessMessage))
    else
       ao.send(sendResponse(msg.From, "Error", { message = "Failed to update provider balance: " .. err }))
    end
@@ -447,9 +603,43 @@ wrapHandler(function(msg)
    local randomBalance = providerInfo.random_balance
    if err == "" then
       local responseData = { providerId = providerId, availibleRandomValues = randomBalance }
-      ao.send(sendResponse(msg.From, "Get-Providers-Random-Balance", responseData))
+      ao.send(sendResponse(msg.From, "Get-Providers-Random-Balance-Response", responseData))
    else
       ao.send(sendResponse(msg.From, "Error", { message = "Provider not found: " .. err }))
+   end
+end))
+
+
+
+Handlers.add(
+"creditNotice",
+Handlers.utils.hasMatchingTag("Action", "Credit-Notice"),
+wrapHandler(function(msg)
+   print("entered creditNotice")
+
+   local value = math.floor(tonumber(msg.Quantity))
+
+   if msg.From ~= TokenInUse then
+      print("Invalid Token Sent: " .. msg.From)
+      ao.send(sendResponse(msg.Sender, "Error", { message = "Invalid TokenInUse Sent" .. msg.From }))
+      return
+   end
+
+   if value < Cost then
+      print("Invalid Value Sent: " .. tostring(value))
+      ao.send(sendResponse(msg.Sender, "Error", { message = "Invalid Value Sent" .. msg.From }))
+      return
+   end
+   print("Providers: " .. msg.Tags["X-Providers"])
+   local data = (json.decode(msg.Tags["X-Providers"]))
+   local userId = msg.Sender
+   local providers = data.providers
+   local success, err = randomManager.createRandomRequest(userId, providers)
+
+   if success then
+      ao.send(sendResponse(msg.From, "Created New Random Request", SuccessMessage))
+   else
+      ao.send(sendResponse(msg.From, "Error", { message = "Failed to create new random request: " .. err }))
    end
 end))
 
@@ -463,11 +653,11 @@ wrapHandler(function(msg)
 
    local data = (json.decode(msg.Data))
    local providerId = data.providerId
-   local providerInfo, err = providerManager.getProvider(providerId)
-   local randomBalance = providerInfo.random_balance
+   local activeRequests, err = providerManager.getActiveRequests(providerId)
+
    if err == "" then
-      local responseData = { providerId = providerId, availibleRandomValues = randomBalance }
-      ao.send(sendResponse(msg.From, "Get-Providers-Random-Balance", responseData))
+      local responseData = { providerId = providerId, activeRequests = activeRequests }
+      ao.send(sendResponse(msg.From, "Get-Open-Random-Requests-Response", responseData))
    else
       ao.send(sendResponse(msg.From, "Error", { message = "Provider not found: " .. err }))
    end

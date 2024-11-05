@@ -1,8 +1,7 @@
--- game/user-manager.tl
-
 require "globals"
 
 local dbUtils = require "dbUtils"
+local json = require "json"
 
 -- Type definitions
 global record Provider
@@ -12,6 +11,14 @@ global record Provider
   active_requests: string
   random_balance: integer
   created_at: integer
+end
+
+global record ProviderList
+  provider_ids: {string}
+end
+
+global record RequestList
+  request_ids: {integer}
 end
 
 local providerManager = {}
@@ -67,6 +74,45 @@ function providerManager.getProvider(userId: string): Provider, string
     return result as Provider, ""
   else
     return {} as Provider, "Provider not found"
+  end
+end
+
+
+function providerManager.pushActiveRequests(providers: string, requestId: integer)
+  
+  local providerList  = json.decode(providers) as ProviderList
+  local success: boolean = true
+  local err: string = ""
+
+  for _, value in ipairs(providerList.provider_ids) do
+    local provider = providerManager.getProvider(value)
+    local active_requests: RequestList
+    if provider.active_requests then
+      active_requests = json.decode(provider.active_requests) as RequestList
+      table.insert(active_requests.request_ids, requestId)
+    else
+      active_requests.request_ids = {}
+      table.insert(active_requests.request_ids, requestId)
+    end
+    
+    local stringified_requests = json.encode(active_requests.request_ids)
+
+    local stmt = DB:prepare[[
+      UPDATE Providers
+      SET active_requests = :active_requests
+      WHERE provider_id = :provider_id;
+    ]]
+    stmt:bind_names({provider_id = provider.provider_id, active_requests = stringified_requests})
+  
+    local ok = pcall(function()
+    dbUtils.execute(stmt, "Failed to update provider active requests")
+    end)
+  
+    if not ok then
+      print("Failed to update provider active requests" .. provider.provider_id)
+      success = false
+      err = err .. " " .. provider.provider_id
+    end
   end
 end
 

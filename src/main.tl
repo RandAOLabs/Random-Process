@@ -4,6 +4,7 @@ require "globals"
 local json = require "json"
 local database = require "database"
 local providerManager = require "providerManager"
+local randomManager = require "randomManager"
 
 -- Type definitions
 global record ResponseData
@@ -22,6 +23,10 @@ end
 
 global record GetOpenRandomRequestsData
   providerId: string
+end
+
+global record CreateRandomRequestData
+  providers: string
 end
 
 -----------
@@ -106,7 +111,7 @@ Handlers.add(
   local success, err = providerManager.updateProviderBalance(userId, balance)
 
   if success then
-    ao.send(sendResponse(msg.From, "Updated Provider Random Balance", balance))
+    ao.send(sendResponse(msg.From, "Updated Provider Random Balance", SuccessMessage))
   else
     ao.send(sendResponse(msg.From, "Error", {message = "Failed to update provider balance: " .. err}))
   end
@@ -133,7 +138,41 @@ Handlers.add(
   end)
 )
 
--- Handler for getting open randomness requests
+-- Handler for creating random requests
+Handlers.add(
+  "creditNotice",
+  Handlers.utils.hasMatchingTag("Action", "Credit-Notice"),
+  wrapHandler(function(msg: Message)
+  print("entered creditNotice")
+
+  local value = math.floor(tonumber(msg.Quantity))
+  
+  if msg.From ~= TokenInUse then
+    print("Invalid Token Sent: " .. msg.From)
+    ao.send(sendResponse(msg.Sender, "Error", {message = "Invalid TokenInUse Sent" .. msg.From}))
+    return
+  end
+
+  if value < Cost then
+    print("Invalid Value Sent: " .. tostring(value))
+    ao.send(sendResponse(msg.Sender, "Error", {message = "Invalid Value Sent" .. msg.From}))
+    return
+  end
+  print("Providers: " .. msg.Tags["X-Providers"])
+  local data = (json.decode(msg.Tags["X-Providers"] as string) as CreateRandomRequestData)
+  local userId = msg.Sender
+  local providers = data.providers
+  local success, err = randomManager.createRandomRequest(userId, providers)
+
+  if success then
+    ao.send(sendResponse(msg.From, "Created New Random Request", SuccessMessage))
+  else
+    ao.send(sendResponse(msg.From, "Error", {message = "Failed to create new random request: " .. err}))
+  end
+  end)
+)
+
+-- Handler for getting open random requests
 Handlers.add(
   "getOpenRandomRequests",
   Handlers.utils.hasMatchingTag("Action", "Get-Open-Random-Requests"),

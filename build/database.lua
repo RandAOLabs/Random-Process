@@ -58,6 +58,7 @@ function database.initializeDatabase()
           request_id INTEGER PRIMARY KEY,
           requester TEXT,
           providers TEXT,
+          entropy: TEXT,
           created_at INTEGER
         );
       ]],
@@ -68,12 +69,10 @@ function database.initializeDatabase()
           input_value TEXT,
           output_value TEXT,
           proof TEXT,
-          entropy TEXT,
           PRIMARY KEY (request_id, provider_id),
           FOREIGN KEY (request_id) REFERENCES RandomRequest(request_id)
         );
       ]],
-
       }
 
       for _, sql in ipairs(tables) do

@@ -1,8 +1,7 @@
-local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local os = _tl_compat and _tl_compat.os or os; local pcall = _tl_compat and _tl_compat.pcall or pcall
-
-require("globals")
+local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local os = _tl_compat and _tl_compat.os or os; local pcall = _tl_compat and _tl_compat.pcall or pcall; local table = _tl_compat and _tl_compat.table or table; require("globals")
 
 local dbUtils = require("dbUtils")
+local json = require("json")
 
 
 Provider = {}
@@ -11,6 +10,14 @@ Provider = {}
 
 
 
+
+
+
+ProviderList = {}
+
+
+
+RequestList = {}
 
 
 
@@ -70,12 +77,53 @@ function providerManager.getProvider(userId)
    end
 end
 
-function providerManager.getActiveRequests(userId)
 
-   local provider = providerManager.getProvider(userId)
+function providerManager.pushActiveRequests(providers, requestId)
 
+   local providerList = json.decode(providers)
+   local success = true
+   local err = ""
+
+   for _, value in ipairs(providerList.provider_ids) do
+      local provider = providerManager.getProvider(value)
+      local active_requests
+      if provider.active_requests then
+         active_requests = json.decode(provider.active_requests)
+         table.insert(active_requests.request_ids, requestId)
+      else
+         active_requests.request_ids = {}
+         table.insert(active_requests.request_ids, requestId)
+      end
+
+      local stringified_requests = json.encode(active_requests.request_ids)
+
+      local stmt = DB:prepare([[
+      UPDATE Providers
+      SET active_requests = :active_requests
+      WHERE provider_id = :provider_id;
+    ]])
+      stmt:bind_names({ provider_id = provider.provider_id, active_requests = stringified_requests })
+
+      local ok = pcall(function()
+         dbUtils.execute(stmt, "Failed to update provider active requests")
+      end)
+
+      if not ok then
+         print("Failed to update provider active requests" .. provider.provider_id)
+         success = false
+         err = err .. " " .. provider.provider_id
+      end
+   end
 end
 
+function providerManager.getActiveRequests(userId)
+   local provider = providerManager.getProvider(userId)
+   if provider.active_requests then
+      return provider.active_requests, ""
+   else
+      return "", "No active requests found"
+   end
+end
 
 function providerManager.checkStakeStubbed(_userId)
    return true, ""
