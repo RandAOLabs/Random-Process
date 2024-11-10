@@ -57,23 +57,24 @@ function database.initializeDatabase()
         );
       ]],
          [[
-        CREATE TABLE IF NOT EXISTS RandomnessRequests (
+        CREATE TABLE IF NOT EXISTS RandomRequests (
           request_id INTEGER PRIMARY KEY,
           requester TEXT,
           providers TEXT,
-          entropy: TEXT,
+          entropy TEXT,
           created_at INTEGER
         );
       ]],
          [[
-        CREATE TABLE ProviderRequestResponse (
+        CREATE TABLE IF NOT EXISTS ProviderVDFResults (
           request_id INTEGER,
           provider_id TEXT,
           input_value TEXT,
           output_value TEXT,
           proof TEXT,
+          created_at INTEGER,
           PRIMARY KEY (request_id, provider_id),
-          FOREIGN KEY (request_id) REFERENCES RandomRequest(request_id)
+          FOREIGN KEY (request_id) REFERENCES RandomRequests(request_id)
         );
       ]],
       }
@@ -184,7 +185,7 @@ Admin = "KLzn6IzhmML7M-XXFNSI29GVNd3xSHtH26zuKa1TWn8"
 RequiredStake = 10
 Cost = 10
 
-TokenTest = "pEbKJIK4PnClZrB_nZUvjPVDOHhp36PkvphrhN2_lDs"
+TokenTest = "OeX1V1xSabUzUtNykWgu9GEaXqacBZawtK12_q5gXaA"
 WrappedAR = "xU9zFkq3X2ZQ6olwNVvr1vUWIjc3kXTWr7xKQD6dh10"
 TokenInUse = TokenTest
 
@@ -276,25 +277,35 @@ function providerManager.getProvider(userId)
    end
 end
 
-
 function providerManager.pushActiveRequests(providers, requestId)
-
+   print("entered pushActiveRequests")
    local providerList = json.decode(providers)
    local success = true
    local err = ""
-
    for _, value in ipairs(providerList.provider_ids) do
       local provider = providerManager.getProvider(value)
-      local active_requests
-      if provider.active_requests then
-         active_requests = json.decode(provider.active_requests)
-         table.insert(active_requests.request_ids, requestId)
-      else
-         active_requests.request_ids = {}
-         table.insert(active_requests.request_ids, requestId)
+
+      if not provider then
+         print("Provider with ID " .. value .. " not found.")
+         success = false
+         err = err .. " " .. value
+         return success, err
       end
 
-      local stringified_requests = json.encode(active_requests.request_ids)
+      local active_requests
+      if provider.active_requests then
+
+         active_requests = json.decode(provider.active_requests)
+      else
+
+         active_requests = { request_ids = {} }
+      end
+
+
+      table.insert(active_requests.request_ids, requestId)
+
+
+      local stringified_requests = json.encode(active_requests)
 
       local stmt = DB:prepare([[
       UPDATE Providers
@@ -308,11 +319,63 @@ function providerManager.pushActiveRequests(providers, requestId)
       end)
 
       if not ok then
-         print("Failed to update provider active requests" .. provider.provider_id)
+         print("Failed to update provider active requests for provider ID " .. provider.provider_id)
          success = false
          err = err .. " " .. provider.provider_id
+         return success, err
+      else
+         return success, ""
       end
    end
+end
+
+function providerManager.removeActiveRequest(provider_id, requestId)
+   print("entered removeActiveRequest")
+
+
+   local provider = providerManager.getProvider(provider_id)
+   if not provider then
+      print("Provider with ID " .. provider_id .. " not found.")
+      return false, "Provider not found"
+   end
+
+
+   local active_requests
+   if provider.active_requests then
+      active_requests = json.decode(provider.active_requests)
+   else
+      active_requests = { request_ids = {} }
+   end
+
+
+   for i, id in ipairs(active_requests.request_ids) do
+      if id == requestId then
+         table.remove(active_requests.request_ids, i)
+         break
+      end
+   end
+
+
+   local stringified_requests = json.encode(active_requests)
+
+
+   local stmt = DB:prepare([[
+      UPDATE Providers
+      SET active_requests = :active_requests
+      WHERE provider_id = :provider_id;
+  ]])
+   stmt:bind_names({ provider_id = provider_id, active_requests = stringified_requests })
+
+   local ok = pcall(function()
+      dbUtils.execute(stmt, "Failed to update provider active requests")
+   end)
+
+   if not ok then
+      print("Failed to update provider active requests for provider ID " .. provider_id)
+      return false, "Failed to update provider active requests"
+   end
+
+   return true, "Request ID removed successfully"
 end
 
 function providerManager.getActiveRequests(userId)
@@ -321,6 +384,21 @@ function providerManager.getActiveRequests(userId)
       return provider.active_requests, ""
    else
       return "", "No active requests found"
+   end
+end
+
+function providerManager.hasActiveRequest(userId, requestId)
+   local activeRequests, err = providerManager.getActiveRequests(userId)
+   if err == "" then
+      local requestIds = json.decode(activeRequests)
+      for _, request_id in ipairs(requestIds.request_ids) do
+         if request_id == requestId then
+            return true
+         end
+      end
+      return false
+   else
+      return false
    end
 end
 
@@ -393,9 +471,7 @@ local dbUtils = require("dbUtils")
 local providerManager = require("providerManager")
 
 
-RandomRequestResponse = {}
-
-
+ProviderVDFResult = {}
 
 
 
@@ -412,6 +488,11 @@ RandomRequest = {}
 
 
 
+ProviderVDFResults = {}
+
+
+
+
 local randomManager = {}
 
 function randomManager.nextId()
@@ -420,7 +501,33 @@ function randomManager.nextId()
    return id
 end
 
+function randomManager.getRandomRequest(requestId)
+   print("entered getRandomRequest")
+   local stmt = DB:prepare("SELECT * FROM RandomRequests WHERE request_id = :request_id")
+   stmt:bind_names({ request_id = requestId })
+   local result = dbUtils.queryOne(stmt)
+   if result then
+      return result, ""
+   else
+      return {}, "RandomRequest not found"
+   end
+end
+
+function randomManager.getVDFResults(requestId)
+   print("entered getVDFResults")
+   local stmt = DB:prepare("SELECT * FROM ProviderVDFResults WHERE request_id = :request_id")
+   stmt:bind_names({ request_id = requestId })
+   local result = dbUtils.queryMany(stmt)
+   if result then
+      return result, ""
+   else
+      return {}, "RandomRequest not found"
+   end
+end
+
 function randomManager.createRandomRequest(userId, providers)
+   print("entered createRandomRequest")
+
    local timestamp = os.time()
    local requestId = randomManager.nextId()
 
@@ -433,7 +540,7 @@ function randomManager.createRandomRequest(userId, providers)
 
    print("Preparing SQL statement for random request creation")
    local stmt = DB:prepare([[
-    INSERT OR IGNORE INTO RandomnessRequests (request_id, requester, providers, created_at)
+    INSERT OR IGNORE INTO RandomRequests (request_id, requester, providers, created_at)
     VALUES (:request_id, :requester, :providers, :created_at);
   ]])
 
@@ -442,7 +549,7 @@ function randomManager.createRandomRequest(userId, providers)
       return false, "Failed to prepare statement: " .. DB:errmsg()
    end
 
-   print("Binding parameters for provider creation")
+   print("Binding parameters for random request creation")
    local bind_ok, bind_err = pcall(function()
       stmt:bind_names({ request_id = requestId, requester = userId, providers = providers, created_at = timestamp })
    end)
@@ -453,7 +560,7 @@ function randomManager.createRandomRequest(userId, providers)
       return false, "Failed to bind parameters: " .. tostring(bind_err)
    end
 
-   print("Executing provider creation statement")
+   print("Executing random request creation statement")
    local execute_ok, execute_err = dbUtils.execute(stmt, "Create random request")
 
    if not execute_ok then
@@ -465,13 +572,98 @@ function randomManager.createRandomRequest(userId, providers)
    return execute_ok, execute_err
 end
 
+function randomManager.postVDFInput(userId, requestId, inputValue)
+   print("entered postVDFInput")
+
+   local timestamp = os.time()
+
+   if not DB then
+      print("Database connection not initialized")
+      return false, "Database connection is not initialized"
+   end
+
+   print("Preparing SQL statement for provider request response creation")
+   local stmt = DB:prepare([[
+    INSERT OR IGNORE INTO ProviderVDFResults (request_id, provider_id, input_value, created_at)
+    VALUES (:request_id, :provider_id, :input_value, :created_at);
+  ]])
+
+   if not stmt then
+      print("Failed to prepare statement: " .. DB:errmsg())
+      return false, "Failed to prepare statement: " .. DB:errmsg()
+   end
+
+   print("Binding parameters for provider request response creation")
+   local bind_ok, bind_err = pcall(function()
+      stmt:bind_names({ request_id = requestId, provider_id = userId, input_value = inputValue, created_at = timestamp })
+   end)
+
+   if not bind_ok then
+      print("Failed to bind parameters: " .. tostring(bind_err))
+      stmt:finalize()
+      return false, "Failed to bind parameters: " .. tostring(bind_err)
+   end
+
+   print("Executing provider request response creation statement")
+   local execute_ok, execute_err = dbUtils.execute(stmt, "Create provider request response")
+
+   if not execute_ok then
+      print("Provider Request Response creation failed: " .. execute_err)
+   else
+      print("Provider Request Response created successfully")
+   end
+
+   return execute_ok, execute_err
+end
+
+function randomManager.postVDFOutputAndProof(userId, requestId, outputValue, proof)
+   print("entered postVDFOutputAndProof")
+
+   if not DB then
+      print("Database connection not initialized")
+      return false, "Database connection is not initialized"
+   end
+
+   print("Preparing SQL statement for provider request response creation")
+   local stmt = DB:prepare([[
+    UPDATE ProviderVDFResults
+    SET output_value = :output_value, proof = :proof
+    WHERE request_id = :request_id AND provider_id = :provider_id;
+  ]])
+
+   if not stmt then
+      print("Failed to prepare statement: " .. DB:errmsg())
+      return false, "Failed to prepare statement: " .. DB:errmsg()
+   end
+
+   print("Binding parameters for provider request response creation")
+   local bind_ok, bind_err = pcall(function()
+      stmt:bind_names({ request_id = requestId, provider_id = userId, output_value = outputValue, proof = proof })
+   end)
+
+   if not bind_ok then
+      print("Failed to bind parameters: " .. tostring(bind_err))
+      stmt:finalize()
+      return false, "Failed to bind parameters: " .. tostring(bind_err)
+   end
+
+   print("Executing post vdf output and proof statement")
+   local execute_ok, execute_err = dbUtils.execute(stmt, "Post vdf output and proof")
+
+   if not execute_ok then
+      print("Post VDF Output and Proof failed: " .. execute_err)
+   else
+      print("VDF Output and Proof posted successfully")
+   end
+
+   return execute_ok, execute_err
+end
 
 return randomManager
 end
 end
 
-local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local debug = _tl_compat and _tl_compat.debug or debug; local math = _tl_compat and _tl_compat.math or math; local xpcall = _tl_compat and _tl_compat.xpcall or xpcall
-
+local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local debug = _tl_compat and _tl_compat.debug or debug; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local math = _tl_compat and _tl_compat.math or math; local table = _tl_compat and _tl_compat.table or table; local xpcall = _tl_compat and _tl_compat.xpcall or xpcall
 require("globals")
 local json = require("json")
 local database = require("database")
@@ -489,11 +681,26 @@ UpdateProviderRandomBalanceData = {}
 
 
 
+PostVDFInputData = {}
+
+
+
+
+PostVDFOutputAndProofData = {}
+
+
+
+
+
 GetProviderRandomBalanceData = {}
 
 
 
 GetOpenRandomRequestsData = {}
+
+
+
+GetRandomRequestsData = {}
 
 
 
@@ -512,6 +719,13 @@ GetOpenRandomRequestsResponse = {}
 
 
 
+
+RandomRequestResponse = {}
+
+
+
+
+GetRandomRequestsResponse = {}
 
 
 
@@ -592,6 +806,75 @@ end))
 
 
 Handlers.add(
+"postVDFInput",
+Handlers.utils.hasMatchingTag("Action", "Post-VDF-Input"),
+wrapHandler(function(msg)
+   print("entered postVDFInput")
+
+   local userId = msg.From
+
+   local data = (json.decode(msg.Data))
+   local input = data.input
+   local requestId = data.requestId
+
+   local requested = providerManager.hasActiveRequest(userId, requestId)
+
+   if not requested then
+      ao.send(sendResponse(msg.From, "Error", { message = "Failed to post VDF Input: " .. "not requested" }))
+   end
+
+   local success, err = randomManager.postVDFInput(userId, requestId, input)
+
+   if success then
+      ao.send(sendResponse(msg.From, "Posted VDF Input", SuccessMessage))
+   else
+      ao.send(sendResponse(msg.From, "Error", { message = "Failed to post VDF Input: " .. err }))
+   end
+end))
+
+
+
+Handlers.add(
+"postVDFOutputAndProof",
+Handlers.utils.hasMatchingTag("Action", "Post-VDF-Output-And-Proof"),
+wrapHandler(function(msg)
+   print("entered postVDFOutputAndProof")
+
+   local userId = msg.From
+
+   local data = (json.decode(msg.Data))
+   local output = data.output
+   local proof = data.proof
+
+   local function validateInputs(_output, _proof)
+      return true
+   end
+
+   if output == nil or proof == nil or not validateInputs(output, proof) then
+      ao.send(sendResponse(msg.From, "Error", { message = "Failed to post VDF Input: " .. "values not provided" }))
+   end
+
+   local requestId = data.requestId
+
+   local requested = providerManager.hasActiveRequest(userId, requestId)
+
+   if not requested then
+      ao.send(sendResponse(msg.From, "Error", { message = "Failed to post VDF Input: " .. "not requested" }))
+   end
+
+   local success, err = randomManager.postVDFOutputAndProof(userId, requestId, output, proof)
+
+   if success then
+      providerManager.removeActiveRequest(userId, requestId)
+      ao.send(sendResponse(msg.From, "Posted VDF Output and Proof", SuccessMessage))
+   else
+      ao.send(sendResponse(msg.From, "Error", { message = "Failed to post VDF Output and Proof: " .. err }))
+   end
+end))
+
+
+
+Handlers.add(
 "getProviderRandomBalance",
 Handlers.utils.hasMatchingTag("Action", "Get-Providers-Random-Balance"),
 wrapHandler(function(msg)
@@ -624,22 +907,23 @@ wrapHandler(function(msg)
       ao.send(sendResponse(msg.Sender, "Error", { message = "Invalid TokenInUse Sent" .. msg.From }))
       return
    end
-
    if value < Cost then
       print("Invalid Value Sent: " .. tostring(value))
       ao.send(sendResponse(msg.Sender, "Error", { message = "Invalid Value Sent" .. msg.From }))
       return
    end
    print("Providers: " .. msg.Tags["X-Providers"])
-   local data = (json.decode(msg.Tags["X-Providers"]))
+   print("Providers: " and json.decode(msg.Tags["X-Providers"]))
+
+   local providers = msg.Tags["X-Providers"]
    local userId = msg.Sender
-   local providers = data.providers
+
    local success, err = randomManager.createRandomRequest(userId, providers)
 
    if success then
-      ao.send(sendResponse(msg.From, "Created New Random Request", SuccessMessage))
+      ao.send(sendResponse(msg.Sender, "Created New Random Request", SuccessMessage))
    else
-      ao.send(sendResponse(msg.From, "Error", { message = "Failed to create new random request: " .. err }))
+      ao.send(sendResponse(msg.Sender, "Error", { message = "Failed to create new random request: " .. err }))
    end
 end))
 
@@ -661,6 +945,36 @@ wrapHandler(function(msg)
    else
       ao.send(sendResponse(msg.From, "Error", { message = "Provider not found: " .. err }))
    end
+end))
+
+
+
+Handlers.add(
+"getRandomRequests",
+Handlers.utils.hasMatchingTag("Action", "Get-Random-Requests"),
+wrapHandler(function(msg)
+   print("entered getRandomRequests")
+
+   local data = (json.decode(msg.Data))
+   local responseData = { randomRequestResponses = {} }
+
+   for _, request_id in ipairs(data.requestIds) do
+      local requestResponse = {
+         randomRequest = nil,
+         providerVDFResults = nil,
+      }
+      local request, requestErr = randomManager.getRandomRequest(request_id)
+      if requestErr == "" then
+         requestResponse.randomRequest = request
+         local providerVDFResults, resultsErr = randomManager.getVDFResults(request_id)
+         if resultsErr == "" then
+            requestResponse.providerVDFResults = providerVDFResults
+         end
+      end
+      table.insert(responseData.randomRequestResponses, requestResponse)
+   end
+
+   ao.send(sendResponse(msg.From, "Get-Random-Requests-Response", responseData))
 end))
 
 

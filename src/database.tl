@@ -54,23 +54,24 @@ function database.initializeDatabase(): boolean
         );
       ]],
       [[
-        CREATE TABLE IF NOT EXISTS RandomnessRequests (
+        CREATE TABLE IF NOT EXISTS RandomRequests (
           request_id INTEGER PRIMARY KEY,
           requester TEXT,
           providers TEXT,
-          entropy: TEXT,
+          entropy TEXT,
           created_at INTEGER
         );
       ]],
       [[
-        CREATE TABLE ProviderRequestResponse (
+        CREATE TABLE IF NOT EXISTS ProviderVDFResults (
           request_id INTEGER,                               
           provider_id TEXT,                              
           input_value TEXT,                               
           output_value TEXT,                               
-          proof TEXT,                                      
+          proof TEXT,         
+          created_at INTEGER,                             
           PRIMARY KEY (request_id, provider_id),          
-          FOREIGN KEY (request_id) REFERENCES RandomRequest(request_id)
+          FOREIGN KEY (request_id) REFERENCES RandomRequests(request_id)
         );
       ]],
     }

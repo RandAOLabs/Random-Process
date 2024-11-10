@@ -77,43 +77,105 @@ function providerManager.getProvider(userId: string): Provider, string
   end
 end
 
-
-function providerManager.pushActiveRequests(providers: string, requestId: integer)
-  
+function providerManager.pushActiveRequests(providers: string, requestId: integer): boolean, string
+  print("entered pushActiveRequests")
   local providerList  = json.decode(providers) as ProviderList
   local success: boolean = true
   local err: string = ""
-
   for _, value in ipairs(providerList.provider_ids) do
     local provider = providerManager.getProvider(value)
+    -- Check if provider exists
+    if not provider then
+      print("Provider with ID " .. value .. " not found.")
+      success = false
+      err = err .. " " .. value
+      return success, err
+    end
+
     local active_requests: RequestList
     if provider.active_requests then
+      -- Decode existing active_requests JSON if it exists
       active_requests = json.decode(provider.active_requests) as RequestList
-      table.insert(active_requests.request_ids, requestId)
     else
-      active_requests.request_ids = {}
-      table.insert(active_requests.request_ids, requestId)
+      -- Initialize active_requests as an empty table if it doesn’t exist
+      active_requests = { request_ids = {} }
     end
-    
-    local stringified_requests = json.encode(active_requests.request_ids)
+
+    -- Insert the new requestId into the request_ids array
+    table.insert(active_requests.request_ids, requestId)
+
+    -- Encode the updated active_requests table back to JSON
+    local stringified_requests = json.encode(active_requests)
 
     local stmt = DB:prepare[[
       UPDATE Providers
       SET active_requests = :active_requests
       WHERE provider_id = :provider_id;
     ]]
-    stmt:bind_names({provider_id = provider.provider_id, active_requests = stringified_requests})
-  
+    stmt:bind_names({ provider_id = provider.provider_id, active_requests = stringified_requests })
+
     local ok = pcall(function()
-    dbUtils.execute(stmt, "Failed to update provider active requests")
+      dbUtils.execute(stmt, "Failed to update provider active requests")
     end)
-  
+
     if not ok then
-      print("Failed to update provider active requests" .. provider.provider_id)
+      print("Failed to update provider active requests for provider ID " .. provider.provider_id)
       success = false
       err = err .. " " .. provider.provider_id
+      return success, err
+    else
+      return success, ""
     end
   end
+end
+
+function providerManager.removeActiveRequest(provider_id: string, requestId: integer): boolean, string
+  print("entered removeActiveRequest")
+
+  -- Fetch the provider
+  local provider = providerManager.getProvider(provider_id)
+  if not provider then
+      print("Provider with ID " .. provider_id .. " not found.")
+      return false, "Provider not found"
+  end
+
+  -- Decode existing active_requests JSON if it exists
+  local active_requests: RequestList
+  if provider.active_requests then
+      active_requests = json.decode(provider.active_requests) as RequestList
+  else
+      active_requests = { request_ids = {} }
+  end
+
+  -- Remove the specific requestId from request_ids array
+  for i, id in ipairs(active_requests.request_ids) do
+      if id == requestId then
+          table.remove(active_requests.request_ids, i)
+          break
+      end
+  end
+
+  -- Encode the updated active_requests table back to JSON
+  local stringified_requests = json.encode(active_requests)
+
+  -- Update the database
+  local stmt = DB:prepare([[
+      UPDATE Providers
+      SET active_requests = :active_requests
+      WHERE provider_id = :provider_id;
+  ]])
+  stmt:bind_names({ provider_id = provider_id, active_requests = stringified_requests })
+
+  local ok = pcall(function()
+    dbUtils.execute(stmt, "Failed to update provider active requests")
+  end)
+
+  if not ok then
+      print("Failed to update provider active requests for provider ID " .. provider_id)
+      return false, "Failed to update provider active requests"
+  end
+
+  return true, "Request ID removed successfully"
 end
 
 function providerManager.getActiveRequests(userId: string): string, string
@@ -122,6 +184,21 @@ function providerManager.getActiveRequests(userId: string): string, string
     return provider.active_requests, ""
   else
     return "", "No active requests found"
+  end
+end
+
+function providerManager.hasActiveRequest(userId: string, requestId: integer): boolean
+  local activeRequests, err = providerManager.getActiveRequests(userId) 
+  if err == "" then
+    local requestIds = json.decode(activeRequests) as RequestList
+    for _, request_id in ipairs(requestIds.request_ids) do
+      if request_id == requestId then
+        return true
+      end
+    end
+    return false
+  else
+    return false
   end
 end
 

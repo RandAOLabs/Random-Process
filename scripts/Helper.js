@@ -5,8 +5,17 @@ import { message, result, createDataItemSigner, spawn } from "@permaweb/aoconnec
 const wallet = JSON.parse(readFileSync("./wallet.json").toString(),);
 const availableRandomValues = 7
 const providerId = "ld4ncW8yLSkckjia3cw6qO7silUdEe1nsdiEvMoLg-0"
-const processId = "FsTJPa-xh2VuhqEkrWEZfLC5GcoNM1WqMEq0TjTKj3w"
+const processId = "Xzs7TJ81L03wNBe8tS-ArB7xDiKIHg9q50ylsDfAVbY"
 const tokenId = "OeX1V1xSabUzUtNykWgu9GEaXqacBZawtK12_q5gXaA"
+let providers = {
+    provider_ids: ["ld4ncW8yLSkckjia3cw6qO7silUdEe1nsdiEvMoLg-0"]
+}
+const requestIds = [0,1,2,3,4]
+
+const requestId = 4
+const input     = "gobledygook"
+const output    = "shamuckers"
+const proof     = "proofs???"
 
 async function updateBalance() {
     let tags = [
@@ -31,42 +40,6 @@ async function updateBalance() {
     })
 
     console.log(id)
-    const { Output, Messages } = await result({
-        message: id,
-        process: processId,
-    });
-    
-    if (Messages && Messages.length > 0) {
-        const data = JSON.parse(Messages[0].Data);
-        console.log("Status: ", data);
-    }
-    
-    return id;
-}
-
-async function postPOH() {
-    let tags = [
-        { name: "Action", value: "post-poh" },
-    ]
-
-    let id = await message({
-        /*
-          The arweave TXID of the process, this will become the "target".
-          This is the process the message is ultimately sent to.
-        */
-        process: processId,
-        // Tags that the process will use as input.
-        tags,
-        // A signer function used to build the message "signature"
-        signer: createDataItemSigner(wallet),
-        /*
-          The "data" portion of the message
-          If not specified a random string will be generated
-        */
-        POH,
-    })
-
-    //console.log(id)
     const { Output, Messages } = await result({
         message: id,
         process: processId,
@@ -117,14 +90,12 @@ async function getStatus() {
     return id;
 }
 
-let providers = "ld4ncW8yLSkckjia3cw6qO7silUdEe1nsdiEvMoLg-0"
-
 async function createRequest() {
     let tags = [
         { name: "Action", value: "Transfer" },
         { name: "Quantity", value: "100" },
         { name: "Recipient", value: processId },
-        { name: "X-Providers", value: providers }
+        { name: "X-Providers", value: JSON.stringify(providers) }
     ]
 
     let id = await message({
@@ -144,19 +115,8 @@ async function createRequest() {
     })
 
     console.log(id)
-    const { Output, Messages } = await result({
-        message: id,
-        process: processId,
-    });
-    
-    if (Messages && Messages.length > 0) {
-        const data = JSON.parse(Messages[0].Data);
-        console.log("Status: ", data);
-    }
-    
     return id;
 }
-
 
 async function getActiveRequests() {
     let tags = [
@@ -195,6 +155,115 @@ async function getActiveRequests() {
     return id;
 }
 
+async function getRequests() {
+    let tags = [
+        { name: "Action", value: "Get-Random-Requests" },
+    ]
+
+    let id = await message({
+        /*
+          The arweave TXID of the process, this will become the "target".
+          This is the process the message is ultimately sent to.
+        */
+        process: processId,
+        // Tags that the process will use as input.
+        tags,
+        // A signer function used to build the message "signature"
+        signer: createDataItemSigner(wallet),
+        /*
+          The "data" portion of the message
+          If not specified a random string will be generated
+        */
+        data: JSON.stringify({ requestIds }),
+
+    })
+
+    //console.log(id)
+    const { Output, Messages } = await result({
+        message: id,
+        process: processId,
+    });
+    
+    if (Messages && Messages.length > 0) {
+        const data = JSON.parse(Messages[0].Data);
+        console.log("Random Requests: ", JSON.stringify(data));
+    }
+    
+    return id;
+}
+
+async function postVDFInput() {
+    let tags = [
+        { name: "Action", value: "Post-VDF-Input" },
+    ]
+
+    let id = await message({
+        /*
+          The arweave TXID of the process, this will become the "target".
+          This is the process the message is ultimately sent to.
+        */
+        process: processId,
+        // Tags that the process will use as input.
+        tags,
+        // A signer function used to build the message "signature"
+        signer: createDataItemSigner(wallet),
+        /*
+          The "data" portion of the message
+          If not specified a random string will be generated
+        */
+          data: JSON.stringify({ requestId, input }),
+        })
+
+    //console.log(id)
+    const { Output, Messages } = await result({
+        message: id,
+        process: processId,
+    });
+    
+    if (Messages && Messages.length > 0) {
+        const data = JSON.parse(Messages[0].Data);
+        console.log("Status: ", data);
+    }
+    
+    return id;
+}
+
+async function postVDFOutputAndProof() {
+    let tags = [
+        { name: "Action", value: "Post-VDF-Output-And-Proof" },
+    ]
+
+    let id = await message({
+        /*
+          The arweave TXID of the process, this will become the "target".
+          This is the process the message is ultimately sent to.
+        */
+        process: processId,
+        // Tags that the process will use as input.
+        tags,
+        // A signer function used to build the message "signature"
+        signer: createDataItemSigner(wallet),
+        /*
+          The "data" portion of the message
+          If not specified a random string will be generated
+        */
+          data: JSON.stringify({ requestId, output, proof }),
+        })
+
+    //console.log(id)
+    const { Output, Messages } = await result({
+        message: id,
+        process: processId,
+    });
+    
+    if (Messages && Messages.length > 0) {
+        const data = JSON.parse(Messages[0].Data);
+        console.log("Status: ", data);
+    }
+    
+    return id;
+}
+
 // Main function to call post data
 async function main() {
     const inputArg =  process.argv[2];
@@ -207,25 +276,37 @@ async function main() {
         }
     } else if (inputArg == 2) {
         try {
-            await postPOH()
+            await getStatus()
         } catch (err) {
             console.error("Error reading process IDs or sending messages:", err);
         }
     } else if (inputArg == 3) {
         try {
-            await getStatus()
+            await createRequest()
         } catch (err) {
             console.error("Error reading process IDs or sending messages:", err);
         }
     } else if (inputArg == 4) {
         try {
-            await createRequest()
+            await getActiveRequests()
         } catch (err) {
             console.error("Error reading process IDs or sending messages:", err);
         }
     } else if (inputArg == 5) {
         try {
-            await getActiveRequests()
+            await getRequests()
+        } catch (err) {
+            console.error("Error reading process IDs or sending messages:", err);
+        }
+    } else if (inputArg == 6) {
+        try {
+            await postVDFInput()
+        } catch (err) {
+            console.error("Error reading process IDs or sending messages:", err);
+        }
+    } else if (inputArg == 7) {
+        try {
+            await postVDFOutputAndProof()
         } catch (err) {
             console.error("Error reading process IDs or sending messages:", err);
         }

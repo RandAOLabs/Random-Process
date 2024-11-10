@@ -36,6 +36,7 @@ local process = require "process" -- require so that process handlers are loaded
 local json = require "json"
 local database = require "database"
 local providerManager = require "providerManager"
+local randomManager = require "randomManager"
 -- local utils = require "utils"
 -- local bint = require ".bint" (512)
 
@@ -53,7 +54,6 @@ describe("updateProviderBalance", function()
   end)
 
   teardown(function()
-    -- to execute after this describe
   end)
 
   it("db should not be nil but stood up", function()
@@ -91,4 +91,63 @@ describe("updateProviderBalance", function()
     -- Now, try to access and assert the value
     assert.are.equal(10, provider.random_balance)
   end)
+end)
+
+
+describe("requestRandom", function()
+  setup(function()
+    -- to execute before this describe
+  end)
+
+  teardown(function()
+  end)
+
+  it("should be able to request random from a registered provider", function()
+    local userId = ao.id
+    local providers = json.encode({provider_ids = {"jessica"}})
+
+    providerManager.createProvider("jessica")
+
+    local success, err = randomManager.createRandomRequest(userId, providers)
+
+    assert(success, "failed to create random request")
+  end)
+
+  it("should be able to see updated active_requests for our requested provider", function ()
+    local _, err = providerManager.getActiveRequests("jessica")    
+    assert(err == "", "no active request found")  
+  end)
+end)
+
+describe("postVDFInput", function()
+  setup(function()
+    -- to execute before this describe
+  end)
+
+  teardown(function()
+  end)
+
+  it("should not be able to post input from an unrequested provider", function()
+    local userId = ao.id
+    local input = json.encode({input = "gobldygook"})
+    local requestId = 0
+
+    ao.send({
+      Target = ao.id,
+      Action = "Post-VDF-Input",
+      Data = json.encode({input = "gobldygook", requestId = 0})
+    })
+
+    local success, err = randomManager.getVDFResults(requestId)
+    print("Result: " .. err)
+
+    assert(success, "failed to create random request")
+  end)
+
+
+
+  -- it("should be able to see updated active_requests for our requested provider", function ()
+  --   local active_requests, err = providerManager.getActiveRequests(ao.id)    
+  --   assert(err == "", "no active request found")  
+  -- end)
 end)

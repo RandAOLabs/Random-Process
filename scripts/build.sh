@@ -2,8 +2,7 @@
 
 # Recreate build directories
 rm ./build/*
-rm ./build-lua/*
-
+rm ./process.lua
 # GENERATE LUA in /build-lua
 mkdir -p ./build
 

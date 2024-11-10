@@ -1,5 +1,4 @@
 -- game/main.tl
-
 require "globals"
 local json = require "json"
 local database = require "database"
@@ -17,6 +16,17 @@ global record UpdateProviderRandomBalanceData
   availableRandomValues: integer
 end
 
+global record PostVDFInputData
+  requestId: integer
+  input: string
+end
+
+global record PostVDFOutputAndProofData
+  requestId: integer
+  output: string
+  proof: string
+end
+
 global record GetProviderRandomBalanceData
   providerId: string
 end
@@ -25,8 +35,12 @@ global record GetOpenRandomRequestsData
   providerId: string
 end
 
+global record GetRandomRequestsData
+  requestIds: {integer}
+end
+
 global record CreateRandomRequestData
-  providers: string
+  providers: {string}
 end
 
 -----------
@@ -41,7 +55,14 @@ global record GetOpenRandomRequestsResponse
   activeRequests: string
 end
 
+global record RandomRequestResponse
+  randomRequest: RandomRequest
+  providerVDFResults: ProviderVDFResults
+end
 
+global record GetRandomRequestsResponse
+  randomRequestResponses: {RandomRequestResponse}
+end
 
 -- Initialize the database
 database.initializeDatabase()
@@ -79,7 +100,7 @@ local function createProvider(userid: string): boolean
 end
 
 
--- Add an info handler to return the process version
+-- Add an info handler to return the process info
 Handlers.add(
   "getInfo",
   Handlers.utils.hasMatchingTag("Action", "Info"),
@@ -118,6 +139,75 @@ Handlers.add(
   end)
 )
 
+-- Handler for posting VDF input
+Handlers.add(
+  "postVDFInput",
+  Handlers.utils.hasMatchingTag("Action", "Post-VDF-Input"),
+  wrapHandler(function(msg: Message)
+  print("entered postVDFInput")
+  
+  local userId = msg.From
+
+  local data = (json.decode(msg.Data as string) as PostVDFInputData)
+  local input = data.input
+  local requestId = data.requestId
+
+  local requested = providerManager.hasActiveRequest(userId, requestId)
+  
+  if not requested then
+    ao.send(sendResponse(msg.From, "Error", {message = "Failed to post VDF Input: " .. "not requested"}))
+  end
+
+  local success, err = randomManager.postVDFInput(userId, requestId, input)
+
+  if success then
+    ao.send(sendResponse(msg.From, "Posted VDF Input", SuccessMessage))
+  else
+    ao.send(sendResponse(msg.From, "Error", {message = "Failed to post VDF Input: " .. err}))
+  end
+  end)
+)
+
+-- Handler for posting VDF output and proof
+Handlers.add(
+  "postVDFOutputAndProof",
+  Handlers.utils.hasMatchingTag("Action", "Post-VDF-Output-And-Proof"),
+  wrapHandler(function(msg: Message)
+  print("entered postVDFOutputAndProof")
+  
+  local userId = msg.From
+
+  local data = (json.decode(msg.Data as string) as PostVDFOutputAndProofData)
+  local output = data.output
+  local proof = data.proof
+
+  local function validateInputs(_output: string, _proof: string): boolean
+    return true
+  end
+
+  if output == nil or proof == nil or not validateInputs(output, proof) then
+    ao.send(sendResponse(msg.From, "Error", {message = "Failed to post VDF Input: " .. "values not provided"}))
+  end
+
+  local requestId = data.requestId
+
+  local requested = providerManager.hasActiveRequest(userId, requestId)
+  
+  if not requested then
+    ao.send(sendResponse(msg.From, "Error", {message = "Failed to post VDF Input: " .. "not requested"}))
+  end
+
+  local success, err = randomManager.postVDFOutputAndProof(userId, requestId, output, proof)
+
+  if success then
+    providerManager.removeActiveRequest(userId, requestId)
+    ao.send(sendResponse(msg.From, "Posted VDF Output and Proof", SuccessMessage))
+  else
+    ao.send(sendResponse(msg.From, "Error", {message = "Failed to post VDF Output and Proof: " .. err}))
+  end
+  end)
+)
+
 -- Handler for getting provider balance
 Handlers.add(
   "getProviderRandomBalance",
@@ -152,22 +242,23 @@ Handlers.add(
     ao.send(sendResponse(msg.Sender, "Error", {message = "Invalid TokenInUse Sent" .. msg.From}))
     return
   end
-
   if value < Cost then
     print("Invalid Value Sent: " .. tostring(value))
     ao.send(sendResponse(msg.Sender, "Error", {message = "Invalid Value Sent" .. msg.From}))
     return
   end
   print("Providers: " .. msg.Tags["X-Providers"])
-  local data = (json.decode(msg.Tags["X-Providers"] as string) as CreateRandomRequestData)
+  print("Providers: " and json.decode(msg.Tags["X-Providers"]))
+
+  local providers = msg.Tags["X-Providers"]
   local userId = msg.Sender
-  local providers = data.providers
+
   local success, err = randomManager.createRandomRequest(userId, providers)
 
   if success then
-    ao.send(sendResponse(msg.From, "Created New Random Request", SuccessMessage))
+    ao.send(sendResponse(msg.Sender, "Created New Random Request", SuccessMessage))
   else
-    ao.send(sendResponse(msg.From, "Error", {message = "Failed to create new random request: " .. err}))
+    ao.send(sendResponse(msg.Sender, "Error", {message = "Failed to create new random request: " .. err}))
   end
   end)
 )
@@ -189,6 +280,36 @@ Handlers.add(
   else
     ao.send(sendResponse(msg.From, "Error", {message = "Provider not found: " .. err}))
   end
+  end)
+)
+
+-- Handler for getting random requests
+Handlers.add(
+  "getRandomRequests",
+  Handlers.utils.hasMatchingTag("Action", "Get-Random-Requests"),
+  wrapHandler(function(msg: Message)
+  print("entered getRandomRequests")
+
+  local data = (json.decode(msg.Data as string) as GetRandomRequestsData)
+  local responseData: GetRandomRequestsResponse = { randomRequestResponses = { } }
+
+  for _, request_id in ipairs(data.requestIds) do
+    local requestResponse: RandomRequestResponse = {   
+      randomRequest: RandomRequest = nil,
+      providerVDFResults: ProviderVDFResults = nil
+    }
+    local request, requestErr = randomManager.getRandomRequest(request_id)
+    if requestErr == "" then
+      requestResponse.randomRequest = request
+      local providerVDFResults, resultsErr = randomManager.getVDFResults(request_id)
+      if resultsErr == "" then 
+        requestResponse.providerVDFResults = providerVDFResults
+      end
+    end
+    table.insert(responseData.randomRequestResponses, requestResponse)
+  end
+
+  ao.send(sendResponse(msg.From, "Get-Random-Requests-Response", responseData))
   end)
 )
 
