@@ -100,21 +100,13 @@ local function createProvider(userid: string): boolean
   return success
 end
 
-
--- Add an info handler to return the process info
-Handlers.add(
-  "getInfo",
-  Handlers.utils.hasMatchingTag("Action", "Info"),
-  wrapHandler(function(msg: Message)
+-- Handler to return the process info
+local function infoHandler(msg: Message)
     ao.send(sendResponse(msg.From, "Info", {}))
-  end)
-)
+end
 
 -- Handler for updating providers balance
-Handlers.add(
-  "updateProviderBalance",
-  Handlers.utils.hasMatchingTag("Action", "Update-Providers-Random-Balance"),
-  wrapHandler(function(msg: Message)
+local function updateProviderBalanceHandler(msg: Message)
   print("entered updateProviderBalance")
   
   local userId = msg.From
@@ -137,14 +129,10 @@ Handlers.add(
   else
     ao.send(sendResponse(msg.From, "Error", {message = "Failed to update provider balance: " .. err}))
   end
-  end)
-)
+end
 
 -- Handler for posting VDF input
-Handlers.add(
-  "postVDFChallenge",
-  Handlers.utils.hasMatchingTag("Action", "Post-VDF-Challenge"),
-  wrapHandler(function(msg: Message)
+local function postVDFChallengeHandler(msg: Message)
   print("entered postVDFChallenge")
   
   local userId = msg.From
@@ -158,6 +146,7 @@ Handlers.add(
   
   if not requested then
     ao.send(sendResponse(msg.From, "Error", {message = "Failed to post VDF Input: " .. "not requested"}))
+    return
   end
 
   local success, err = randomManager.postVDFChallenge(userId, requestId, input, modulus)
@@ -167,14 +156,10 @@ Handlers.add(
   else
     ao.send(sendResponse(msg.From, "Error", {message = "Failed to post VDF Input: " .. err}))
   end
-  end)
-)
+end
 
 -- Handler for posting VDF output and proof
-Handlers.add(
-  "postVDFOutputAndProof",
-  Handlers.utils.hasMatchingTag("Action", "Post-VDF-Output-And-Proof"),
-  wrapHandler(function(msg: Message)
+local function postVDFOutputAndProofHandler(msg: Message)
   print("entered postVDFOutputAndProof")
   
   local userId = msg.From
@@ -188,7 +173,8 @@ Handlers.add(
   end
 
   if output == nil or proof == nil or not validateInputs(output, proof) then
-    ao.send(sendResponse(msg.From, "Error", {message = "Failed to post VDF Input: " .. "values not provided"}))
+    ao.send(sendResponse(msg.From, "Error", {message = "Failed to post VDF Output: " .. "values not provided"}))
+    return
   end
 
   local requestId = data.requestId
@@ -196,7 +182,7 @@ Handlers.add(
   local requested = providerManager.hasActiveRequest(userId, requestId)
   
   if not requested then
-    ao.send(sendResponse(msg.From, "Error", {message = "Failed to post VDF Input: " .. "not requested"}))
+    ao.send(sendResponse(msg.From, "Error", {message = "Failed to post VDF Output: " .. "not requested"}))
   end
 
   local success, err = randomManager.postVDFOutputAndProof(userId, requestId, output, proof)
@@ -207,14 +193,10 @@ Handlers.add(
   else
     ao.send(sendResponse(msg.From, "Error", {message = "Failed to post VDF Output and Proof: " .. err}))
   end
-  end)
-)
+end
 
 -- Handler for getting provider balance
-Handlers.add(
-  "getProviderRandomBalance",
-  Handlers.utils.hasMatchingTag("Action", "Get-Providers-Random-Balance"),
-  wrapHandler(function(msg: Message)
+local function getProviderRandomBalanceHandler(msg: Message)
   print("entered getProviderRandomBalance")
 
   local data = (json.decode(msg.Data as string) as GetProviderRandomBalanceData)
@@ -227,14 +209,10 @@ Handlers.add(
   else
     ao.send(sendResponse(msg.From, "Error", {message = "Provider not found: " .. err}))
   end
-  end)
-)
+end
 
 -- Handler for creating random requests
-Handlers.add(
-  "creditNotice",
-  Handlers.utils.hasMatchingTag("Action", "Credit-Notice"),
-  wrapHandler(function(msg: Message)
+local function creditNoticeHandler(msg: Message)
   print("entered creditNotice")
 
   local value = math.floor(tonumber(msg.Quantity))
@@ -262,14 +240,10 @@ Handlers.add(
   else
     ao.send(sendResponse(msg.Sender, "Error", {message = "Failed to create new random request: " .. err}))
   end
-  end)
-)
+end
 
 -- Handler for getting open random requests
-Handlers.add(
-  "getOpenRandomRequests",
-  Handlers.utils.hasMatchingTag("Action", "Get-Open-Random-Requests"),
-  wrapHandler(function(msg: Message)
+local function getOpenRandomRequestsHandler(msg: Message)
   print("entered getOpenRandomRequests")
 
   local data = (json.decode(msg.Data as string) as GetOpenRandomRequestsData)
@@ -282,14 +256,10 @@ Handlers.add(
   else
     ao.send(sendResponse(msg.From, "Error", {message = "Provider not found: " .. err}))
   end
-  end)
-)
+end
 
 -- Handler for getting random requests
-Handlers.add(
-  "getRandomRequests",
-  Handlers.utils.hasMatchingTag("Action", "Get-Random-Requests"),
-  wrapHandler(function(msg: Message)
+local function getRandomRequestsHandler(msg: Message)
   print("entered getRandomRequests")
 
   local data = (json.decode(msg.Data as string) as GetRandomRequestsData)
@@ -312,7 +282,40 @@ Handlers.add(
   end
 
   ao.send(sendResponse(msg.From, "Get-Random-Requests-Response", responseData))
-  end)
-)
+end
 
+-- Add handlers
+Handlers.add('info', 
+Handlers.utils.hasMatchingTag('Action', 'Info'), 
+wrapHandler(infoHandler))
+
+Handlers.add('updateProviderBalance', 
+Handlers.utils.hasMatchingTag('Action', 'Update-Providers-Random-Balance'), 
+wrapHandler(updateProviderBalanceHandler))
+
+Handlers.add('postVDFChallenge', 
+Handlers.utils.hasMatchingTag('Action', 'Post-VDF-Challenge'), 
+wrapHandler(postVDFChallengeHandler))
+
+Handlers.add('postVDFOutputAndProof', 
+Handlers.utils.hasMatchingTag('Action', 'Post-VDF-Output-And-Proof'), 
+wrapHandler(postVDFOutputAndProofHandler))
+
+Handlers.add('getProviderRandomBalance', 
+Handlers.utils.hasMatchingTag('Action', 'Get-Providers-Random-Balance'), 
+wrapHandler(getProviderRandomBalanceHandler))
+
+Handlers.add('creditNotice', 
+Handlers.utils.hasMatchingTag('Action', 'Credit-Notice'), 
+wrapHandler(creditNoticeHandler))
+
+Handlers.add('getOpenRandomRequests', 
+Handlers.utils.hasMatchingTag('Action', 'Get-Open-Random-Requests'), 
+wrapHandler(getOpenRandomRequestsHandler))
+
+Handlers.add('getRandomRequests', 
+Handlers.utils.hasMatchingTag('Action', 'Get-Random-Requests'), 
+wrapHandler(getRandomRequestsHandler))
+
+-- Logging
 print("RandAO Process Initialized")

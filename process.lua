@@ -769,19 +769,12 @@ end
 
 
 
-Handlers.add(
-"getInfo",
-Handlers.utils.hasMatchingTag("Action", "Info"),
-wrapHandler(function(msg)
+local function infoHandler(msg)
    ao.send(sendResponse(msg.From, "Info", {}))
-end))
+end
 
 
-
-Handlers.add(
-"updateProviderBalance",
-Handlers.utils.hasMatchingTag("Action", "Update-Providers-Random-Balance"),
-wrapHandler(function(msg)
+local function updateProviderBalanceHandler(msg)
    print("entered updateProviderBalance")
 
    local userId = msg.From
@@ -804,14 +797,10 @@ wrapHandler(function(msg)
    else
       ao.send(sendResponse(msg.From, "Error", { message = "Failed to update provider balance: " .. err }))
    end
-end))
+end
 
 
-
-Handlers.add(
-"postVDFChallenge",
-Handlers.utils.hasMatchingTag("Action", "Post-VDF-Challenge"),
-wrapHandler(function(msg)
+local function postVDFChallengeHandler(msg)
    print("entered postVDFChallenge")
 
    local userId = msg.From
@@ -825,6 +814,7 @@ wrapHandler(function(msg)
 
    if not requested then
       ao.send(sendResponse(msg.From, "Error", { message = "Failed to post VDF Input: " .. "not requested" }))
+      return
    end
 
    local success, err = randomManager.postVDFChallenge(userId, requestId, input, modulus)
@@ -834,14 +824,10 @@ wrapHandler(function(msg)
    else
       ao.send(sendResponse(msg.From, "Error", { message = "Failed to post VDF Input: " .. err }))
    end
-end))
+end
 
 
-
-Handlers.add(
-"postVDFOutputAndProof",
-Handlers.utils.hasMatchingTag("Action", "Post-VDF-Output-And-Proof"),
-wrapHandler(function(msg)
+local function postVDFOutputAndProofHandler(msg)
    print("entered postVDFOutputAndProof")
 
    local userId = msg.From
@@ -855,7 +841,8 @@ wrapHandler(function(msg)
    end
 
    if output == nil or proof == nil or not validateInputs(output, proof) then
-      ao.send(sendResponse(msg.From, "Error", { message = "Failed to post VDF Input: " .. "values not provided" }))
+      ao.send(sendResponse(msg.From, "Error", { message = "Failed to post VDF Output: " .. "values not provided" }))
+      return
    end
 
    local requestId = data.requestId
@@ -863,7 +850,7 @@ wrapHandler(function(msg)
    local requested = providerManager.hasActiveRequest(userId, requestId)
 
    if not requested then
-      ao.send(sendResponse(msg.From, "Error", { message = "Failed to post VDF Input: " .. "not requested" }))
+      ao.send(sendResponse(msg.From, "Error", { message = "Failed to post VDF Output: " .. "not requested" }))
    end
 
    local success, err = randomManager.postVDFOutputAndProof(userId, requestId, output, proof)
@@ -874,14 +861,10 @@ wrapHandler(function(msg)
    else
       ao.send(sendResponse(msg.From, "Error", { message = "Failed to post VDF Output and Proof: " .. err }))
    end
-end))
+end
 
 
-
-Handlers.add(
-"getProviderRandomBalance",
-Handlers.utils.hasMatchingTag("Action", "Get-Providers-Random-Balance"),
-wrapHandler(function(msg)
+local function getProviderRandomBalanceHandler(msg)
    print("entered getProviderRandomBalance")
 
    local data = (json.decode(msg.Data))
@@ -894,14 +877,10 @@ wrapHandler(function(msg)
    else
       ao.send(sendResponse(msg.From, "Error", { message = "Provider not found: " .. err }))
    end
-end))
+end
 
 
-
-Handlers.add(
-"creditNotice",
-Handlers.utils.hasMatchingTag("Action", "Credit-Notice"),
-wrapHandler(function(msg)
+local function creditNoticeHandler(msg)
    print("entered creditNotice")
 
    local value = math.floor(tonumber(msg.Quantity))
@@ -929,14 +908,10 @@ wrapHandler(function(msg)
    else
       ao.send(sendResponse(msg.Sender, "Error", { message = "Failed to create new random request: " .. err }))
    end
-end))
+end
 
 
-
-Handlers.add(
-"getOpenRandomRequests",
-Handlers.utils.hasMatchingTag("Action", "Get-Open-Random-Requests"),
-wrapHandler(function(msg)
+local function getOpenRandomRequestsHandler(msg)
    print("entered getOpenRandomRequests")
 
    local data = (json.decode(msg.Data))
@@ -949,14 +924,10 @@ wrapHandler(function(msg)
    else
       ao.send(sendResponse(msg.From, "Error", { message = "Provider not found: " .. err }))
    end
-end))
+end
 
 
-
-Handlers.add(
-"getRandomRequests",
-Handlers.utils.hasMatchingTag("Action", "Get-Random-Requests"),
-wrapHandler(function(msg)
+local function getRandomRequestsHandler(msg)
    print("entered getRandomRequests")
 
    local data = (json.decode(msg.Data))
@@ -979,7 +950,41 @@ wrapHandler(function(msg)
    end
 
    ao.send(sendResponse(msg.From, "Get-Random-Requests-Response", responseData))
-end))
+end
+
+
+Handlers.add('info',
+Handlers.utils.hasMatchingTag('Action', 'Info'),
+infoHandler)
+
+Handlers.add('updateProviderBalance',
+Handlers.utils.hasMatchingTag('Action', 'Update-Providers-Random-Balance'),
+updateProviderBalanceHandler)
+
+Handlers.add('postVDFChallenge',
+Handlers.utils.hasMatchingTag('Action', 'Post-VDF-Challenge'),
+postVDFChallengeHandler)
+
+Handlers.add('postVDFOutputAndProof',
+Handlers.utils.hasMatchingTag('Action', 'Post-VDF-Output-And-Proof'),
+postVDFOutputAndProofHandler)
+
+Handlers.add('getProviderRandomBalance',
+Handlers.utils.hasMatchingTag('Action', 'Get-Providers-Random-Balance'),
+getProviderRandomBalanceHandler)
+
+Handlers.add('creditNotice',
+Handlers.utils.hasMatchingTag('Action', 'Credit-Notice'),
+creditNoticeHandler)
+
+Handlers.add('getOpenRandomRequests',
+Handlers.utils.hasMatchingTag('Action', 'Get-Open-Random-Requests'),
+getOpenRandomRequestsHandler)
+
+Handlers.add('getRandomRequests',
+Handlers.utils.hasMatchingTag('Action', 'Get-Random-Requests'),
+getRandomRequestsHandler)
+
 
 
 print("RandAO Process Initialized")

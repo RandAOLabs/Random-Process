@@ -3,16 +3,16 @@ import { message, result, createDataItemSigner, spawn } from "@permaweb/aoconnec
 
 // Load the wallet file
 const wallet = JSON.parse(readFileSync("./wallet.json").toString(),);
-const availableRandomValues = 7
+const availableRandomValues = 44
 const providerId = "ld4ncW8yLSkckjia3cw6qO7silUdEe1nsdiEvMoLg-0"
 const processId = "lMUJe-fgQSHPysqi78mly_0_uk2qrgTYtDSp2_eqhwU"
 const tokenId = "OeX1V1xSabUzUtNykWgu9GEaXqacBZawtK12_q5gXaA"
 let providers = {
-    provider_ids: ["ld4ncW8yLSkckjia3cw6qO7silUdEe1nsdiEvMoLg-0"]
+    provider_ids: ["ld4ncW8yLSkckjia3cw6qO7silUdEe1nsdiEvMoLg-"]
 }
 const requestIds = [0,1,2,3,4]
 
-const requestId = 0
+const requestId = 3
 const input     = "gobledygook"
 const modulus   = "7777"
 const output    = "shamuckers"
