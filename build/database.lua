@@ -67,6 +67,7 @@ function database.initializeDatabase()
           request_id INTEGER,
           provider_id TEXT,
           input_value TEXT,
+          modulus_value TEXT,
           output_value TEXT,
           proof TEXT,
           created_at INTEGER,

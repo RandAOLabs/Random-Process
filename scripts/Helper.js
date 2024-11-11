@@ -5,15 +5,16 @@ import { message, result, createDataItemSigner, spawn } from "@permaweb/aoconnec
 const wallet = JSON.parse(readFileSync("./wallet.json").toString(),);
 const availableRandomValues = 7
 const providerId = "ld4ncW8yLSkckjia3cw6qO7silUdEe1nsdiEvMoLg-0"
-const processId = "Xzs7TJ81L03wNBe8tS-ArB7xDiKIHg9q50ylsDfAVbY"
+const processId = "lMUJe-fgQSHPysqi78mly_0_uk2qrgTYtDSp2_eqhwU"
 const tokenId = "OeX1V1xSabUzUtNykWgu9GEaXqacBZawtK12_q5gXaA"
 let providers = {
     provider_ids: ["ld4ncW8yLSkckjia3cw6qO7silUdEe1nsdiEvMoLg-0"]
 }
 const requestIds = [0,1,2,3,4]
 
-const requestId = 4
+const requestId = 0
 const input     = "gobledygook"
+const modulus   = "7777"
 const output    = "shamuckers"
 const proof     = "proofs???"
 
@@ -192,9 +193,9 @@ async function getRequests() {
     return id;
 }
 
-async function postVDFInput() {
+async function postVDFChallenge() {
     let tags = [
-        { name: "Action", value: "Post-VDF-Input" },
+        { name: "Action", value: "Post-VDF-Challenge" },
     ]
 
     let id = await message({
@@ -211,7 +212,7 @@ async function postVDFInput() {
           The "data" portion of the message
           If not specified a random string will be generated
         */
-          data: JSON.stringify({ requestId, input }),
+          data: JSON.stringify({ requestId, input, modulus }),
         })
 
     //console.log(id)
@@ -300,7 +301,7 @@ async function main() {
         }
     } else if (inputArg == 6) {
         try {
-            await postVDFInput()
+            await postVDFChallenge()
         } catch (err) {
             console.error("Error reading process IDs or sending messages:", err);
         }

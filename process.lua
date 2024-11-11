@@ -70,6 +70,7 @@ function database.initializeDatabase()
           request_id INTEGER,
           provider_id TEXT,
           input_value TEXT,
+          modulus_value TEXT,
           output_value TEXT,
           proof TEXT,
           created_at INTEGER,
@@ -480,6 +481,7 @@ ProviderVDFResult = {}
 
 
 
+
 RandomRequest = {}
 
 
@@ -572,8 +574,8 @@ function randomManager.createRandomRequest(userId, providers)
    return execute_ok, execute_err
 end
 
-function randomManager.postVDFInput(userId, requestId, inputValue)
-   print("entered postVDFInput")
+function randomManager.postVDFChallenge(userId, requestId, inputValue, modulusValue)
+   print("entered postVDFChallenge")
 
    local timestamp = os.time()
 
@@ -584,8 +586,8 @@ function randomManager.postVDFInput(userId, requestId, inputValue)
 
    print("Preparing SQL statement for provider request response creation")
    local stmt = DB:prepare([[
-    INSERT OR IGNORE INTO ProviderVDFResults (request_id, provider_id, input_value, created_at)
-    VALUES (:request_id, :provider_id, :input_value, :created_at);
+    INSERT OR IGNORE INTO ProviderVDFResults (request_id, provider_id, input_value, modulus_value, created_at)
+    VALUES (:request_id, :provider_id, :input_value, :modulus_value, :created_at);
   ]])
 
    if not stmt then
@@ -595,7 +597,7 @@ function randomManager.postVDFInput(userId, requestId, inputValue)
 
    print("Binding parameters for provider request response creation")
    local bind_ok, bind_err = pcall(function()
-      stmt:bind_names({ request_id = requestId, provider_id = userId, input_value = inputValue, created_at = timestamp })
+      stmt:bind_names({ request_id = requestId, provider_id = userId, input_value = inputValue, modulus_value = modulusValue, created_at = timestamp })
    end)
 
    if not bind_ok then
@@ -681,7 +683,8 @@ UpdateProviderRandomBalanceData = {}
 
 
 
-PostVDFInputData = {}
+PostVDFChallengeData = {}
+
 
 
 
@@ -806,16 +809,17 @@ end))
 
 
 Handlers.add(
-"postVDFInput",
-Handlers.utils.hasMatchingTag("Action", "Post-VDF-Input"),
+"postVDFChallenge",
+Handlers.utils.hasMatchingTag("Action", "Post-VDF-Challenge"),
 wrapHandler(function(msg)
-   print("entered postVDFInput")
+   print("entered postVDFChallenge")
 
    local userId = msg.From
 
    local data = (json.decode(msg.Data))
-   local input = data.input
    local requestId = data.requestId
+   local modulus = data.modulus
+   local input = data.input
 
    local requested = providerManager.hasActiveRequest(userId, requestId)
 
@@ -823,7 +827,7 @@ wrapHandler(function(msg)
       ao.send(sendResponse(msg.From, "Error", { message = "Failed to post VDF Input: " .. "not requested" }))
    end
 
-   local success, err = randomManager.postVDFInput(userId, requestId, input)
+   local success, err = randomManager.postVDFChallenge(userId, requestId, input, modulus)
 
    if success then
       ao.send(sendResponse(msg.From, "Posted VDF Input", SuccessMessage))

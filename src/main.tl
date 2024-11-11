@@ -16,9 +16,10 @@ global record UpdateProviderRandomBalanceData
   availableRandomValues: integer
 end
 
-global record PostVDFInputData
+global record PostVDFChallengeData
   requestId: integer
   input: string
+  modulus: string
 end
 
 global record PostVDFOutputAndProofData
@@ -141,16 +142,17 @@ Handlers.add(
 
 -- Handler for posting VDF input
 Handlers.add(
-  "postVDFInput",
-  Handlers.utils.hasMatchingTag("Action", "Post-VDF-Input"),
+  "postVDFChallenge",
+  Handlers.utils.hasMatchingTag("Action", "Post-VDF-Challenge"),
   wrapHandler(function(msg: Message)
-  print("entered postVDFInput")
+  print("entered postVDFChallenge")
   
   local userId = msg.From
 
-  local data = (json.decode(msg.Data as string) as PostVDFInputData)
-  local input = data.input
+  local data = (json.decode(msg.Data as string) as PostVDFChallengeData)
   local requestId = data.requestId
+  local modulus = data.modulus
+  local input = data.input
 
   local requested = providerManager.hasActiveRequest(userId, requestId)
   
@@ -158,7 +160,7 @@ Handlers.add(
     ao.send(sendResponse(msg.From, "Error", {message = "Failed to post VDF Input: " .. "not requested"}))
   end
 
-  local success, err = randomManager.postVDFInput(userId, requestId, input)
+  local success, err = randomManager.postVDFChallenge(userId, requestId, input, modulus)
 
   if success then
     ao.send(sendResponse(msg.From, "Posted VDF Input", SuccessMessage))

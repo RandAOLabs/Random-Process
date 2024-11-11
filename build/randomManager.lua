@@ -13,6 +13,7 @@ ProviderVDFResult = {}
 
 
 
+
 RandomRequest = {}
 
 
@@ -105,8 +106,8 @@ function randomManager.createRandomRequest(userId, providers)
    return execute_ok, execute_err
 end
 
-function randomManager.postVDFInput(userId, requestId, inputValue)
-   print("entered postVDFInput")
+function randomManager.postVDFChallenge(userId, requestId, inputValue, modulusValue)
+   print("entered postVDFChallenge")
 
    local timestamp = os.time()
 
@@ -117,8 +118,8 @@ function randomManager.postVDFInput(userId, requestId, inputValue)
 
    print("Preparing SQL statement for provider request response creation")
    local stmt = DB:prepare([[
-    INSERT OR IGNORE INTO ProviderVDFResults (request_id, provider_id, input_value, created_at)
-    VALUES (:request_id, :provider_id, :input_value, :created_at);
+    INSERT OR IGNORE INTO ProviderVDFResults (request_id, provider_id, input_value, modulus_value, created_at)
+    VALUES (:request_id, :provider_id, :input_value, :modulus_value, :created_at);
   ]])
 
    if not stmt then
@@ -128,7 +129,7 @@ function randomManager.postVDFInput(userId, requestId, inputValue)
 
    print("Binding parameters for provider request response creation")
    local bind_ok, bind_err = pcall(function()
-      stmt:bind_names({ request_id = requestId, provider_id = userId, input_value = inputValue, created_at = timestamp })
+      stmt:bind_names({ request_id = requestId, provider_id = userId, input_value = inputValue, modulus_value = modulusValue, created_at = timestamp })
    end)
 
    if not bind_ok then
