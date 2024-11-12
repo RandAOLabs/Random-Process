@@ -95,11 +95,11 @@ local function wrapHandler(handlerFn)
    end
 end
 
+
 local function createProvider(userid)
    local success, _ = providerManager.createProvider(userid)
    return success
 end
-
 
 
 local function infoHandler(msg)
@@ -107,7 +107,7 @@ local function infoHandler(msg)
 end
 
 
-local function updateProviderBalanceHandler(msg)
+function updateProviderBalanceHandler(msg)
    print("entered updateProviderBalance")
 
    local userId = msg.From
@@ -118,7 +118,7 @@ local function updateProviderBalanceHandler(msg)
 
    if not staked then
       ao.send(sendResponse(msg.From, "Error", { message = "Update failed: Provider not staked" }))
-      return
+      return false
    end
 
    local data = (json.decode(msg.Data))
@@ -127,13 +127,15 @@ local function updateProviderBalanceHandler(msg)
 
    if success then
       ao.send(sendResponse(msg.From, "Updated Provider Random Balance", SuccessMessage))
+      return true
    else
       ao.send(sendResponse(msg.From, "Error", { message = "Failed to update provider balance: " .. err }))
+      return false
    end
 end
 
 
-local function postVDFChallengeHandler(msg)
+function postVDFChallengeHandler(msg)
    print("entered postVDFChallenge")
 
    local userId = msg.From
@@ -147,20 +149,22 @@ local function postVDFChallengeHandler(msg)
 
    if not requested then
       ao.send(sendResponse(msg.From, "Error", { message = "Failed to post VDF Input: " .. "not requested" }))
-      return
+      return false
    end
 
    local success, err = randomManager.postVDFChallenge(userId, requestId, input, modulus)
 
    if success then
       ao.send(sendResponse(msg.From, "Posted VDF Input", SuccessMessage))
+      return true
    else
       ao.send(sendResponse(msg.From, "Error", { message = "Failed to post VDF Input: " .. err }))
+      return false
    end
 end
 
 
-local function postVDFOutputAndProofHandler(msg)
+function postVDFOutputAndProofHandler(msg)
    print("entered postVDFOutputAndProof")
 
    local userId = msg.From
@@ -175,7 +179,7 @@ local function postVDFOutputAndProofHandler(msg)
 
    if output == nil or proof == nil or not validateInputs(output, proof) then
       ao.send(sendResponse(msg.From, "Error", { message = "Failed to post VDF Output: " .. "values not provided" }))
-      return
+      return false
    end
 
    local requestId = data.requestId
@@ -184,6 +188,7 @@ local function postVDFOutputAndProofHandler(msg)
 
    if not requested then
       ao.send(sendResponse(msg.From, "Error", { message = "Failed to post VDF Output: " .. "not requested" }))
+      return false
    end
 
    local success, err = randomManager.postVDFOutputAndProof(userId, requestId, output, proof)
@@ -191,13 +196,15 @@ local function postVDFOutputAndProofHandler(msg)
    if success then
       providerManager.removeActiveRequest(userId, requestId)
       ao.send(sendResponse(msg.From, "Posted VDF Output and Proof", SuccessMessage))
+      return true
    else
       ao.send(sendResponse(msg.From, "Error", { message = "Failed to post VDF Output and Proof: " .. err }))
+      return false
    end
 end
 
 
-local function getProviderRandomBalanceHandler(msg)
+function getProviderRandomBalanceHandler(msg)
    print("entered getProviderRandomBalance")
 
    local data = (json.decode(msg.Data))
@@ -207,13 +214,15 @@ local function getProviderRandomBalanceHandler(msg)
    if err == "" then
       local responseData = { providerId = providerId, availibleRandomValues = randomBalance }
       ao.send(sendResponse(msg.From, "Get-Providers-Random-Balance-Response", responseData))
+      return true
    else
       ao.send(sendResponse(msg.From, "Error", { message = "Provider not found: " .. err }))
+      return false
    end
 end
 
 
-local function creditNoticeHandler(msg)
+function creditNoticeHandler(msg)
    print("entered creditNotice")
 
    local value = math.floor(tonumber(msg.Quantity))
@@ -221,12 +230,12 @@ local function creditNoticeHandler(msg)
    if msg.From ~= TokenInUse then
       print("Invalid Token Sent: " .. msg.From)
       ao.send(sendResponse(msg.Sender, "Error", { message = "Invalid TokenInUse Sent" .. msg.From }))
-      return
+      return false
    end
    if value < Cost then
       print("Invalid Value Sent: " .. tostring(value))
       ao.send(sendResponse(msg.Sender, "Error", { message = "Invalid Value Sent" .. msg.From }))
-      return
+      return false
    end
    print("Providers: " .. msg.Tags["X-Providers"])
    print("Providers: " and json.decode(msg.Tags["X-Providers"]))
@@ -238,13 +247,15 @@ local function creditNoticeHandler(msg)
 
    if success then
       ao.send(sendResponse(msg.Sender, "Created New Random Request", SuccessMessage))
+      return true
    else
       ao.send(sendResponse(msg.Sender, "Error", { message = "Failed to create new random request: " .. err }))
+      return false
    end
 end
 
 
-local function getOpenRandomRequestsHandler(msg)
+function getOpenRandomRequestsHandler(msg)
    print("entered getOpenRandomRequests")
 
    local data = (json.decode(msg.Data))
@@ -254,13 +265,15 @@ local function getOpenRandomRequestsHandler(msg)
    if err == "" then
       local responseData = { providerId = providerId, activeRequests = activeRequests }
       ao.send(sendResponse(msg.From, "Get-Open-Random-Requests-Response", responseData))
+      return true
    else
       ao.send(sendResponse(msg.From, "Error", { message = "Provider not found: " .. err }))
+      return false
    end
 end
 
 
-local function getRandomRequestsHandler(msg)
+function getRandomRequestsHandler(msg)
    print("entered getRandomRequests")
 
    local data = (json.decode(msg.Data))
@@ -283,41 +296,41 @@ local function getRandomRequestsHandler(msg)
    end
 
    ao.send(sendResponse(msg.From, "Get-Random-Requests-Response", responseData))
+   return true
 end
 
 
 Handlers.add('info',
 Handlers.utils.hasMatchingTag('Action', 'Info'),
-infoHandler)
+wrapHandler(infoHandler))
 
 Handlers.add('updateProviderBalance',
 Handlers.utils.hasMatchingTag('Action', 'Update-Providers-Random-Balance'),
-updateProviderBalanceHandler)
+wrapHandler(updateProviderBalanceHandler))
 
 Handlers.add('postVDFChallenge',
 Handlers.utils.hasMatchingTag('Action', 'Post-VDF-Challenge'),
-postVDFChallengeHandler)
+wrapHandler(postVDFChallengeHandler))
 
 Handlers.add('postVDFOutputAndProof',
 Handlers.utils.hasMatchingTag('Action', 'Post-VDF-Output-And-Proof'),
-postVDFOutputAndProofHandler)
+wrapHandler(postVDFOutputAndProofHandler))
 
 Handlers.add('getProviderRandomBalance',
 Handlers.utils.hasMatchingTag('Action', 'Get-Providers-Random-Balance'),
-getProviderRandomBalanceHandler)
+wrapHandler(getProviderRandomBalanceHandler))
 
 Handlers.add('creditNotice',
 Handlers.utils.hasMatchingTag('Action', 'Credit-Notice'),
-creditNoticeHandler)
+wrapHandler(creditNoticeHandler))
 
 Handlers.add('getOpenRandomRequests',
 Handlers.utils.hasMatchingTag('Action', 'Get-Open-Random-Requests'),
-getOpenRandomRequestsHandler)
+wrapHandler(getOpenRandomRequestsHandler))
 
 Handlers.add('getRandomRequests',
 Handlers.utils.hasMatchingTag('Action', 'Get-Random-Requests'),
-getRandomRequestsHandler)
-
+wrapHandler(getRandomRequestsHandler))
 
 
 print("RandAO Process Initialized")

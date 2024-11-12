@@ -17,13 +17,13 @@ global record UpdateProviderRandomBalanceData
 end
 
 global record PostVDFChallengeData
-  requestId: integer
+  requestId: string
   input: string
   modulus: string
 end
 
 global record PostVDFOutputAndProofData
-  requestId: integer
+  requestId: string
   output: string
   proof: string
 end
@@ -37,7 +37,7 @@ global record GetOpenRandomRequestsData
 end
 
 global record GetRandomRequestsData
-  requestIds: {integer}
+  requestIds: {string}
 end
 
 global record CreateRandomRequestData
@@ -95,6 +95,7 @@ local function wrapHandler(handlerFn: function(msg: Message)): function(msg: Mes
   end
 end
 
+-- TODO Remove with staking
 local function createProvider(userid: string): boolean
   local success, _ = providerManager.createProvider(userid)
   return success
@@ -106,7 +107,7 @@ local function infoHandler(msg: Message)
 end
 
 -- Handler for updating providers balance
-local function updateProviderBalanceHandler(msg: Message)
+global function updateProviderBalanceHandler(msg: Message): boolean
   print("entered updateProviderBalance")
   
   local userId = msg.From
@@ -117,7 +118,7 @@ local function updateProviderBalanceHandler(msg: Message)
   -- Check if staked TODO remove stubbed
   if not staked then 
     ao.send(sendResponse(msg.From, "Error", {message = "Update failed: Provider not staked"}))
-    return
+    return false
   end
 
   local data = (json.decode(msg.Data as string) as UpdateProviderRandomBalanceData)
@@ -126,13 +127,15 @@ local function updateProviderBalanceHandler(msg: Message)
 
   if success then
     ao.send(sendResponse(msg.From, "Updated Provider Random Balance", SuccessMessage))
+    return true
   else
     ao.send(sendResponse(msg.From, "Error", {message = "Failed to update provider balance: " .. err}))
+    return false
   end
 end
 
 -- Handler for posting VDF input
-local function postVDFChallengeHandler(msg: Message)
+global function postVDFChallengeHandler(msg: Message): boolean
   print("entered postVDFChallenge")
   
   local userId = msg.From
@@ -146,20 +149,22 @@ local function postVDFChallengeHandler(msg: Message)
   
   if not requested then
     ao.send(sendResponse(msg.From, "Error", {message = "Failed to post VDF Input: " .. "not requested"}))
-    return
+    return false
   end
 
   local success, err = randomManager.postVDFChallenge(userId, requestId, input, modulus)
 
   if success then
     ao.send(sendResponse(msg.From, "Posted VDF Input", SuccessMessage))
+    return true
   else
     ao.send(sendResponse(msg.From, "Error", {message = "Failed to post VDF Input: " .. err}))
+    return false
   end
 end
 
 -- Handler for posting VDF output and proof
-local function postVDFOutputAndProofHandler(msg: Message)
+global function postVDFOutputAndProofHandler(msg: Message): boolean
   print("entered postVDFOutputAndProof")
   
   local userId = msg.From
@@ -174,7 +179,7 @@ local function postVDFOutputAndProofHandler(msg: Message)
 
   if output == nil or proof == nil or not validateInputs(output, proof) then
     ao.send(sendResponse(msg.From, "Error", {message = "Failed to post VDF Output: " .. "values not provided"}))
-    return
+    return false
   end
 
   local requestId = data.requestId
@@ -183,6 +188,7 @@ local function postVDFOutputAndProofHandler(msg: Message)
   
   if not requested then
     ao.send(sendResponse(msg.From, "Error", {message = "Failed to post VDF Output: " .. "not requested"}))
+    return false
   end
 
   local success, err = randomManager.postVDFOutputAndProof(userId, requestId, output, proof)
@@ -190,13 +196,15 @@ local function postVDFOutputAndProofHandler(msg: Message)
   if success then
     providerManager.removeActiveRequest(userId, requestId)
     ao.send(sendResponse(msg.From, "Posted VDF Output and Proof", SuccessMessage))
+    return true
   else
     ao.send(sendResponse(msg.From, "Error", {message = "Failed to post VDF Output and Proof: " .. err}))
+    return false
   end
 end
 
 -- Handler for getting provider balance
-local function getProviderRandomBalanceHandler(msg: Message)
+global function getProviderRandomBalanceHandler(msg: Message): boolean
   print("entered getProviderRandomBalance")
 
   local data = (json.decode(msg.Data as string) as GetProviderRandomBalanceData)
@@ -206,13 +214,15 @@ local function getProviderRandomBalanceHandler(msg: Message)
   if err == "" then
     local responseData: GetProviderRandomBalanceResponse = { providerId = providerId, availibleRandomValues = randomBalance }
     ao.send(sendResponse(msg.From, "Get-Providers-Random-Balance-Response", responseData))
+    return true
   else
     ao.send(sendResponse(msg.From, "Error", {message = "Provider not found: " .. err}))
+    return false
   end
 end
 
 -- Handler for creating random requests
-local function creditNoticeHandler(msg: Message)
+global function creditNoticeHandler(msg: Message): boolean
   print("entered creditNotice")
 
   local value = math.floor(tonumber(msg.Quantity))
@@ -220,12 +230,12 @@ local function creditNoticeHandler(msg: Message)
   if msg.From ~= TokenInUse then
     print("Invalid Token Sent: " .. msg.From)
     ao.send(sendResponse(msg.Sender, "Error", {message = "Invalid TokenInUse Sent" .. msg.From}))
-    return
+    return false
   end
   if value < Cost then
     print("Invalid Value Sent: " .. tostring(value))
     ao.send(sendResponse(msg.Sender, "Error", {message = "Invalid Value Sent" .. msg.From}))
-    return
+    return false
   end
   print("Providers: " .. msg.Tags["X-Providers"])
   print("Providers: " and json.decode(msg.Tags["X-Providers"]))
@@ -237,13 +247,15 @@ local function creditNoticeHandler(msg: Message)
 
   if success then
     ao.send(sendResponse(msg.Sender, "Created New Random Request", SuccessMessage))
+    return true
   else
     ao.send(sendResponse(msg.Sender, "Error", {message = "Failed to create new random request: " .. err}))
+    return false
   end
 end
 
 -- Handler for getting open random requests
-local function getOpenRandomRequestsHandler(msg: Message)
+global function getOpenRandomRequestsHandler(msg: Message): boolean
   print("entered getOpenRandomRequests")
 
   local data = (json.decode(msg.Data as string) as GetOpenRandomRequestsData)
@@ -253,13 +265,15 @@ local function getOpenRandomRequestsHandler(msg: Message)
   if err == "" then
     local responseData: GetOpenRandomRequestsResponse = { providerId = providerId, activeRequests = activeRequests }
     ao.send(sendResponse(msg.From, "Get-Open-Random-Requests-Response", responseData))
+    return true
   else
     ao.send(sendResponse(msg.From, "Error", {message = "Provider not found: " .. err}))
+    return false
   end
 end
 
 -- Handler for getting random requests
-local function getRandomRequestsHandler(msg: Message)
+global function getRandomRequestsHandler(msg: Message): boolean
   print("entered getRandomRequests")
 
   local data = (json.decode(msg.Data as string) as GetRandomRequestsData)
@@ -282,6 +296,7 @@ local function getRandomRequestsHandler(msg: Message)
   end
 
   ao.send(sendResponse(msg.From, "Get-Random-Requests-Response", responseData))
+  return true
 end
 
 -- Add handlers

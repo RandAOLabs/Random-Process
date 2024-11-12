@@ -5,7 +5,7 @@ local providerManager = require "providerManager"
 
 -- Type definitions
 global record ProviderVDFResult
-  request_id: integer
+  request_id: string
   provider_id: string
   input_value: string
   modulus_value: string
@@ -29,13 +29,15 @@ end
 
 local randomManager = {}
 
-function randomManager.nextId(): integer 
-    local id = CurrentRequestId or 0
-    CurrentRequestId = id + 1
-    return id
+function randomManager.generateUUID(): string
+  local template = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'
+  return (string.gsub(template, '[xy]', function (c: string): string
+    local v = (c == 'x') and math.random(0, 0xf) or math.random(8, 0xb)
+    return string.format('%x', v)
+  end))
 end
 
-function randomManager.getRandomRequest(requestId: integer): RandomRequest, string
+function randomManager.getRandomRequest(requestId: string): RandomRequest, string
   print("entered getRandomRequest")
   local stmt = DB:prepare("SELECT * FROM RandomRequests WHERE request_id = :request_id")
   stmt:bind_names({request_id = requestId})  
@@ -47,7 +49,7 @@ function randomManager.getRandomRequest(requestId: integer): RandomRequest, stri
   end
 end
 
-function randomManager.getVDFResults(requestId: integer): ProviderVDFResults, string
+function randomManager.getVDFResults(requestId: string): ProviderVDFResults, string
   print("entered getVDFResults")
   local stmt = DB:prepare("SELECT * FROM ProviderVDFResults WHERE request_id = :request_id")
   stmt:bind_names({request_id = requestId})  
@@ -63,7 +65,7 @@ function randomManager.createRandomRequest(userId: string, providers: string): b
   print("entered createRandomRequest")
 
   local timestamp = os.time()
-  local requestId = randomManager.nextId()
+  local requestId = randomManager.generateUUID()
 
   if not DB then
     print("Database connection not initialized")
@@ -106,7 +108,7 @@ function randomManager.createRandomRequest(userId: string, providers: string): b
   return execute_ok, execute_err
 end
 
-function randomManager.postVDFChallenge(userId: string, requestId: integer, inputValue: string, modulusValue: string): boolean, string
+function randomManager.postVDFChallenge(userId: string, requestId: string, inputValue: string, modulusValue: string): boolean, string
   print("entered postVDFChallenge")
 
   local timestamp = os.time()
@@ -150,7 +152,7 @@ function randomManager.postVDFChallenge(userId: string, requestId: integer, inpu
   return execute_ok, execute_err
 end
 
-function randomManager.postVDFOutputAndProof(userId: string, requestId: integer, outputValue: string, proof: string): boolean, string
+function randomManager.postVDFOutputAndProof(userId: string, requestId: string, outputValue: string, proof: string): boolean, string
   print("entered postVDFOutputAndProof")
 
   if not DB then

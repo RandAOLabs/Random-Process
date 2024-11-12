@@ -55,7 +55,7 @@ function database.initializeDatabase()
       ]],
          [[
         CREATE TABLE IF NOT EXISTS RandomRequests (
-          request_id INTEGER PRIMARY KEY,
+          request_id STRING PRIMARY KEY,
           requester TEXT,
           providers TEXT,
           entropy TEXT,
@@ -64,7 +64,7 @@ function database.initializeDatabase()
       ]],
          [[
         CREATE TABLE IF NOT EXISTS ProviderVDFResults (
-          request_id INTEGER,
+          request_id STRING,
           provider_id TEXT,
           input_value TEXT,
           modulus_value TEXT,

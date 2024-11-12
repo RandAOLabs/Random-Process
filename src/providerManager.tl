@@ -18,7 +18,7 @@ global record ProviderList
 end
 
 global record RequestList
-  request_ids: {integer}
+  request_ids: {string}
 end
 
 local providerManager = {}
@@ -77,7 +77,7 @@ function providerManager.getProvider(userId: string): Provider, string
   end
 end
 
-function providerManager.pushActiveRequests(providers: string, requestId: integer): boolean, string
+function providerManager.pushActiveRequests(providers: string, requestId: string): boolean, string
   print("entered pushActiveRequests")
   local providerList  = json.decode(providers) as ProviderList
   local success: boolean = true
@@ -129,7 +129,7 @@ function providerManager.pushActiveRequests(providers: string, requestId: intege
   end
 end
 
-function providerManager.removeActiveRequest(provider_id: string, requestId: integer): boolean, string
+function providerManager.removeActiveRequest(provider_id: string, requestId: string): boolean, string
   print("entered removeActiveRequest")
 
   -- Fetch the provider
@@ -187,7 +187,7 @@ function providerManager.getActiveRequests(userId: string): string, string
   end
 end
 
-function providerManager.hasActiveRequest(userId: string, requestId: integer): boolean
+function providerManager.hasActiveRequest(userId: string, requestId: string): boolean
   local activeRequests, err = providerManager.getActiveRequests(userId) 
   if err == "" then
     local requestIds = json.decode(activeRequests) as RequestList

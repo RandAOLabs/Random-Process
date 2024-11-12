@@ -1,4 +1,4 @@
-local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local os = _tl_compat and _tl_compat.os or os; local pcall = _tl_compat and _tl_compat.pcall or pcall; require("globals")
+local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local math = _tl_compat and _tl_compat.math or math; local os = _tl_compat and _tl_compat.os or os; local pcall = _tl_compat and _tl_compat.pcall or pcall; local string = _tl_compat and _tl_compat.string or string; require("globals")
 
 local dbUtils = require("dbUtils")
 local providerManager = require("providerManager")
@@ -29,10 +29,12 @@ ProviderVDFResults = {}
 
 local randomManager = {}
 
-function randomManager.nextId()
-   local id = CurrentRequestId or 0
-   CurrentRequestId = id + 1
-   return id
+function randomManager.generateUUID()
+   local template = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'
+   return (string.gsub(template, '[xy]', function(c)
+      local v = (c == 'x') and math.random(0, 0xf) or math.random(8, 0xb)
+      return string.format('%x', v)
+   end))
 end
 
 function randomManager.getRandomRequest(requestId)
@@ -63,7 +65,7 @@ function randomManager.createRandomRequest(userId, providers)
    print("entered createRandomRequest")
 
    local timestamp = os.time()
-   local requestId = randomManager.nextId()
+   local requestId = randomManager.generateUUID()
 
    if not DB then
       print("Database connection not initialized")
