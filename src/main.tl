@@ -240,7 +240,7 @@ global function creditNoticeHandler(msg: Message): boolean
   print("Providers: " .. msg.Tags["X-Providers"])
   print("Providers: " and json.decode(msg.Tags["X-Providers"]))
 
-  local providers = msg.Tags["X-Providers"]
+  local providers = msg.Tags["X-Providers"] or nil
   local userId = msg.Sender
 
   local success, err = randomManager.createRandomRequest(userId, providers)
