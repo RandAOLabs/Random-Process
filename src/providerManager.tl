@@ -24,6 +24,8 @@ end
 local providerManager = {}
 
 function providerManager.createProvider(userId: string): boolean, string
+  print("entered providerManager.createProvider")
+  
   local timestamp = os.time()
   
   if not DB then
@@ -66,6 +68,8 @@ function providerManager.createProvider(userId: string): boolean, string
 end
 
 function providerManager.getProvider(userId: string): Provider, string
+  print("entered providerManager.getProvider")
+  
   local stmt = DB:prepare("SELECT * FROM Providers WHERE provider_id = :provider_id")
   stmt:bind_names({provider_id = userId})  
   local result = dbUtils.queryOne(stmt)
@@ -78,7 +82,8 @@ function providerManager.getProvider(userId: string): Provider, string
 end
 
 function providerManager.pushActiveRequests(providers: string, requestId: string): boolean, string
-  print("entered pushActiveRequests")
+  print("entered providerManager.pushActiveRequests")
+  
   local providerList  = json.decode(providers) as ProviderList
   local success: boolean = true
   local err: string = ""
@@ -130,7 +135,7 @@ function providerManager.pushActiveRequests(providers: string, requestId: string
 end
 
 function providerManager.removeActiveRequest(provider_id: string, requestId: string): boolean, string
-  print("entered removeActiveRequest")
+  print("entered providerManager.removeActiveRequest")
 
   -- Fetch the provider
   local provider = providerManager.getProvider(provider_id)
@@ -179,6 +184,7 @@ function providerManager.removeActiveRequest(provider_id: string, requestId: str
 end
 
 function providerManager.getActiveRequests(userId: string): string, string
+  print("entered providerManager.getActiveRequests")
   local provider = providerManager.getProvider(userId)
   if provider.active_requests then
     return provider.active_requests, ""
@@ -188,6 +194,8 @@ function providerManager.getActiveRequests(userId: string): string, string
 end
 
 function providerManager.hasActiveRequest(userId: string, requestId: string): boolean
+  print("entered providerManager.hasActiveRequest")
+
   local activeRequests, err = providerManager.getActiveRequests(userId) 
   if err == "" then
     local requestIds = json.decode(activeRequests) as RequestList
@@ -203,10 +211,13 @@ function providerManager.hasActiveRequest(userId: string, requestId: string): bo
 end
 
 function providerManager.checkStakeStubbed(_userId: string): boolean, string
+  print("entered providerManager.checkStakeStubbed")
   return true, ""
 end
 
 function providerManager.checkStake(userId: string): boolean, string
+  print("entered providerManager.checkStake")
+
   local provider, _ = providerManager.getProvider(userId)
   if provider.stake < RequiredStake then 
     return false, "Stake is less than required"
@@ -216,6 +227,8 @@ function providerManager.checkStake(userId: string): boolean, string
 end
 
 function providerManager.updateProviderBalance(userId: string, balance: integer): boolean, string
+  print("entered providerManager.updateProviderBalance")
+
   local stmt = DB:prepare[[
     UPDATE Providers
     SET random_balance = :balance
@@ -236,6 +249,8 @@ end
 
 
 function providerManager.updateProviderStatus(userId: string, active: boolean): boolean, string
+  print("entered providerManager.updateProviderStatus")
+
   local stmt: statement 
   local status: integer = active and 1 or 0
 

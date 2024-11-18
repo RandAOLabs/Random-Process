@@ -4,3 +4,7 @@ package-lock
 luacov.report.out
 luacov.report.out.index
 luacov.stats.out
+build/
+build-lua/
+package-lock.json
+constants.txt

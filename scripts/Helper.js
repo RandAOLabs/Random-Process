@@ -4,15 +4,15 @@ import { message, result, createDataItemSigner, spawn } from "@permaweb/aoconnec
 // Load the wallet file
 const wallet = JSON.parse(readFileSync("./wallet.json").toString(),);
 const availableRandomValues = 44
-const providerId = "ld4ncW8yLSkckjia3cw6qO7silUdEe1nsdiEvMoLg-0"
-const processId = "lMUJe-fgQSHPysqi78mly_0_uk2qrgTYtDSp2_eqhwU"
+const providerId = "lld4ncW8yLSkckjia3cw6qO7silUdEe1nsdiEvMoLg-0"
+const processId = "ZCBFSw2oALTIdGYrmrbqxciB1OSrptp11nBLAMLLFKI"
 const tokenId = "OeX1V1xSabUzUtNykWgu9GEaXqacBZawtK12_q5gXaA"
 let providers = {
-    provider_ids: ["ld4ncW8yLSkckjia3cw6qO7silUdEe1nsdiEvMoLg-"]
+    provider_ids: ["ld4ncW8yLSkckjia3cw6qO7silUdEe1nsdiEvMoLg-0"]
 }
-const requestIds = [0,1,2,3,4]
+const requestIds = ["00a38f54-a48d-4505-9150-c52a3753658f"]
 
-const requestId = 3
+const requestId = "00a38f54-a48d-4505-9150-c52a3753658f"
 const input     = "gobledygook"
 const modulus   = "7777"
 const output    = "shamuckers"

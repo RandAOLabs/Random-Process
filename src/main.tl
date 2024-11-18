@@ -53,7 +53,7 @@ end
 
 global record GetOpenRandomRequestsResponse
   providerId: string
-  activeRequests: string
+  activeRequests: RequestList
 end
 
 global record RandomRequestResponse
@@ -237,8 +237,6 @@ global function creditNoticeHandler(msg: Message): boolean
     ao.send(sendResponse(msg.Sender, "Error", {message = "Invalid Value Sent" .. msg.From}))
     return false
   end
-  print("Providers: " .. msg.Tags["X-Providers"])
-  print("Providers: " and json.decode(msg.Tags["X-Providers"]))
 
   local providers = msg.Tags["X-Providers"] or nil
   local userId = msg.Sender
@@ -263,7 +261,8 @@ global function getOpenRandomRequestsHandler(msg: Message): boolean
   local activeRequests, err = providerManager.getActiveRequests(providerId)
 
   if err == "" then
-    local responseData: GetOpenRandomRequestsResponse = { providerId = providerId, activeRequests = activeRequests }
+    local requestIds = json.decode(activeRequests) as RequestList
+    local responseData: GetOpenRandomRequestsResponse = { providerId = providerId, activeRequests = requestIds }
     ao.send(sendResponse(msg.From, "Get-Open-Random-Requests-Response", responseData))
     return true
   else

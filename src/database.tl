@@ -58,6 +58,7 @@ function database.initializeDatabase(): boolean
           request_id STRING PRIMARY KEY,
           requester TEXT,
           providers TEXT,
+          status TEXT,
           entropy TEXT,
           created_at INTEGER
         );

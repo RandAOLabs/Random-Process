@@ -30,6 +30,8 @@ end
 local randomManager = {}
 
 function randomManager.generateUUID(): string
+  print("entered randomManager.generateUUID")
+
   local template = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'
   return (string.gsub(template, '[xy]', function (c: string): string
     local v = (c == 'x') and math.random(0, 0xf) or math.random(8, 0xb)
@@ -38,7 +40,8 @@ function randomManager.generateUUID(): string
 end
 
 function randomManager.getRandomRequest(requestId: string): RandomRequest, string
-  print("entered getRandomRequest")
+  print("entered randomManager.getRandomRequest")
+
   local stmt = DB:prepare("SELECT * FROM RandomRequests WHERE request_id = :request_id")
   stmt:bind_names({request_id = requestId})  
   local result = dbUtils.queryOne(stmt)
@@ -50,7 +53,8 @@ function randomManager.getRandomRequest(requestId: string): RandomRequest, strin
 end
 
 function randomManager.getVDFResults(requestId: string): ProviderVDFResults, string
-  print("entered getVDFResults")
+  print("entered randomManager.getVDFResults")
+  
   local stmt = DB:prepare("SELECT * FROM ProviderVDFResults WHERE request_id = :request_id")
   stmt:bind_names({request_id = requestId})  
   local result = dbUtils.queryMany(stmt)
@@ -62,10 +66,11 @@ function randomManager.getVDFResults(requestId: string): ProviderVDFResults, str
 end
 
 function randomManager.createRandomRequest(userId: string, providers: string): boolean, string
-  print("entered createRandomRequest")
+  print("entered randomManager.createRandomRequest")
 
   local timestamp = os.time()
   local requestId = randomManager.generateUUID()
+  print("New RequestId: " .. requestId)
 
   if not DB then
     print("Database connection not initialized")
@@ -109,7 +114,7 @@ function randomManager.createRandomRequest(userId: string, providers: string): b
 end
 
 function randomManager.postVDFChallenge(userId: string, requestId: string, inputValue: string, modulusValue: string): boolean, string
-  print("entered postVDFChallenge")
+  print("entered randomManager.postVDFChallenge")
 
   local timestamp = os.time()
 
@@ -153,7 +158,7 @@ function randomManager.postVDFChallenge(userId: string, requestId: string, input
 end
 
 function randomManager.postVDFOutputAndProof(userId: string, requestId: string, outputValue: string, proof: string): boolean, string
-  print("entered postVDFOutputAndProof")
+  print("entered randomManager.postVDFOutputAndProof")
 
   if not DB then
     print("Database connection not initialized")

@@ -61,6 +61,7 @@ function database.initializeDatabase()
           request_id STRING PRIMARY KEY,
           requester TEXT,
           providers TEXT,
+          status TEXT,
           entropy TEXT,
           created_at INTEGER
         );
@@ -192,6 +193,13 @@ TokenInUse = TokenTest
 
 SuccessMessage = "200: Success"
 
+Status = {}
+
+
+
+
+
+
 return {}
 end
 end
@@ -225,6 +233,8 @@ RequestList = {}
 local providerManager = {}
 
 function providerManager.createProvider(userId)
+   print("entered providerManager.createProvider")
+
    local timestamp = os.time()
 
    if not DB then
@@ -267,6 +277,8 @@ function providerManager.createProvider(userId)
 end
 
 function providerManager.getProvider(userId)
+   print("entered providerManager.getProvider")
+
    local stmt = DB:prepare("SELECT * FROM Providers WHERE provider_id = :provider_id")
    stmt:bind_names({ provider_id = userId })
    local result = dbUtils.queryOne(stmt)
@@ -279,7 +291,8 @@ function providerManager.getProvider(userId)
 end
 
 function providerManager.pushActiveRequests(providers, requestId)
-   print("entered pushActiveRequests")
+   print("entered providerManager.pushActiveRequests")
+
    local providerList = json.decode(providers)
    local success = true
    local err = ""
@@ -331,7 +344,7 @@ function providerManager.pushActiveRequests(providers, requestId)
 end
 
 function providerManager.removeActiveRequest(provider_id, requestId)
-   print("entered removeActiveRequest")
+   print("entered providerManager.removeActiveRequest")
 
 
    local provider = providerManager.getProvider(provider_id)
@@ -380,6 +393,7 @@ function providerManager.removeActiveRequest(provider_id, requestId)
 end
 
 function providerManager.getActiveRequests(userId)
+   print("entered providerManager.getActiveRequests")
    local provider = providerManager.getProvider(userId)
    if provider.active_requests then
       return provider.active_requests, ""
@@ -389,6 +403,8 @@ function providerManager.getActiveRequests(userId)
 end
 
 function providerManager.hasActiveRequest(userId, requestId)
+   print("entered providerManager.hasActiveRequest")
+
    local activeRequests, err = providerManager.getActiveRequests(userId)
    if err == "" then
       local requestIds = json.decode(activeRequests)
@@ -404,10 +420,13 @@ function providerManager.hasActiveRequest(userId, requestId)
 end
 
 function providerManager.checkStakeStubbed(_userId)
+   print("entered providerManager.checkStakeStubbed")
    return true, ""
 end
 
 function providerManager.checkStake(userId)
+   print("entered providerManager.checkStake")
+
    local provider, _ = providerManager.getProvider(userId)
    if provider.stake < RequiredStake then
       return false, "Stake is less than required"
@@ -417,6 +436,8 @@ function providerManager.checkStake(userId)
 end
 
 function providerManager.updateProviderBalance(userId, balance)
+   print("entered providerManager.updateProviderBalance")
+
    local stmt = DB:prepare([[
     UPDATE Providers
     SET random_balance = :balance
@@ -437,6 +458,8 @@ end
 
 
 function providerManager.updateProviderStatus(userId, active)
+   print("entered providerManager.updateProviderStatus")
+
    local stmt
    local status = active and 1 or 0
 
@@ -498,6 +521,8 @@ ProviderVDFResults = {}
 local randomManager = {}
 
 function randomManager.generateUUID()
+   print("entered randomManager.generateUUID")
+
    local template = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'
    return (string.gsub(template, '[xy]', function(c)
       local v = (c == 'x') and math.random(0, 0xf) or math.random(8, 0xb)
@@ -506,7 +531,8 @@ function randomManager.generateUUID()
 end
 
 function randomManager.getRandomRequest(requestId)
-   print("entered getRandomRequest")
+   print("entered randomManager.getRandomRequest")
+
    local stmt = DB:prepare("SELECT * FROM RandomRequests WHERE request_id = :request_id")
    stmt:bind_names({ request_id = requestId })
    local result = dbUtils.queryOne(stmt)
@@ -518,7 +544,8 @@ function randomManager.getRandomRequest(requestId)
 end
 
 function randomManager.getVDFResults(requestId)
-   print("entered getVDFResults")
+   print("entered randomManager.getVDFResults")
+
    local stmt = DB:prepare("SELECT * FROM ProviderVDFResults WHERE request_id = :request_id")
    stmt:bind_names({ request_id = requestId })
    local result = dbUtils.queryMany(stmt)
@@ -530,10 +557,11 @@ function randomManager.getVDFResults(requestId)
 end
 
 function randomManager.createRandomRequest(userId, providers)
-   print("entered createRandomRequest")
+   print("entered randomManager.createRandomRequest")
 
    local timestamp = os.time()
    local requestId = randomManager.generateUUID()
+   print("New RequestId: " .. requestId)
 
    if not DB then
       print("Database connection not initialized")
@@ -577,7 +605,7 @@ function randomManager.createRandomRequest(userId, providers)
 end
 
 function randomManager.postVDFChallenge(userId, requestId, inputValue, modulusValue)
-   print("entered postVDFChallenge")
+   print("entered randomManager.postVDFChallenge")
 
    local timestamp = os.time()
 
@@ -621,7 +649,7 @@ function randomManager.postVDFChallenge(userId, requestId, inputValue, modulusVa
 end
 
 function randomManager.postVDFOutputAndProof(userId, requestId, outputValue, proof)
-   print("entered postVDFOutputAndProof")
+   print("entered randomManager.postVDFOutputAndProof")
 
    if not DB then
       print("Database connection not initialized")
@@ -906,10 +934,8 @@ function creditNoticeHandler(msg)
       ao.send(sendResponse(msg.Sender, "Error", { message = "Invalid Value Sent" .. msg.From }))
       return false
    end
-   print("Providers: " .. msg.Tags["X-Providers"])
-   print("Providers: " and json.decode(msg.Tags["X-Providers"]))
 
-   local providers = msg.Tags["X-Providers"]
+   local providers = msg.Tags["X-Providers"] or nil
    local userId = msg.Sender
 
    local success, err = randomManager.createRandomRequest(userId, providers)
@@ -932,7 +958,8 @@ function getOpenRandomRequestsHandler(msg)
    local activeRequests, err = providerManager.getActiveRequests(providerId)
 
    if err == "" then
-      local responseData = { providerId = providerId, activeRequests = activeRequests }
+      local requestIds = json.decode(activeRequests)
+      local responseData = { providerId = providerId, activeRequests = requestIds }
       ao.send(sendResponse(msg.From, "Get-Open-Random-Requests-Response", responseData))
       return true
    else
