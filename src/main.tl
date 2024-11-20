@@ -1,9 +1,10 @@
 -- game/main.tl
 require "globals"
-local json = require "json"
-local database = require "database"
+local json            = require "json"
+local database        = require "database"
 local providerManager = require "providerManager"
-local randomManager = require "randomManager"
+local randomManager   = require "randomManager"
+local tokenManager    = require "tokenManager"
 
 -- Type definitions
 global record ResponseData
@@ -38,6 +39,10 @@ end
 
 global record GetRandomRequestsData
   requestIds: {string}
+end
+
+global record GetRandomRequestViaCallbackIdData
+  callbackId: string
 end
 
 global record CreateRandomRequestData
@@ -77,11 +82,13 @@ global function sendResponse(target: string, action: string, data: any): Respons
   }
 end
 
+-- Helper function to log errors
 local function errorHandler(err: any): nil
   print("Critical error occurred: " .. tostring(err))
   print(debug.traceback())
 end
 
+-- Helper function to wrap handlers to catch errors before computation
 local function wrapHandler(handlerFn: function(msg: Message)): function(msg: Message)
   return function(msg: Message): nil
     local success = xpcall(function(): any return handlerFn(msg) end, errorHandler)
@@ -226,28 +233,41 @@ global function creditNoticeHandler(msg: Message): boolean
   print("entered creditNotice")
 
   local value = math.floor(tonumber(msg.Quantity))
-  
+  local callbackId = msg.Tags["X-CallbackId"] or nil
+
   if msg.From ~= TokenInUse then
-    print("Invalid Token Sent: " .. msg.From)
-    ao.send(sendResponse(msg.Sender, "Error", {message = "Invalid TokenInUse Sent" .. msg.From}))
+    local err = "Invalid Token Sent: " .. msg.From
+    print(err)
+    ao.send(sendResponse(msg.Sender, "Error", {message = err}))
+    tokenManager.returnTokens(msg, err)
     return false
   end
   if value < Cost then
-    print("Invalid Value Sent: " .. tostring(value))
-    ao.send(sendResponse(msg.Sender, "Error", {message = "Invalid Value Sent" .. msg.From}))
+    local err = "Invalid Value Sent: " .. tostring(value)
+    print(err)
+    ao.send(sendResponse(msg.Sender, "Error", {message = err}))
+    tokenManager.returnTokens(msg, err)
+    return false
+  end
+  if callbackId == nil then
+    local err = "Failure: No Callback ID provided"
+    print(err)
+    ao.send(sendResponse(msg.Sender, "Error", {message = err}))
+    tokenManager.returnTokens(msg, err)
     return false
   end
 
-  local providers = msg.Tags["X-Providers"] or nil
   local userId = msg.Sender
+  local providers = msg.Tags["X-Providers"] or nil
 
-  local success, err = randomManager.createRandomRequest(userId, providers)
+
+  local success, err = randomManager.createRandomRequest(userId, providers, callbackId)
 
   if success then
-    ao.send(sendResponse(msg.Sender, "Created New Random Request", SuccessMessage))
+    ao.send(sendResponse(userId, "Created New Random Request", SuccessMessage))
     return true
   else
-    ao.send(sendResponse(msg.Sender, "Error", {message = "Failed to create new random request: " .. err}))
+    ao.send(sendResponse(userId, "Error", {message = "Failed to create new random request: " .. err}))
     return false
   end
 end
@@ -298,6 +318,34 @@ global function getRandomRequestsHandler(msg: Message): boolean
   return true
 end
 
+-- Handler for getting random requests via callback id
+global function getRandomRequestViaCallbackIdHandler(msg: Message): boolean
+  print("entered getRandomRequestViaCallbackId")
+
+  local data = (json.decode(msg.Data as string) as GetRandomRequestViaCallbackIdData)
+  local callback_id = data.callbackId
+  local responseData: GetRandomRequestsResponse = { randomRequestResponses = { } }
+
+  local requestResponse: RandomRequestResponse = {   
+    randomRequest: RandomRequest = nil,
+    providerVDFResults: ProviderVDFResults = nil
+  }
+  local request, requestErr = randomManager.getRandomRequestViaCallbackId(callback_id)
+  local request_id = request.request_id
+
+  if requestErr == "" then
+    requestResponse.randomRequest = request
+    local providerVDFResults, resultsErr = randomManager.getVDFResults(request_id)
+    if resultsErr == "" then 
+      requestResponse.providerVDFResults = providerVDFResults
+    end
+  end
+  table.insert(responseData.randomRequestResponses, requestResponse)
+
+  ao.send(sendResponse(msg.From, "Get-Random-Requests-Response", responseData))
+  return true
+end
+
 -- Add handlers
 Handlers.add('info', 
 Handlers.utils.hasMatchingTag('Action', 'Info'), 
@@ -330,6 +378,10 @@ wrapHandler(getOpenRandomRequestsHandler))
 Handlers.add('getRandomRequests', 
 Handlers.utils.hasMatchingTag('Action', 'Get-Random-Requests'), 
 wrapHandler(getRandomRequestsHandler))
+
+Handlers.add('getRandomRequestViaCallbackId', 
+Handlers.utils.hasMatchingTag('Action', 'Get-Random-Request-Via-Callback-Id'), 
+wrapHandler(getRandomRequestViaCallbackIdHandler))
 
 -- Logging
 print("RandAO Process Initialized")

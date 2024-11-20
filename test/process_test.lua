@@ -1,6 +1,10 @@
 ---@diagnostic disable: duplicate-set-field
 require("test.setup")()
 require("luacov")
+-- local luacov = require"luacov.runner"
+
+-- luacov.init() -- Resets the coverage data
+
 
 _G.VerboseTests = 0                    -- how much logging to see (0 - none at all, 1 - important ones, 2 - everything)
 _G.VirtualTime = _G.VirtualTime or nil -- use for time travel
@@ -115,6 +119,8 @@ describe("requestRandom", function()
   it("should not be able to request random from a registered provider with insufficient quantity and correct token", function()
     local userId = "Requester1"
     local providers = json.encode({provider_ids = {"Provider1"}})
+    local callbackId = "xxxx-xxxx-4xxx-xxxx"
+
     local message = {
       Target = ao.id,
       From = TokenInUse,
@@ -122,6 +128,7 @@ describe("requestRandom", function()
       Quantity = "99",
       Tags = {
         ["X-Providers"] = providers,
+        ["X-CallbackId"] = callbackId,
         Sender = userId
       }
     }
@@ -132,6 +139,8 @@ describe("requestRandom", function()
   it("should not be able to request random from a registered provider with sufficient quantity but incorrect token", function()
     local userId = "Requester1"
     local providers = json.encode({provider_ids = {"Provider1"}})
+    local callbackId = "xxxx-xxxx-4xxx-xxxx"
+
     local message = {
       Target = ao.id,
       From = "Not the token in use",
@@ -139,14 +148,15 @@ describe("requestRandom", function()
       Quantity = "100",
       Tags = {
         ["X-Providers"] = providers,
-        Sender = userId
+        ["X-CallbackId"] = callbackId,
+        Sender = userId,
       }
     }
     local success = creditNoticeHandler(message)
     assert(not success, "Failure: able to create random request with incorrect token")
   end)
 
-  it("should be able to request random from a registered provider with correct balance and token", function()
+  it("should not be able to request random from a registered provider with sufficient quantity correct token but no callback id", function()
     local userId = "Requester1"
     local providers = json.encode({provider_ids = {"Provider1"}})
 
@@ -157,6 +167,26 @@ describe("requestRandom", function()
       Quantity = "100",
       Tags = {
         ["X-Providers"] = providers,
+        Sender = userId,
+      }
+    }
+    local success = creditNoticeHandler(message)
+    assert(not success, "Failure: able to create random request with no callback id")
+  end)
+
+  it("should be able to request random from a registered provider with correct balance and token", function()
+    local userId = "Requester1"
+    local providers = json.encode({provider_ids = {"Provider1"}})
+    local callbackId = "xxxx-xxxx-4xxx-xxxx"
+
+    local message = {
+      Target = ao.id,
+      From = TokenInUse,
+      Action = "Credit-Notice",
+      Quantity = "100",
+      Tags = {
+        ["X-Providers"] = providers,
+        ["X-CallbackId"] = callbackId,
         Sender = userId
       }
     }
@@ -329,7 +359,7 @@ describe("postVDFOutputAndProof", function()
   end)
 end)
 
-describe("getRandomRequests", function()
+describe("getRandomRequests & getRandomRequestViaCallbackId", function()
   setup(function()
     -- to execute before this describe
   end)
@@ -364,6 +394,37 @@ describe("getRandomRequests", function()
     }
 
     local success = getRandomRequestsHandler(message)
-    assert(success, "Failure: errors out on valid requestIds")
+    assert(success, "Failure: errors out on invalid requestIds")
+  end)
+
+  it("should not error on valid callbackId",
+  function()
+    local callbackId = "xxxx-xxxx-4xxx-xxxx"
+
+    local message = {
+      Target = ao.id,
+      From = "Provider1",
+      Action = "Get-Random-Request-Via-Callback-Id",
+      Data = json.encode({requestIds = requestIds})
+    }
+
+    local success = getRandomRequestViaCallbackIdHandler(message)
+    assert(success, "Failure: errors out on valid callbackId")
+  end)
+
+
+  it("should not error on valid callbackId",
+  function()
+    local callbackId = "xxxx-xxxx-4xxx-xxx"
+
+    local message = {
+      Target = ao.id,
+      From = "Provider1",
+      Action = "Get-Random-Request-Via-Callback-Id",
+      Data = json.encode({requestIds = requestIds})
+    }
+
+    local success = getRandomRequestViaCallbackIdHandler(message)
+    assert(success, "Failure: errors out on invalid callbackId")
   end)
 end)

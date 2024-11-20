@@ -19,9 +19,9 @@ global SuccessMessage: string = "200: Success"
 
 global enum Status 
     "PENDING"
+    "CACKING"
     "SUCCESS"
     "FAILED"
-    "TIMEOUT"
 end
 
 return {}

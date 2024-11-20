@@ -4,15 +4,19 @@ import { message, result, createDataItemSigner, spawn } from "@permaweb/aoconnec
 // Load the wallet file
 const wallet = JSON.parse(readFileSync("./wallet.json").toString(),);
 const availableRandomValues = 44
-const providerId = "lld4ncW8yLSkckjia3cw6qO7silUdEe1nsdiEvMoLg-0"
-const processId = "ZCBFSw2oALTIdGYrmrbqxciB1OSrptp11nBLAMLLFKI"
+const providerId = "ld4ncW8yLSkckjia3cw6qO7silUdEe1nsdiEvMoLg-0"
+const processId = "nUH3LnpaVCL9jT7J2dT3DfB4V3nkucyNpE3KI9IPxyw"
 const tokenId = "OeX1V1xSabUzUtNykWgu9GEaXqacBZawtK12_q5gXaA"
 let providers = {
     provider_ids: ["ld4ncW8yLSkckjia3cw6qO7silUdEe1nsdiEvMoLg-0"]
 }
-const requestIds = ["00a38f54-a48d-4505-9150-c52a3753658f"]
+const requestIds = [
+    "09d4fe31-04f7-415a-8b77-2092cbe70e5d",
+    "fedfabf7-49d5-4915-86e5-e547a8fe6e12"
+]
 
 const requestId = "00a38f54-a48d-4505-9150-c52a3753658f"
+const callbackId = "call me back :("
 const input     = "gobledygook"
 const modulus   = "7777"
 const output    = "shamuckers"
@@ -96,7 +100,8 @@ async function createRequest() {
         { name: "Action", value: "Transfer" },
         { name: "Quantity", value: "100" },
         { name: "Recipient", value: processId },
-        { name: "X-Providers", value: JSON.stringify(providers) }
+        { name: "X-Providers", value: JSON.stringify(providers) },
+        { name: "X-CallbackId", value: callbackId }
     ]
 
     let id = await message({
@@ -188,6 +193,43 @@ async function getRequests() {
     if (Messages && Messages.length > 0) {
         const data = JSON.parse(Messages[0].Data);
         console.log("Random Requests: ", JSON.stringify(data));
+    }
+    
+    return id;
+}
+
+async function getRequestViaCallbackId() {
+    let tags = [
+        { name: "Action", value: "Get-Random-Request-Via-Callback-Id" },
+    ]
+
+    let id = await message({
+        /*
+          The arweave TXID of the process, this will become the "target".
+          This is the process the message is ultimately sent to.
+        */
+        process: processId,
+        // Tags that the process will use as input.
+        tags,
+        // A signer function used to build the message "signature"
+        signer: createDataItemSigner(wallet),
+        /*
+          The "data" portion of the message
+          If not specified a random string will be generated
+        */
+        data: JSON.stringify({ callbackId }),
+
+    })
+
+    //console.log(id)
+    const { Output, Messages } = await result({
+        message: id,
+        process: processId,
+    });
+    
+    if (Messages && Messages.length > 0) {
+        const data = JSON.parse(Messages[0].Data);
+        console.log("Random Request: ", JSON.stringify(data));
     }
     
     return id;
@@ -301,11 +343,17 @@ async function main() {
         }
     } else if (inputArg == 6) {
         try {
-            await postVDFChallenge()
+            await getRequestViaCallbackId()
         } catch (err) {
             console.error("Error reading process IDs or sending messages:", err);
         }
     } else if (inputArg == 7) {
+        try {
+            await postVDFChallenge()
+        } catch (err) {
+            console.error("Error reading process IDs or sending messages:", err);
+        }
+    } else if (inputArg == 8) {
         try {
             await postVDFOutputAndProof()
         } catch (err) {

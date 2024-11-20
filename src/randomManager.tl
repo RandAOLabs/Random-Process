@@ -52,6 +52,19 @@ function randomManager.getRandomRequest(requestId: string): RandomRequest, strin
   end
 end
 
+function randomManager.getRandomRequestViaCallbackId(callbackId: string): RandomRequest, string
+  print("entered randomManager.getRandomRequestViaCallbackId")
+
+  local stmt = DB:prepare("SELECT * FROM RandomRequests WHERE callback_id = :callback_id")
+  stmt:bind_names({callback_id = callbackId})  
+  local result = dbUtils.queryOne(stmt)
+  if result then
+    return result as RandomRequest, ""
+  else
+    return {} as RandomRequest, "RandomRequest not found"
+  end
+end
+
 function randomManager.getVDFResults(requestId: string): ProviderVDFResults, string
   print("entered randomManager.getVDFResults")
   
@@ -65,7 +78,7 @@ function randomManager.getVDFResults(requestId: string): ProviderVDFResults, str
   end
 end
 
-function randomManager.createRandomRequest(userId: string, providers: string): boolean, string
+function randomManager.createRandomRequest(userId: string, providers: string, callbackId: string): boolean, string
   print("entered randomManager.createRandomRequest")
 
   local timestamp = os.time()
@@ -81,8 +94,8 @@ function randomManager.createRandomRequest(userId: string, providers: string): b
 
   print("Preparing SQL statement for random request creation")
   local stmt = DB:prepare([[
-    INSERT OR IGNORE INTO RandomRequests (request_id, requester, providers, created_at)
-    VALUES (:request_id, :requester, :providers, :created_at);
+    INSERT OR IGNORE INTO RandomRequests (request_id, requester, callback_id, providers, created_at)
+    VALUES (:request_id, :requester, :callback_id, :providers, :created_at);
   ]])
   
   if not stmt then
@@ -92,7 +105,7 @@ function randomManager.createRandomRequest(userId: string, providers: string): b
   
   print("Binding parameters for random request creation")
   local bind_ok, bind_err = pcall(function(): string
-    stmt:bind_names({request_id = requestId, requester = userId, providers = providers, created_at = timestamp})
+    stmt:bind_names({request_id = requestId, requester = userId, callback_id = callbackId, providers = providers, created_at = timestamp})
   end)
   
   if not bind_ok then

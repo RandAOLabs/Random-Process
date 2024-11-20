@@ -55,8 +55,9 @@ function database.initializeDatabase(): boolean
       ]],
       [[
         CREATE TABLE IF NOT EXISTS RandomRequests (
-          request_id STRING PRIMARY KEY,
+          request_id TEXT PRIMARY KEY,
           requester TEXT,
+          callback_id TEXT,
           providers TEXT,
           status TEXT,
           entropy TEXT,
@@ -65,7 +66,7 @@ function database.initializeDatabase(): boolean
       ]],
       [[
         CREATE TABLE IF NOT EXISTS ProviderVDFResults (
-          request_id STRING,                               
+          request_id TEXT,                               
           provider_id TEXT,                              
           input_value TEXT,
           modulus_value TEXT,                               

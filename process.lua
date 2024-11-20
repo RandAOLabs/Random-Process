@@ -58,8 +58,9 @@ function database.initializeDatabase()
       ]],
          [[
         CREATE TABLE IF NOT EXISTS RandomRequests (
-          request_id STRING PRIMARY KEY,
+          request_id TEXT PRIMARY KEY,
           requester TEXT,
+          callback_id TEXT,
           providers TEXT,
           status TEXT,
           entropy TEXT,
@@ -68,7 +69,7 @@ function database.initializeDatabase()
       ]],
          [[
         CREATE TABLE IF NOT EXISTS ProviderVDFResults (
-          request_id STRING,
+          request_id TEXT,
           provider_id TEXT,
           input_value TEXT,
           modulus_value TEXT,
@@ -543,6 +544,19 @@ function randomManager.getRandomRequest(requestId)
    end
 end
 
+function randomManager.getRandomRequestViaCallbackId(callbackId)
+   print("entered randomManager.getRandomRequestViaCallbackId")
+
+   local stmt = DB:prepare("SELECT * FROM RandomRequests WHERE callback_id = :callback_id")
+   stmt:bind_names({ callback_id = callbackId })
+   local result = dbUtils.queryOne(stmt)
+   if result then
+      return result, ""
+   else
+      return {}, "RandomRequest not found"
+   end
+end
+
 function randomManager.getVDFResults(requestId)
    print("entered randomManager.getVDFResults")
 
@@ -556,7 +570,7 @@ function randomManager.getVDFResults(requestId)
    end
 end
 
-function randomManager.createRandomRequest(userId, providers)
+function randomManager.createRandomRequest(userId, providers, callbackId)
    print("entered randomManager.createRandomRequest")
 
    local timestamp = os.time()
@@ -572,8 +586,8 @@ function randomManager.createRandomRequest(userId, providers)
 
    print("Preparing SQL statement for random request creation")
    local stmt = DB:prepare([[
-    INSERT OR IGNORE INTO RandomRequests (request_id, requester, providers, created_at)
-    VALUES (:request_id, :requester, :providers, :created_at);
+    INSERT OR IGNORE INTO RandomRequests (request_id, requester, callback_id, providers, created_at)
+    VALUES (:request_id, :requester, :callback_id, :providers, :created_at);
   ]])
 
    if not stmt then
@@ -583,7 +597,7 @@ function randomManager.createRandomRequest(userId, providers)
 
    print("Binding parameters for random request creation")
    local bind_ok, bind_err = pcall(function()
-      stmt:bind_names({ request_id = requestId, requester = userId, providers = providers, created_at = timestamp })
+      stmt:bind_names({ request_id = requestId, requester = userId, callback_id = callbackId, providers = providers, created_at = timestamp })
    end)
 
    if not bind_ok then
@@ -695,12 +709,36 @@ return randomManager
 end
 end
 
+do
+local _ENV = _ENV
+package.preload[ "tokenManager" ] = function( ... ) local arg = _G.arg;
+local tokenManager = {}
+
+function tokenManager.sendTokens(token, recipient, quantity, note)
+   ao.send({
+      Target = token,
+      Action = "Transfer",
+      Recipient = recipient,
+      Quantity = quantity,
+      ["X-Note"] = note or "Sending tokens from Random Process",
+   })
+end
+
+function tokenManager.returnTokens(msg, errMessage)
+   tokenManager.sendTokens(msg.From, msg.Sender, msg.Quantity, errMessage)
+end
+
+return tokenManager
+end
+end
+
 local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local debug = _tl_compat and _tl_compat.debug or debug; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local math = _tl_compat and _tl_compat.math or math; local table = _tl_compat and _tl_compat.table or table; local xpcall = _tl_compat and _tl_compat.xpcall or xpcall
 require("globals")
 local json = require("json")
 local database = require("database")
 local providerManager = require("providerManager")
 local randomManager = require("randomManager")
+local tokenManager = require("tokenManager")
 
 
 ResponseData = {}
@@ -734,6 +772,10 @@ GetOpenRandomRequestsData = {}
 
 
 GetRandomRequestsData = {}
+
+
+
+GetRandomRequestViaCallbackIdData = {}
 
 
 
@@ -774,10 +816,12 @@ function sendResponse(target, action, data)
    }
 end
 
+
 local function errorHandler(err)
    print("Critical error occurred: " .. tostring(err))
    print(debug.traceback())
 end
+
 
 local function wrapHandler(handlerFn)
    return function(msg)
@@ -923,28 +967,41 @@ function creditNoticeHandler(msg)
    print("entered creditNotice")
 
    local value = math.floor(tonumber(msg.Quantity))
+   local callbackId = msg.Tags["X-CallbackId"] or nil
 
    if msg.From ~= TokenInUse then
-      print("Invalid Token Sent: " .. msg.From)
-      ao.send(sendResponse(msg.Sender, "Error", { message = "Invalid TokenInUse Sent" .. msg.From }))
+      local err = "Invalid Token Sent: " .. msg.From
+      print(err)
+      ao.send(sendResponse(msg.Sender, "Error", { message = err }))
+      tokenManager.returnTokens(msg, err)
       return false
    end
    if value < Cost then
-      print("Invalid Value Sent: " .. tostring(value))
-      ao.send(sendResponse(msg.Sender, "Error", { message = "Invalid Value Sent" .. msg.From }))
+      local err = "Invalid Value Sent: " .. tostring(value)
+      print(err)
+      ao.send(sendResponse(msg.Sender, "Error", { message = err }))
+      tokenManager.returnTokens(msg, err)
+      return false
+   end
+   if callbackId == nil then
+      local err = "Failure: No Callback ID provided"
+      print(err)
+      ao.send(sendResponse(msg.Sender, "Error", { message = err }))
+      tokenManager.returnTokens(msg, err)
       return false
    end
 
-   local providers = msg.Tags["X-Providers"] or nil
    local userId = msg.Sender
+   local providers = msg.Tags["X-Providers"] or nil
 
-   local success, err = randomManager.createRandomRequest(userId, providers)
+
+   local success, err = randomManager.createRandomRequest(userId, providers, callbackId)
 
    if success then
-      ao.send(sendResponse(msg.Sender, "Created New Random Request", SuccessMessage))
+      ao.send(sendResponse(userId, "Created New Random Request", SuccessMessage))
       return true
    else
-      ao.send(sendResponse(msg.Sender, "Error", { message = "Failed to create new random request: " .. err }))
+      ao.send(sendResponse(userId, "Error", { message = "Failed to create new random request: " .. err }))
       return false
    end
 end
@@ -996,6 +1053,34 @@ function getRandomRequestsHandler(msg)
 end
 
 
+function getRandomRequestViaCallbackIdHandler(msg)
+   print("entered getRandomRequestViaCallbackId")
+
+   local data = (json.decode(msg.Data))
+   local callback_id = data.callbackId
+   local responseData = { randomRequestResponses = {} }
+
+   local requestResponse = {
+      randomRequest = nil,
+      providerVDFResults = nil,
+   }
+   local request, requestErr = randomManager.getRandomRequestViaCallbackId(callback_id)
+   local request_id = request.request_id
+
+   if requestErr == "" then
+      requestResponse.randomRequest = request
+      local providerVDFResults, resultsErr = randomManager.getVDFResults(request_id)
+      if resultsErr == "" then
+         requestResponse.providerVDFResults = providerVDFResults
+      end
+   end
+   table.insert(responseData.randomRequestResponses, requestResponse)
+
+   ao.send(sendResponse(msg.From, "Get-Random-Requests-Response", responseData))
+   return true
+end
+
+
 Handlers.add('info',
 Handlers.utils.hasMatchingTag('Action', 'Info'),
 wrapHandler(infoHandler))
@@ -1027,6 +1112,10 @@ wrapHandler(getOpenRandomRequestsHandler))
 Handlers.add('getRandomRequests',
 Handlers.utils.hasMatchingTag('Action', 'Get-Random-Requests'),
 wrapHandler(getRandomRequestsHandler))
+
+Handlers.add('getRandomRequestViaCallbackId',
+Handlers.utils.hasMatchingTag('Action', 'Get-Random-Request-Via-Callback-Id'),
+wrapHandler(getRandomRequestViaCallbackIdHandler))
 
 
 print("RandAO Process Initialized")

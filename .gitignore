@@ -8,3 +8,4 @@ build/
 build-lua/
 package-lock.json
 constants.txt
+process.lua
