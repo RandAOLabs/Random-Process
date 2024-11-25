@@ -17,7 +17,9 @@ end
 global record RandomRequest
     request_id: string
     requester: string
+    callback_id: string
     providers: string
+    status: string
     entropy: string
     created_at: integer
 end
@@ -29,6 +31,7 @@ end
 
 local randomManager = {}
 
+
 function randomManager.generateUUID(): string
   print("entered randomManager.generateUUID")
 
@@ -38,6 +41,51 @@ function randomManager.generateUUID(): string
     return string.format('%x', v)
   end))
 end
+
+function randomManager.updateRandomRequestStatus(requestId: string, newStatus: string): boolean, string
+  print("Entered randomManager.updateRandomRequestStatus")
+
+  -- Validate the newStatus against the global Status enum
+  local validStatus = false
+  for _, status in ipairs(Status) do
+    if newStatus == status then
+      validStatus = true
+      break
+    end
+  end
+
+  if not validStatus then
+    return false, "Failure: Invalid status: " .. tostring(newStatus)
+  end
+
+  -- Prepare the SQL statement to update the status
+  local stmt = DB:prepare([[
+    UPDATE RandomRequests
+    SET status = :status
+    WHERE request_id = :request_id;
+  ]])
+
+  if not stmt then
+    return false, "Failed to prepare statement: " .. DB:errmsg()
+  end
+
+  -- Bind the parameters
+  stmt:bind_names({status = newStatus, request_id = requestId})
+
+  -- Execute the statement
+  local execute_ok, execute_err = dbUtils.execute(stmt, "Update random request status")
+
+  -- Finalize the statement to release resources
+  stmt:finalize()
+
+  if not execute_ok then
+    return false, "Failed to update random request status: " .. tostring(execute_err)
+  end
+
+  print("Random request status updated successfully to: " .. newStatus)
+  return true, ""
+end
+
 
 function randomManager.getRandomRequest(requestId: string): RandomRequest, string
   print("entered randomManager.getRandomRequest")
@@ -94,18 +142,20 @@ function randomManager.createRandomRequest(userId: string, providers: string, ca
 
   print("Preparing SQL statement for random request creation")
   local stmt = DB:prepare([[
-    INSERT OR IGNORE INTO RandomRequests (request_id, requester, callback_id, providers, created_at)
-    VALUES (:request_id, :requester, :callback_id, :providers, :created_at);
+    INSERT OR IGNORE INTO RandomRequests (request_id, requester, callback_id, providers, status, created_at)
+    VALUES (:request_id, :requester, :callback_id, :providers, :status, :created_at);
   ]])
   
   if not stmt then
     print("Failed to prepare statement: " .. DB:errmsg())
     return false, "Failed to prepare statement: " .. DB:errmsg()
   end
-  
+
+  local status = Status[0]
+
   print("Binding parameters for random request creation")
   local bind_ok, bind_err = pcall(function(): string
-    stmt:bind_names({request_id = requestId, requester = userId, callback_id = callbackId, providers = providers, created_at = timestamp})
+    stmt:bind_names({request_id = requestId, requester = userId, callback_id = callbackId, providers = providers, status = status, created_at = timestamp})
   end)
   
   if not bind_ok then

@@ -17,11 +17,13 @@ global TokenInUse: string = TokenTest
 
 global SuccessMessage: string = "200: Success"
 
-global enum Status 
-    "PENDING"
-    "CACKING"
-    "SUCCESS"
+global Status = {
+    "COLLECTING CHALLENGES",
+    "COLLECTING OUTPUTS",
+    "VERIFYING OUTPUTS",
+    "CRACKING",
+    "FINALIZED",
     "FAILED"
-end
+}
 
 return {}

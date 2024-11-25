@@ -4,9 +4,10 @@ import { message, result, createDataItemSigner, spawn } from "@permaweb/aoconnec
 // Load the wallet file
 const wallet = JSON.parse(readFileSync("./wallet.json").toString(),);
 const availableRandomValues = 44
-const providerId = "ld4ncW8yLSkckjia3cw6qO7silUdEe1nsdiEvMoLg-0"
-const processId = "nUH3LnpaVCL9jT7J2dT3DfB4V3nkucyNpE3KI9IPxyw"
-const tokenId = "OeX1V1xSabUzUtNykWgu9GEaXqacBZawtK12_q5gXaA"
+const providerId    = "ld4ncW8yLSkckjia3cw6qO7silUdEe1nsdiEvMoLg-0"
+const processId     = "BP0oPYskxlXWgSMZKNnJddmtKDtX5OehhAhwqwwdv-Q"
+const randomTesting = "Y-Bghcvb-yaTdjZvQt2qP1GgZmgagq7rUhBqJFHPDok"
+const tokenId       = "OeX1V1xSabUzUtNykWgu9GEaXqacBZawtK12_q5gXaA"
 let providers = {
     provider_ids: ["ld4ncW8yLSkckjia3cw6qO7silUdEe1nsdiEvMoLg-0"]
 }
@@ -307,6 +308,103 @@ async function postVDFOutputAndProof() {
     return id;
 }
 
+async function requestRandomTester() {
+    let tags = [
+        { name: "Action", value: "run" },
+    ]
+
+    let id = await message({
+        /*
+          The arweave TXID of the process, this will become the "target".
+          This is the process the message is ultimately sent to.
+        */
+        process: randomTesting,
+        // Tags that the process will use as input.
+        tags,
+        // A signer function used to build the message "signature"
+        signer: createDataItemSigner(wallet),
+        /*
+          The "data" portion of the message
+          If not specified a random string will be generated
+        */
+        })
+
+    return id;
+}
+
+async function simulateResponse() {
+    let tags = [
+        { name: "Action", value: "Simulate-Response" },
+    ]
+
+    let id = await message({
+        /*
+          The arweave TXID of the process, this will become the "target".
+          This is the process the message is ultimately sent to.
+        */
+        process: processId,
+        // Tags that the process will use as input.
+        tags,
+        // A signer function used to build the message "signature"
+        signer: createDataItemSigner(wallet),
+        /*
+          The "data" portion of the message
+          If not specified a random string will be generated
+        */
+        data: JSON.stringify({ providerId }),
+
+    })
+
+    //console.log(id)
+    const { Output, Messages } = await result({
+        message: id,
+        process: processId,
+    });
+    
+    if (Messages && Messages.length > 0) {
+        const data = JSON.parse(Messages[0].Data);
+        console.log("Random Requests: ", data);
+    }
+    
+    return id;
+}
+
+async function sendQuery() {
+    let tags = [
+        { name: "Action", value: "Check-Status-Via-Callback" },
+    ]
+
+    let id = await message({
+        /*
+          The arweave TXID of the process, this will become the "target".
+          This is the process the message is ultimately sent to.
+        */
+        process: randomTesting,
+        // Tags that the process will use as input.
+        tags,
+        // A signer function used to build the message "signature"
+        signer: createDataItemSigner(wallet),
+        /*
+          The "data" portion of the message
+          If not specified a random string will be generated
+        */
+
+    })
+
+    //console.log(id)
+    const { Output, Messages } = await result({
+        message: id,
+        process: processId,
+    });
+    
+    if (Messages && Messages.length > 0) {
+        const data = JSON.parse(Messages[0].Data);
+        console.log("Random Requests: ", data);
+    }
+    
+    return id;
+}
+
 // Main function to call post data
 async function main() {
     const inputArg =  process.argv[2];
@@ -359,7 +457,25 @@ async function main() {
         } catch (err) {
             console.error("Error reading process IDs or sending messages:", err);
         }
-    }
+    } else if (inputArg == 9) {
+        try {
+            await requestRandomTester()
+        } catch (err) {
+            console.error("Error reading process IDs or sending messages:", err);
+        }
+    } else if (inputArg == 10) {
+        try {
+            await simulateResponse()
+        } catch (err) {
+            console.error("Error reading process IDs or sending messages:", err);
+        }
+    } else if (inputArg == 11) {
+        try {
+            await sendQuery()
+        } catch (err) {
+            console.error("Error reading process IDs or sending messages:", err);
+        }
+    } 
 }
 
 main();

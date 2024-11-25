@@ -747,6 +747,11 @@ ResponseData = {}
 
 
 
+ReplyData = {}
+
+
+
+
 UpdateProviderRandomBalanceData = {}
 
 
@@ -811,6 +816,14 @@ database.initializeDatabase()
 function sendResponse(target, action, data)
    return {
       Target = target,
+      Action = action,
+      Data = json.encode(data),
+   }
+end
+
+
+function sendReply(action, data)
+   return {
       Action = action,
       Data = json.encode(data),
    }
@@ -1075,9 +1088,27 @@ function getRandomRequestViaCallbackIdHandler(msg)
       end
    end
    table.insert(responseData.randomRequestResponses, requestResponse)
+   msg.reply({ Data = json.encode(responseData) })
 
-   ao.send(sendResponse(msg.From, "Get-Random-Requests-Response", responseData))
+
    return true
+end
+
+RandomResponseResponse = {}
+
+
+
+
+function simulateResponseHandler()
+   print("entered simulateResponseHandler")
+
+   local target = "Y-Bghcvb-yaTdjZvQt2qP1GgZmgagq7rUhBqJFHPDok"
+   local action = "Random-Response"
+   local data = {
+      callbackId = "samuel",
+      entropy = "777",
+   }
+   ao.send(sendResponse(target, action, data))
 end
 
 
@@ -1116,6 +1147,10 @@ wrapHandler(getRandomRequestsHandler))
 Handlers.add('getRandomRequestViaCallbackId',
 Handlers.utils.hasMatchingTag('Action', 'Get-Random-Request-Via-Callback-Id'),
 wrapHandler(getRandomRequestViaCallbackIdHandler))
+
+Handlers.add('simulateResponse',
+Handlers.utils.hasMatchingTag('Action', 'Simulate-Response'),
+wrapHandler(simulateResponseHandler))
 
 
 print("RandAO Process Initialized")

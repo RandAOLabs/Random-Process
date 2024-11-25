@@ -405,7 +405,10 @@ describe("getRandomRequests & getRandomRequestViaCallbackId", function()
       Target = ao.id,
       From = "Provider1",
       Action = "Get-Random-Request-Via-Callback-Id",
-      Data = json.encode({requestIds = requestIds})
+      Data = json.encode({callbackId = callbackId}),
+      reply = function (msg)
+        print("replied: " .. json.encode(msg))
+      end
     }
 
     local success = getRandomRequestViaCallbackIdHandler(message)
@@ -413,7 +416,7 @@ describe("getRandomRequests & getRandomRequestViaCallbackId", function()
   end)
 
 
-  it("should not error on valid callbackId",
+  it("should not error on invalid callbackId",
   function()
     local callbackId = "xxxx-xxxx-4xxx-xxx"
 
@@ -421,7 +424,10 @@ describe("getRandomRequests & getRandomRequestViaCallbackId", function()
       Target = ao.id,
       From = "Provider1",
       Action = "Get-Random-Request-Via-Callback-Id",
-      Data = json.encode({requestIds = requestIds})
+      Data = json.encode({callbackId = callbackId}),
+      reply = function (msg)
+        print("replied: " .. json.encode(msg))
+      end
     }
 
     local success = getRandomRequestViaCallbackIdHandler(message)
