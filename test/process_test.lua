@@ -195,15 +195,21 @@ describe("requestRandom", function()
     assert(success, "Failure: failed to create random request")
   end)
 
+  it("should be able to see random status",
+  function ()
+    local _, err = randomManager.getRandomStatus("d6cce35c-487a-458f-bab2-9032c2621f38")
+    assert(err == "", "Failure: no status found")
+  end)
+  
   it("should not be able to see updated active_requests for an unrequested provider",
   function ()
-    local _, err = providerManager.getActiveRequests("Provider2")
-    assert(err == "No active requests found", "Failure: active request found")
+    local _, err = providerManager.getActiveRequests("Provider2", true)
+    assert(err == "No active challenge requests found", "Failure: active request found")
   end)
 
   it("should be able to see updated active_requests for our requested provider",
   function ()
-    local _, err = providerManager.getActiveRequests("Provider1")
+    local _, err = providerManager.getActiveRequests("Provider1", true)
     assert(err == "", "Failure: no active request found")
   end)
 
@@ -218,8 +224,8 @@ describe("requestRandom", function()
     }
     local success = getOpenRandomRequestsHandler(message)
     assert(not success, "Failure: able to get active requests from an unrequested provider")
-    local _, err = providerManager.getActiveRequests("Provider2")
-    assert(err == "No active requests found", "Failure: active request found")
+    local _, err = providerManager.getActiveRequests("Provider2", true)
+    assert(err == "No active challenge requests found", "Failure: active request found")
   end)
 
   it("should be able to retrieve active_requests for our requested provider",
@@ -234,7 +240,7 @@ describe("requestRandom", function()
     local success = getOpenRandomRequestsHandler(message)
     assert(success, "Failure: unable to get active requests from a requested provider")
 
-    local _, err = providerManager.getActiveRequests("Provider1")
+    local _, err = providerManager.getActiveRequests("Provider1", true)
     assert(err == "", "Failure: no active request found")
   end)
 end)
@@ -407,7 +413,7 @@ describe("getRandomRequests & getRandomRequestViaCallbackId", function()
       Action = "Get-Random-Request-Via-Callback-Id",
       Data = json.encode({callbackId = callbackId}),
       reply = function (msg)
-        print("replied: " .. json.encode(msg))
+        -- print("replied: " .. json.encode(msg))
       end
     }
 
@@ -426,7 +432,7 @@ describe("getRandomRequests & getRandomRequestViaCallbackId", function()
       Action = "Get-Random-Request-Via-Callback-Id",
       Data = json.encode({callbackId = callbackId}),
       reply = function (msg)
-        print("replied: " .. json.encode(msg))
+        -- print("replied: " .. json.encode(msg))
       end
     }
 

@@ -63,7 +63,8 @@ end
 
 global record GetOpenRandomRequestsResponse
   providerId: string
-  activeRequests: RequestList
+  activeChallengeRequests: RequestList
+  activeOutputRequests: RequestList
 end
 
 global record RandomRequestResponse
@@ -165,7 +166,7 @@ global function postVDFChallengeHandler(msg: Message): boolean
   local modulus = data.modulus
   local input = data.input
 
-  local requested = providerManager.hasActiveRequest(userId, requestId)
+  local requested = providerManager.hasActiveRequest(userId, requestId, true)
   
   if not requested then
     ao.send(sendResponse(msg.From, "Error", {message = "Failed to post VDF Input: " .. "not requested"}))
@@ -175,6 +176,7 @@ global function postVDFChallengeHandler(msg: Message): boolean
   local success, err = randomManager.postVDFChallenge(userId, requestId, input, modulus)
 
   if success then
+    providerManager.removeActiveRequest(userId, requestId, true)
     ao.send(sendResponse(msg.From, "Posted VDF Input", SuccessMessage))
     return true
   else
@@ -204,7 +206,7 @@ global function postVDFOutputAndProofHandler(msg: Message): boolean
 
   local requestId = data.requestId
 
-  local requested = providerManager.hasActiveRequest(userId, requestId)
+  local requested = providerManager.hasActiveRequest(userId, requestId, false)
   
   if not requested then
     ao.send(sendResponse(msg.From, "Error", {message = "Failed to post VDF Output: " .. "not requested"}))
@@ -214,7 +216,7 @@ global function postVDFOutputAndProofHandler(msg: Message): boolean
   local success, err = randomManager.postVDFOutputAndProof(userId, requestId, output, proof)
 
   if success then
-    providerManager.removeActiveRequest(userId, requestId)
+    providerManager.removeActiveRequest(userId, requestId, false)
     ao.send(sendResponse(msg.From, "Posted VDF Output and Proof", SuccessMessage))
     return true
   else
@@ -291,17 +293,30 @@ global function getOpenRandomRequestsHandler(msg: Message): boolean
 
   local data = (json.decode(msg.Data as string) as GetOpenRandomRequestsData)
   local providerId = data.providerId
-  local activeRequests, err = providerManager.getActiveRequests(providerId)
+  
+  local _, providerErr = providerManager.getProvider(providerId)
 
-  if err == "" then
-    local requestIds = json.decode(activeRequests) as RequestList
-    local responseData: GetOpenRandomRequestsResponse = { providerId = providerId, activeRequests = requestIds }
-    ao.send(sendResponse(msg.From, "Get-Open-Random-Requests-Response", responseData))
-    return true
-  else
-    ao.send(sendResponse(msg.From, "Error", {message = "Provider not found: " .. err}))
+  if providerErr ~= "" then
+    ao.send(sendResponse(msg.From, "Error", {message = "Provider not found"}))
     return false
   end
+
+  local responseData: GetOpenRandomRequestsResponse = { providerId = providerId, activeChallengeRequests = { request_ids = {} }, activeOutputRequests = { request_ids = {} } }
+  
+  local activeChallengeRequests, err = providerManager.getActiveRequests(providerId, true)
+  local activeOutputRequests, outputErr = providerManager.getActiveRequests(providerId, false)
+
+  if err == "" then
+    local requestIds = json.decode(activeChallengeRequests) as RequestList
+    responseData.activeChallengeRequests = requestIds
+  end
+  if outputErr == "" then
+    local requestIds = json.decode(activeOutputRequests) as RequestList
+    responseData.activeOutputRequests = requestIds
+  end
+
+  ao.send(sendResponse(msg.From, "Get-Open-Random-Requests-Response", responseData))
+  return true
 end
 
 -- Handler for getting random requests

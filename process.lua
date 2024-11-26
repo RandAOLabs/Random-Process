@@ -51,7 +51,8 @@ function database.initializeDatabase()
           provider_id TEXT PRIMARY KEY,
           stake INTEGER,
           active INTEGER,
-          active_requests TEXT,
+          active_challenge_requests TEXT,
+          active_output_requests TEXT,
           random_balance INTEGER,
           created_at INTEGER
         );
@@ -194,12 +195,14 @@ TokenInUse = TokenTest
 
 SuccessMessage = "200: Success"
 
-Status = {}
-
-
-
-
-
+Status = {
+   "COLLECTING CHALLENGES",
+   "COLLECTING OUTPUTS",
+   "VERIFYING OUTPUTS",
+   "CRACKING",
+   "FINALIZED",
+   "FAILED",
+}
 
 return {}
 end
@@ -215,6 +218,7 @@ local json = require("json")
 
 
 Provider = {}
+
 
 
 
@@ -291,7 +295,7 @@ function providerManager.getProvider(userId)
    end
 end
 
-function providerManager.pushActiveRequests(providers, requestId)
+function providerManager.pushActiveRequests(providers, requestId, challenge)
    print("entered providerManager.pushActiveRequests")
 
    local providerList = json.decode(providers)
@@ -307,44 +311,81 @@ function providerManager.pushActiveRequests(providers, requestId)
          return success, err
       end
 
-      local active_requests
-      if provider.active_requests then
+      if challenge then
+         local active_challenge_requests
+         if provider.active_challenge_requests then
 
-         active_requests = json.decode(provider.active_requests)
+            active_challenge_requests = json.decode(provider.active_challenge_requests)
+         else
+
+            active_challenge_requests = { request_ids = {} }
+         end
+
+
+         table.insert(active_challenge_requests.request_ids, requestId)
+
+
+         local stringified_requests = json.encode(active_challenge_requests)
+
+         local stmt = DB:prepare([[
+        UPDATE Providers
+        SET active_challenge_requests = :active_challenge_requests
+        WHERE provider_id = :provider_id;
+      ]])
+         stmt:bind_names({ provider_id = provider.provider_id, active_challenge_requests = stringified_requests })
+
+         local ok = pcall(function()
+            dbUtils.execute(stmt, "Failed to update provider active challenge requests")
+         end)
+
+         if not ok then
+            print("Failed to update provider active challenge requests for provider ID " .. provider.provider_id)
+            success = false
+            err = err .. " " .. provider.provider_id
+            return success, err
+         else
+            return success, ""
+         end
       else
+         local active_output_requests
+         if provider.active_output_requests then
 
-         active_requests = { request_ids = {} }
-      end
+            active_output_requests = json.decode(provider.active_output_requests)
+         else
+
+            active_output_requests = { request_ids = {} }
+         end
 
 
-      table.insert(active_requests.request_ids, requestId)
+         table.insert(active_output_requests.request_ids, requestId)
 
 
-      local stringified_requests = json.encode(active_requests)
+         local stringified_requests = json.encode(active_output_requests)
 
-      local stmt = DB:prepare([[
-      UPDATE Providers
-      SET active_requests = :active_requests
-      WHERE provider_id = :provider_id;
-    ]])
-      stmt:bind_names({ provider_id = provider.provider_id, active_requests = stringified_requests })
+         local stmt = DB:prepare([[
+        UPDATE Providers
+        SET active_output_requests = :active_output_requests
+        WHERE provider_id = :provider_id;
+      ]])
+         stmt:bind_names({ provider_id = provider.provider_id, active_output_requests = stringified_requests })
 
-      local ok = pcall(function()
-         dbUtils.execute(stmt, "Failed to update provider active requests")
-      end)
+         local ok = pcall(function()
+            dbUtils.execute(stmt, "Failed to update provider active output requests")
+         end)
 
-      if not ok then
-         print("Failed to update provider active requests for provider ID " .. provider.provider_id)
-         success = false
-         err = err .. " " .. provider.provider_id
-         return success, err
-      else
-         return success, ""
+         if not ok then
+            print("Failed to update provider active output requests for provider ID " .. provider.provider_id)
+            success = false
+            err = err .. " " .. provider.provider_id
+            return success, err
+         else
+            return success, ""
+         end
       end
    end
 end
 
-function providerManager.removeActiveRequest(provider_id, requestId)
+function providerManager.removeActiveRequest(provider_id, requestId, challenge)
    print("entered providerManager.removeActiveRequest")
 
 
@@ -354,59 +395,105 @@ function providerManager.removeActiveRequest(provider_id, requestId)
       return false, "Provider not found"
    end
 
+   if challenge then
 
-   local active_requests
-   if provider.active_requests then
-      active_requests = json.decode(provider.active_requests)
-   else
-      active_requests = { request_ids = {} }
-   end
-
-
-   for i, id in ipairs(active_requests.request_ids) do
-      if id == requestId then
-         table.remove(active_requests.request_ids, i)
-         break
+      local active_challenge_requests
+      if provider.active_challenge_requests then
+         active_challenge_requests = json.decode(provider.active_challenge_requests)
+      else
+         active_challenge_requests = { request_ids = {} }
       end
-   end
 
 
-   local stringified_requests = json.encode(active_requests)
+      for i, id in ipairs(active_challenge_requests.request_ids) do
+         if id == requestId then
+            table.remove(active_challenge_requests.request_ids, i)
+            break
+         end
+      end
 
 
-   local stmt = DB:prepare([[
-      UPDATE Providers
-      SET active_requests = :active_requests
-      WHERE provider_id = :provider_id;
-  ]])
-   stmt:bind_names({ provider_id = provider_id, active_requests = stringified_requests })
+      local stringified_requests = json.encode(active_challenge_requests)
 
-   local ok = pcall(function()
-      dbUtils.execute(stmt, "Failed to update provider active requests")
-   end)
 
-   if not ok then
-      print("Failed to update provider active requests for provider ID " .. provider_id)
-      return false, "Failed to update provider active requests"
+      local stmt = DB:prepare([[
+        UPDATE Providers
+        SET active_challenge_requests = :active_challenge_requests
+        WHERE provider_id = :provider_id;
+    ]])
+      stmt:bind_names({ provider_id = provider_id, active_challenge_requests = stringified_requests })
+
+      local ok = pcall(function()
+         dbUtils.execute(stmt, "Failed to update provider active challenge requests")
+      end)
+
+      if not ok then
+         print("Failed to update provider active challenge requests for provider ID " .. provider_id)
+         return false, "Failed to update provider active challenge requests"
+      end
+   else
+
+      local active_output_requests
+      if provider.active_output_requests then
+         active_output_requests = json.decode(provider.active_output_requests)
+      else
+         active_output_requests = { request_ids = {} }
+      end
+
+
+      for i, id in ipairs(active_output_requests.request_ids) do
+         if id == requestId then
+            table.remove(active_output_requests.request_ids, i)
+            break
+         end
+      end
+
+
+      local stringified_requests = json.encode(active_output_requests)
+
+
+      local stmt = DB:prepare([[
+        UPDATE Providers
+        SET active_output_requests = :active_output_requests
+        WHERE provider_id = :provider_id;
+    ]])
+      stmt:bind_names({ provider_id = provider_id, active_output_requests = stringified_requests })
+
+      local ok = pcall(function()
+         dbUtils.execute(stmt, "Failed to update provider active output requests")
+      end)
+
+      if not ok then
+         print("Failed to update provider active output requests for provider ID " .. provider_id)
+         return false, "Failed to update provider active output requests"
+      end
    end
 
    return true, "Request ID removed successfully"
 end
 
-function providerManager.getActiveRequests(userId)
+function providerManager.getActiveRequests(userId, challenge)
    print("entered providerManager.getActiveRequests")
    local provider = providerManager.getProvider(userId)
-   if provider.active_requests then
-      return provider.active_requests, ""
+   if challenge then
+      if provider.active_challenge_requests then
+         return provider.active_challenge_requests, ""
+      else
+         return "", "No active challenge requests found"
+      end
    else
-      return "", "No active requests found"
+      if provider.active_output_requests then
+         return provider.active_output_requests, ""
+      else
+         return "", "No active output requests found"
+      end
    end
 end
 
-function providerManager.hasActiveRequest(userId, requestId)
+function providerManager.hasActiveRequest(userId, requestId, challenge)
    print("entered providerManager.hasActiveRequest")
 
-   local activeRequests, err = providerManager.getActiveRequests(userId)
+   local activeRequests, err = providerManager.getActiveRequests(userId, challenge)
    if err == "" then
       local requestIds = json.decode(activeRequests)
       for _, request_id in ipairs(requestIds.request_ids) do
@@ -457,7 +544,6 @@ function providerManager.updateProviderBalance(userId, balance)
    end
 end
 
-
 function providerManager.updateProviderStatus(userId, active)
    print("entered providerManager.updateProviderStatus")
 
@@ -490,8 +576,7 @@ end
 do
 local _ENV = _ENV
 package.preload[ "randomManager" ] = function( ... ) local arg = _G.arg;
-local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local math = _tl_compat and _tl_compat.math or math; local os = _tl_compat and _tl_compat.os or os; local pcall = _tl_compat and _tl_compat.pcall or pcall; local string = _tl_compat and _tl_compat.string or string; require("globals")
-
+local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local math = _tl_compat and _tl_compat.math or math; local os = _tl_compat and _tl_compat.os or os; local pcall = _tl_compat and _tl_compat.pcall or pcall; local string = _tl_compat and _tl_compat.string or string; require("globals")
 local dbUtils = require("dbUtils")
 local providerManager = require("providerManager")
 
@@ -514,8 +599,13 @@ RandomRequest = {}
 
 
 
-ProviderVDFResults = {}
 
+
+RandomStatus = {}
+
+
+
+ProviderVDFResults = {}
 
 
 
@@ -531,6 +621,50 @@ function randomManager.generateUUID()
    end))
 end
 
+function randomManager.updateRandomRequestStatus(requestId, newStatus)
+   print("Entered randomManager.updateRandomRequestStatus")
+
+
+   local validStatus = false
+   for _, status in ipairs(Status) do
+      if newStatus == status then
+         validStatus = true
+         break
+      end
+   end
+
+   if not validStatus then
+      return false, "Failure: Invalid status: " .. tostring(newStatus)
+   end
+
+
+   local stmt = DB:prepare([[
+    UPDATE RandomRequests
+    SET status = :status
+    WHERE request_id = :request_id;
+  ]])
+
+   if not stmt then
+      return false, "Failed to prepare statement: " .. DB:errmsg()
+   end
+
+
+   stmt:bind_names({ status = newStatus, request_id = requestId })
+
+
+   local execute_ok, execute_err = dbUtils.execute(stmt, "Update random request status")
+
+
+   stmt:finalize()
+
+   if not execute_ok then
+      return false, "Failed to update random request status: " .. tostring(execute_err)
+   end
+
+   print("Random request status updated successfully to: " .. newStatus)
+   return true, ""
+end
+
 function randomManager.getRandomRequest(requestId)
    print("entered randomManager.getRandomRequest")
 
@@ -541,6 +675,19 @@ function randomManager.getRandomRequest(requestId)
       return result, ""
    else
       return {}, "RandomRequest not found"
+   end
+end
+
+function randomManager.getRandomStatus(requestId)
+   print("entered randomManager.getRandomStatus")
+
+   local stmt = DB:prepare("SELECT status FROM RandomRequests WHERE request_id = :request_id")
+   stmt:bind_names({ request_id = requestId })
+   local result = dbUtils.queryOne(stmt)
+   if result then
+      return result.status, ""
+   else
+      return "", "RandomRequest status not found"
    end
 end
 
@@ -582,12 +729,12 @@ function randomManager.createRandomRequest(userId, providers, callbackId)
       return false, "Database connection is not initialized"
    end
 
-   providerManager.pushActiveRequests(providers, requestId)
+   providerManager.pushActiveRequests(providers, requestId, true)
 
    print("Preparing SQL statement for random request creation")
    local stmt = DB:prepare([[
-    INSERT OR IGNORE INTO RandomRequests (request_id, requester, callback_id, providers, created_at)
-    VALUES (:request_id, :requester, :callback_id, :providers, :created_at);
+    INSERT OR IGNORE INTO RandomRequests (request_id, requester, callback_id, providers, status, created_at)
+    VALUES (:request_id, :requester, :callback_id, :providers, :status, :created_at);
   ]])
 
    if not stmt then
@@ -595,9 +742,11 @@ function randomManager.createRandomRequest(userId, providers, callbackId)
       return false, "Failed to prepare statement: " .. DB:errmsg()
    end
 
+   local status = Status[1]
+
    print("Binding parameters for random request creation")
    local bind_ok, bind_err = pcall(function()
-      stmt:bind_names({ request_id = requestId, requester = userId, callback_id = callbackId, providers = providers, created_at = timestamp })
+      stmt:bind_names({ request_id = requestId, requester = userId, callback_id = callbackId, providers = providers, status = status, created_at = timestamp })
    end)
 
    if not bind_ok then
@@ -705,6 +854,9 @@ function randomManager.postVDFOutputAndProof(userId, requestId, outputValue, pro
    return execute_ok, execute_err
 end
 
+
+
+
 return randomManager
 end
 end
@@ -796,6 +948,7 @@ GetProviderRandomBalanceResponse = {}
 
 
 GetOpenRandomRequestsResponse = {}
+
 
 
 
@@ -899,7 +1052,7 @@ function postVDFChallengeHandler(msg)
    local modulus = data.modulus
    local input = data.input
 
-   local requested = providerManager.hasActiveRequest(userId, requestId)
+   local requested = providerManager.hasActiveRequest(userId, requestId, true)
 
    if not requested then
       ao.send(sendResponse(msg.From, "Error", { message = "Failed to post VDF Input: " .. "not requested" }))
@@ -909,6 +1062,7 @@ function postVDFChallengeHandler(msg)
    local success, err = randomManager.postVDFChallenge(userId, requestId, input, modulus)
 
    if success then
+      providerManager.removeActiveRequest(userId, requestId, true)
       ao.send(sendResponse(msg.From, "Posted VDF Input", SuccessMessage))
       return true
    else
@@ -938,7 +1092,7 @@ function postVDFOutputAndProofHandler(msg)
 
    local requestId = data.requestId
 
-   local requested = providerManager.hasActiveRequest(userId, requestId)
+   local requested = providerManager.hasActiveRequest(userId, requestId, false)
 
    if not requested then
       ao.send(sendResponse(msg.From, "Error", { message = "Failed to post VDF Output: " .. "not requested" }))
@@ -948,7 +1102,7 @@ function postVDFOutputAndProofHandler(msg)
    local success, err = randomManager.postVDFOutputAndProof(userId, requestId, output, proof)
 
    if success then
-      providerManager.removeActiveRequest(userId, requestId)
+      providerManager.removeActiveRequest(userId, requestId, false)
       ao.send(sendResponse(msg.From, "Posted VDF Output and Proof", SuccessMessage))
       return true
    else
@@ -1025,17 +1179,30 @@ function getOpenRandomRequestsHandler(msg)
 
    local data = (json.decode(msg.Data))
    local providerId = data.providerId
-   local activeRequests, err = providerManager.getActiveRequests(providerId)
 
-   if err == "" then
-      local requestIds = json.decode(activeRequests)
-      local responseData = { providerId = providerId, activeRequests = requestIds }
-      ao.send(sendResponse(msg.From, "Get-Open-Random-Requests-Response", responseData))
-      return true
-   else
-      ao.send(sendResponse(msg.From, "Error", { message = "Provider not found: " .. err }))
+   local _, providerErr = providerManager.getProvider(providerId)
+
+   if providerErr ~= "" then
+      ao.send(sendResponse(msg.From, "Error", { message = "Provider not found" }))
       return false
    end
+
+   local responseData = { providerId = providerId, activeChallengeRequests = { request_ids = {} }, activeOutputRequests = { request_ids = {} } }
+
+   local activeChallengeRequests, err = providerManager.getActiveRequests(providerId, true)
+   local activeOutputRequests, outputErr = providerManager.getActiveRequests(providerId, false)
+
+   if err == "" then
+      local requestIds = json.decode(activeChallengeRequests)
+      responseData.activeChallengeRequests = requestIds
+   end
+   if outputErr == "" then
+      local requestIds = json.decode(activeOutputRequests)
+      responseData.activeOutputRequests = requestIds
+   end
+
+   ao.send(sendResponse(msg.From, "Get-Open-Random-Requests-Response", responseData))
+   return true
 end
 
 

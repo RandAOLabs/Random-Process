@@ -1,6 +1,5 @@
 require "globals"
-
-local dbUtils = require "dbUtils"
+local dbUtils         = require "dbUtils"
 local providerManager = require "providerManager"
 
 -- Type definitions
@@ -24,13 +23,15 @@ global record RandomRequest
     created_at: integer
 end
 
+global record RandomStatus
+  status: string
+end
+
 global record ProviderVDFResults
   requestResponses: {ProviderVDFResult}
 end
 
-
 local randomManager = {}
-
 
 function randomManager.generateUUID(): string
   print("entered randomManager.generateUUID")
@@ -86,7 +87,6 @@ function randomManager.updateRandomRequestStatus(requestId: string, newStatus: s
   return true, ""
 end
 
-
 function randomManager.getRandomRequest(requestId: string): RandomRequest, string
   print("entered randomManager.getRandomRequest")
 
@@ -97,6 +97,19 @@ function randomManager.getRandomRequest(requestId: string): RandomRequest, strin
     return result as RandomRequest, ""
   else
     return {} as RandomRequest, "RandomRequest not found"
+  end
+end
+
+function randomManager.getRandomStatus(requestId: string): string, string
+  print("entered randomManager.getRandomStatus")
+
+  local stmt = DB:prepare("SELECT status FROM RandomRequests WHERE request_id = :request_id")
+  stmt:bind_names({request_id = requestId})  
+  local result = dbUtils.queryOne(stmt) as RandomStatus
+  if result then
+    return result.status, ""
+  else
+    return "", "RandomRequest status not found"
   end
 end
 
@@ -138,7 +151,7 @@ function randomManager.createRandomRequest(userId: string, providers: string, ca
     return false, "Database connection is not initialized"
   end
 
-  providerManager.pushActiveRequests(providers, requestId)
+  providerManager.pushActiveRequests(providers, requestId, true)
 
   print("Preparing SQL statement for random request creation")
   local stmt = DB:prepare([[
@@ -151,7 +164,7 @@ function randomManager.createRandomRequest(userId: string, providers: string, ca
     return false, "Failed to prepare statement: " .. DB:errmsg()
   end
 
-  local status = Status[0]
+  local status = Status[1]
 
   print("Binding parameters for random request creation")
   local bind_ok, bind_err = pcall(function(): string
@@ -262,5 +275,8 @@ function randomManager.postVDFOutputAndProof(userId: string, requestId: string, 
 
   return execute_ok, execute_err
 end
+
+
+
 
 return randomManager
