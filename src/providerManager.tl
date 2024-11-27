@@ -82,13 +82,13 @@ function providerManager.getProvider(userId: string): Provider, string
   end
 end
 
-function providerManager.pushActiveRequests(providers: string, requestId: string, challenge: boolean): boolean, string
+function providerManager.pushActiveRequests(providerIds: {string}, requestId: string, challenge: boolean): boolean, string
   print("entered providerManager.pushActiveRequests")
   
-  local providerList  = json.decode(providers) as ProviderList
   local success: boolean = true
   local err: string = ""
-  for _, value in ipairs(providerList.provider_ids) do
+  
+  for _, value in ipairs(providerIds) do
     local provider = providerManager.getProvider(value)
     -- Check if provider exists
     if not provider then
@@ -98,7 +98,7 @@ function providerManager.pushActiveRequests(providers: string, requestId: string
       return success, err
     end
 
-    if challenge then 
+    if challenge == true then 
       local active_challenge_requests: RequestList
       if provider.active_challenge_requests then
         -- Decode existing active_requests JSON if it exists
@@ -134,6 +134,7 @@ function providerManager.pushActiveRequests(providers: string, requestId: string
         return success, ""
       end
     else
+      print("made here")
       local active_output_requests: RequestList
       if provider.active_output_requests then
         -- Decode existing active_output_requests JSON if it exists
@@ -148,6 +149,8 @@ function providerManager.pushActiveRequests(providers: string, requestId: string
 
       -- Encode the updated active_output_requests table back to JSON
       local stringified_requests = json.encode(active_output_requests)
+
+      print("LLL: " .. stringified_requests)
 
       local stmt = DB:prepare[[
         UPDATE Providers

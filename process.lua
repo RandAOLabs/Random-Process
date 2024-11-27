@@ -63,6 +63,7 @@ function database.initializeDatabase()
           requester TEXT,
           callback_id TEXT,
           providers TEXT,
+          requested_inputs INTEGER,
           status TEXT,
           entropy TEXT,
           created_at INTEGER
@@ -295,13 +296,13 @@ function providerManager.getProvider(userId)
    end
 end
 
-function providerManager.pushActiveRequests(providers, requestId, challenge)
+function providerManager.pushActiveRequests(providerIds, requestId, challenge)
    print("entered providerManager.pushActiveRequests")
 
-   local providerList = json.decode(providers)
    local success = true
    local err = ""
-   for _, value in ipairs(providerList.provider_ids) do
+
+   for _, value in ipairs(providerIds) do
       local provider = providerManager.getProvider(value)
 
       if not provider then
@@ -311,7 +312,7 @@ function providerManager.pushActiveRequests(providers, requestId, challenge)
          return success, err
       end
 
-      if challenge then
+      if challenge == true then
          local active_challenge_requests
          if provider.active_challenge_requests then
 
@@ -347,6 +348,7 @@ function providerManager.pushActiveRequests(providers, requestId, challenge)
             return success, ""
          end
       else
+         print("made here")
          local active_output_requests
          if provider.active_output_requests then
 
@@ -361,6 +363,8 @@ function providerManager.pushActiveRequests(providers, requestId, challenge)
 
 
          local stringified_requests = json.encode(active_output_requests)
+
+         print("LLL: " .. stringified_requests)
 
          local stmt = DB:prepare([[
         UPDATE Providers
@@ -577,6 +581,7 @@ do
 local _ENV = _ENV
 package.preload[ "randomManager" ] = function( ... ) local arg = _G.arg;
 local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local math = _tl_compat and _tl_compat.math or math; local os = _tl_compat and _tl_compat.os or os; local pcall = _tl_compat and _tl_compat.pcall or pcall; local string = _tl_compat and _tl_compat.string or string; require("globals")
+local json = require("json")
 local dbUtils = require("dbUtils")
 local providerManager = require("providerManager")
 
@@ -601,7 +606,16 @@ RandomRequest = {}
 
 
 
+
 RandomStatus = {}
+
+
+
+ProvidersValue = {}
+
+
+
+RequestedInputs = {}
 
 
 
@@ -619,6 +633,20 @@ function randomManager.generateUUID()
       local v = (c == 'x') and math.random(0, 0xf) or math.random(8, 0xb)
       return string.format('%x', v)
    end))
+end
+
+function randomManager.getRandomProviderList(requestId)
+   print("entered randomManager.getRandomProviders")
+
+   local stmt = DB:prepare("SELECT providers FROM RandomRequests WHERE request_id = :request_id")
+   stmt:bind_names({ request_id = requestId })
+   local result = dbUtils.queryOne(stmt)
+
+   if result then
+      return json.decode(result.providers), ""
+   else
+      return {}, "RandomRequest providers not found"
+   end
 end
 
 function randomManager.updateRandomRequestStatus(requestId, newStatus)
@@ -654,9 +682,6 @@ function randomManager.updateRandomRequestStatus(requestId, newStatus)
 
    local execute_ok, execute_err = dbUtils.execute(stmt, "Update random request status")
 
-
-   stmt:finalize()
-
    if not execute_ok then
       return false, "Failed to update random request status: " .. tostring(execute_err)
    end
@@ -665,17 +690,60 @@ function randomManager.updateRandomRequestStatus(requestId, newStatus)
    return true, ""
 end
 
-function randomManager.getRandomRequest(requestId)
-   print("entered randomManager.getRandomRequest")
+function randomManager.getRandomRequestedInputs(requestId)
+   print("entered randomManager.getRandomRequestedInputs")
 
-   local stmt = DB:prepare("SELECT * FROM RandomRequests WHERE request_id = :request_id")
+   local stmt = DB:prepare("SELECT requested_inputs FROM RandomRequests WHERE request_id = :request_id")
    stmt:bind_names({ request_id = requestId })
    local result = dbUtils.queryOne(stmt)
    if result then
-      return result, ""
+      return result.requested_inputs, ""
    else
-      return {}, "RandomRequest not found"
+      return nil, "RandomRequest requested_inputs not found"
    end
+end
+
+function randomManager.decrementRequestedInputs(requestId)
+   print("Entered randomManager.decrementRequestedInputs")
+
+   local requested, _ = randomManager.getRandomRequestedInputs(requestId)
+
+   if requested == 0 then
+      return false, "Failure: can not decrement needed below 0"
+   end
+
+   requested = requested - 1
+
+
+   local stmt = DB:prepare([[
+    UPDATE RandomRequests
+    SET requested_inputs = :requested_inputs
+    WHERE request_id = :request_id;
+  ]])
+
+   if not stmt then
+      return false, "Failed to prepare statement: " .. DB:errmsg()
+   end
+
+
+   stmt:bind_names({ requested_inputs = requested, request_id = requestId })
+
+
+   local execute_ok, execute_err = dbUtils.execute(stmt, "Update random request requested_inputs")
+
+   if not execute_ok then
+      return false, "Failed to update random request requested_inputs: " .. tostring(execute_err)
+   end
+
+   if requested == 0 then
+      local status = Status[2]
+      local providerList = randomManager.getRandomProviderList(requestId)
+      randomManager.updateRandomRequestStatus(requestId, status)
+      providerManager.pushActiveRequests(providerList.provider_ids, requestId, false)
+   end
+
+   print("Random request requested_inputs updated successfully to: " .. requested)
+   return true, ""
 end
 
 function randomManager.getRandomStatus(requestId)
@@ -688,6 +756,19 @@ function randomManager.getRandomStatus(requestId)
       return result.status, ""
    else
       return "", "RandomRequest status not found"
+   end
+end
+
+function randomManager.getRandomRequest(requestId)
+   print("entered randomManager.getRandomRequest")
+
+   local stmt = DB:prepare("SELECT * FROM RandomRequests WHERE request_id = :request_id")
+   stmt:bind_names({ request_id = requestId })
+   local result = dbUtils.queryOne(stmt)
+   if result then
+      return result, ""
+   else
+      return {}, "RandomRequest not found"
    end
 end
 
@@ -717,24 +798,49 @@ function randomManager.getVDFResults(requestId)
    end
 end
 
-function randomManager.createRandomRequest(userId, providers, callbackId)
+function randomManager.createRandomRequest(userId, providers, callbackId, requestedInputs)
    print("entered randomManager.createRandomRequest")
 
    local timestamp = os.time()
    local requestId = randomManager.generateUUID()
-   print("New RequestId: " .. requestId)
+
+
+   local providerList = json.decode(providers)
+   if not providerList or not providerList.provider_ids or #providerList.provider_ids == 0 then
+      return false, "Invalid providers list"
+   end
+
+   local decodedRequestList = {}
+
+   if requestedInputs ~= "" then
+
+      local result = json.decode(requestedInputs)
+
+      if result and type(result) == "table" then
+         decodedRequestList = result
+      else
+         print("Failed to decode requestedInputs. Invalid JSON or structure.")
+         return false, "Invalid requestedInputs JSON"
+      end
+   else
+
+      decodedRequestList = {}
+   end
+
+
+   local requestedValue = math.min(decodedRequestList.requested_inputs or #providerList.provider_ids, #providerList.provider_ids)
 
    if not DB then
       print("Database connection not initialized")
       return false, "Database connection is not initialized"
    end
 
-   providerManager.pushActiveRequests(providers, requestId, true)
+   providerManager.pushActiveRequests(providerList.provider_ids, requestId, true)
 
    print("Preparing SQL statement for random request creation")
    local stmt = DB:prepare([[
-    INSERT OR IGNORE INTO RandomRequests (request_id, requester, callback_id, providers, status, created_at)
-    VALUES (:request_id, :requester, :callback_id, :providers, :status, :created_at);
+    INSERT OR IGNORE INTO RandomRequests (request_id, requester, callback_id, providers, requested_inputs, status, created_at)
+    VALUES (:request_id, :requester, :callback_id, :providers, :requested_inputs, :status, :created_at);
   ]])
 
    if not stmt then
@@ -746,7 +852,7 @@ function randomManager.createRandomRequest(userId, providers, callbackId)
 
    print("Binding parameters for random request creation")
    local bind_ok, bind_err = pcall(function()
-      stmt:bind_names({ request_id = requestId, requester = userId, callback_id = callbackId, providers = providers, status = status, created_at = timestamp })
+      stmt:bind_names({ request_id = requestId, requester = userId, callback_id = callbackId, providers = providers, requested_inputs = requestedValue, status = status, created_at = timestamp })
    end)
 
    if not bind_ok then
@@ -762,6 +868,7 @@ function randomManager.createRandomRequest(userId, providers, callbackId)
       print("Random Request creation failed: " .. execute_err)
    else
       print("Random Request created successfully")
+      print("New RequestId: " .. requestId)
    end
 
    return execute_ok, execute_err
@@ -853,9 +960,6 @@ function randomManager.postVDFOutputAndProof(userId, requestId, outputValue, pro
 
    return execute_ok, execute_err
 end
-
-
-
 
 return randomManager
 end
@@ -1063,6 +1167,7 @@ function postVDFChallengeHandler(msg)
 
    if success then
       providerManager.removeActiveRequest(userId, requestId, true)
+      randomManager.decrementRequestedInputs(requestId)
       ao.send(sendResponse(msg.From, "Posted VDF Input", SuccessMessage))
       return true
    else
@@ -1093,7 +1198,6 @@ function postVDFOutputAndProofHandler(msg)
    local requestId = data.requestId
 
    local requested = providerManager.hasActiveRequest(userId, requestId, false)
-
    if not requested then
       ao.send(sendResponse(msg.From, "Error", { message = "Failed to post VDF Output: " .. "not requested" }))
       return false
@@ -1160,9 +1264,9 @@ function creditNoticeHandler(msg)
 
    local userId = msg.Sender
    local providers = msg.Tags["X-Providers"] or nil
+   local requestedInputs = msg.Tags["X-RequestedInputs"] or ""
 
-
-   local success, err = randomManager.createRandomRequest(userId, providers, callbackId)
+   local success, err = randomManager.createRandomRequest(userId, providers, callbackId, requestedInputs)
 
    if success then
       ao.send(sendResponse(userId, "Created New Random Request", SuccessMessage))

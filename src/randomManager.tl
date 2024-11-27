@@ -1,4 +1,5 @@
 require "globals"
+local json            = require "json"
 local dbUtils         = require "dbUtils"
 local providerManager = require "providerManager"
 
@@ -18,6 +19,7 @@ global record RandomRequest
     requester: string
     callback_id: string
     providers: string
+    requested_inputs: integer
     status: string
     entropy: string
     created_at: integer
@@ -25,6 +27,14 @@ end
 
 global record RandomStatus
   status: string
+end
+
+global record ProvidersValue
+  providers: string
+end
+
+global record RequestedInputs
+  requested_inputs: integer
 end
 
 global record ProviderVDFResults
@@ -41,6 +51,20 @@ function randomManager.generateUUID(): string
     local v = (c == 'x') and math.random(0, 0xf) or math.random(8, 0xb)
     return string.format('%x', v)
   end))
+end
+ 
+function randomManager.getRandomProviderList(requestId: string): ProviderList, string
+  print("entered randomManager.getRandomProviders")
+
+  local stmt = DB:prepare("SELECT providers FROM RandomRequests WHERE request_id = :request_id")
+  stmt:bind_names({request_id = requestId})  
+  local result = dbUtils.queryOne(stmt) as ProvidersValue
+
+  if result then
+    return json.decode(result.providers) as ProviderList, ""
+  else
+    return {}, "RandomRequest providers not found"
+  end
 end
 
 function randomManager.updateRandomRequestStatus(requestId: string, newStatus: string): boolean, string
@@ -76,9 +100,6 @@ function randomManager.updateRandomRequestStatus(requestId: string, newStatus: s
   -- Execute the statement
   local execute_ok, execute_err = dbUtils.execute(stmt, "Update random request status")
 
-  -- Finalize the statement to release resources
-  stmt:finalize()
-
   if not execute_ok then
     return false, "Failed to update random request status: " .. tostring(execute_err)
   end
@@ -87,17 +108,60 @@ function randomManager.updateRandomRequestStatus(requestId: string, newStatus: s
   return true, ""
 end
 
-function randomManager.getRandomRequest(requestId: string): RandomRequest, string
-  print("entered randomManager.getRandomRequest")
+function randomManager.getRandomRequestedInputs(requestId: string): integer, string
+  print("entered randomManager.getRandomRequestedInputs")
 
-  local stmt = DB:prepare("SELECT * FROM RandomRequests WHERE request_id = :request_id")
+  local stmt = DB:prepare("SELECT requested_inputs FROM RandomRequests WHERE request_id = :request_id")
   stmt:bind_names({request_id = requestId})  
-  local result = dbUtils.queryOne(stmt)
+  local result = dbUtils.queryOne(stmt) as RequestedInputs
   if result then
-    return result as RandomRequest, ""
+    return result.requested_inputs, ""
   else
-    return {} as RandomRequest, "RandomRequest not found"
+    return nil, "RandomRequest requested_inputs not found"
   end
+end
+
+function randomManager.decrementRequestedInputs(requestId: string): boolean, string
+  print("Entered randomManager.decrementRequestedInputs")
+
+  local requested, _ = randomManager.getRandomRequestedInputs(requestId)
+
+  if requested == 0 then
+    return false, "Failure: can not decrement needed below 0"
+  end
+
+  requested = requested - 1
+
+  -- Prepare the SQL statement to update the value
+  local stmt = DB:prepare([[
+    UPDATE RandomRequests
+    SET requested_inputs = :requested_inputs
+    WHERE request_id = :request_id;
+  ]])
+
+  if not stmt then
+    return false, "Failed to prepare statement: " .. DB:errmsg()
+  end
+
+  -- Bind the parameters
+  stmt:bind_names({requested_inputs = requested, request_id = requestId})
+
+  -- Execute the statement
+  local execute_ok, execute_err = dbUtils.execute(stmt, "Update random request requested_inputs")
+
+  if not execute_ok then
+    return false, "Failed to update random request requested_inputs: " .. tostring(execute_err)
+  end
+
+  if requested == 0 then
+    local status        = Status[2]
+    local providerList  = randomManager.getRandomProviderList(requestId) as ProviderList
+    randomManager.updateRandomRequestStatus(requestId, status)
+    providerManager.pushActiveRequests(providerList.provider_ids, requestId, false)
+  end
+
+  print("Random request requested_inputs updated successfully to: " .. requested)
+  return true, ""
 end
 
 function randomManager.getRandomStatus(requestId: string): string, string
@@ -110,6 +174,19 @@ function randomManager.getRandomStatus(requestId: string): string, string
     return result.status, ""
   else
     return "", "RandomRequest status not found"
+  end
+end
+
+function randomManager.getRandomRequest(requestId: string): RandomRequest, string
+  print("entered randomManager.getRandomRequest")
+
+  local stmt = DB:prepare("SELECT * FROM RandomRequests WHERE request_id = :request_id")
+  stmt:bind_names({request_id = requestId})  
+  local result = dbUtils.queryOne(stmt)
+  if result then
+    return result as RandomRequest, ""
+  else
+    return {} as RandomRequest, "RandomRequest not found"
   end
 end
 
@@ -139,24 +216,49 @@ function randomManager.getVDFResults(requestId: string): ProviderVDFResults, str
   end
 end
 
-function randomManager.createRandomRequest(userId: string, providers: string, callbackId: string): boolean, string
+function randomManager.createRandomRequest(userId: string, providers: string, callbackId: string, requestedInputs: string): boolean, string
   print("entered randomManager.createRandomRequest")
 
-  local timestamp = os.time()
-  local requestId = randomManager.generateUUID()
-  print("New RequestId: " .. requestId)
+  local timestamp           = os.time()
+  local requestId           = randomManager.generateUUID()
+
+  -- Decode providers JSON
+  local providerList = json.decode(providers) as ProviderList
+  if not providerList or not providerList.provider_ids or #providerList.provider_ids == 0 then
+    return false, "Invalid providers list"
+  end  
+  
+  local decodedRequestList: RequestedInputs = {}
+
+  if requestedInputs ~= "" then
+    -- Attempt to decode requestedInputs and handle errors explicitly
+    local result: any = json.decode(requestedInputs)
+
+    if result and type(result) == "table" then
+      decodedRequestList = result as RequestedInputs
+    else
+      print("Failed to decode requestedInputs. Invalid JSON or structure.")
+      return false, "Invalid requestedInputs JSON"
+    end
+  else
+    -- Handle the case where requestedInputs is empty
+    decodedRequestList = {} -- Default to an empty table
+  end
+
+  -- Determine requestedValue
+  local requestedValue: integer = math.min(decodedRequestList.requested_inputs or #providerList.provider_ids, #providerList.provider_ids)
 
   if not DB then
     print("Database connection not initialized")
     return false, "Database connection is not initialized"
   end
 
-  providerManager.pushActiveRequests(providers, requestId, true)
+  providerManager.pushActiveRequests(providerList.provider_ids, requestId, true)
 
   print("Preparing SQL statement for random request creation")
   local stmt = DB:prepare([[
-    INSERT OR IGNORE INTO RandomRequests (request_id, requester, callback_id, providers, status, created_at)
-    VALUES (:request_id, :requester, :callback_id, :providers, :status, :created_at);
+    INSERT OR IGNORE INTO RandomRequests (request_id, requester, callback_id, providers, requested_inputs, status, created_at)
+    VALUES (:request_id, :requester, :callback_id, :providers, :requested_inputs, :status, :created_at);
   ]])
   
   if not stmt then
@@ -168,7 +270,7 @@ function randomManager.createRandomRequest(userId: string, providers: string, ca
 
   print("Binding parameters for random request creation")
   local bind_ok, bind_err = pcall(function(): string
-    stmt:bind_names({request_id = requestId, requester = userId, callback_id = callbackId, providers = providers, status = status, created_at = timestamp})
+    stmt:bind_names({request_id = requestId, requester = userId, callback_id = callbackId, providers = providers, requested_inputs = requestedValue, status = status, created_at = timestamp})
   end)
   
   if not bind_ok then
@@ -184,6 +286,7 @@ function randomManager.createRandomRequest(userId: string, providers: string, ca
     print("Random Request creation failed: " .. execute_err)
   else
     print("Random Request created successfully")
+    print("New RequestId: " .. requestId)
   end
 
   return execute_ok, execute_err
@@ -275,8 +378,5 @@ function randomManager.postVDFOutputAndProof(userId: string, requestId: string, 
 
   return execute_ok, execute_err
 end
-
-
-
 
 return randomManager

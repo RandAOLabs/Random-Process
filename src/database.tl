@@ -60,6 +60,7 @@ function database.initializeDatabase(): boolean
           requester TEXT,
           callback_id TEXT,
           providers TEXT,
+          requested_inputs INTEGER,
           status TEXT,
           entropy TEXT,
           created_at INTEGER

@@ -4,23 +4,24 @@ import { message, result, createDataItemSigner, spawn } from "@permaweb/aoconnec
 // Load the wallet file
 const wallet = JSON.parse(readFileSync("./wallet.json").toString(),);
 const availableRandomValues = 44
-const providerId    = "XUo8jZtUDBFLtp5okR12oLrqIZ4ewNlTpqnqmriihJE"
-const processId     = "XgUoOWcsHDwibQCWoAdii3hw1sFh2sCExeGnVZsnzoo"
+const providerId    = "ld4ncW8yLSkckjia3cw6qO7silUdEe1nsdiEvMoLg-0"
+const processId     = "NlHgeFYslkUhiOdF1JcbTC9nkxFkwCJs8wjd2sBTjf8"
 const randomTesting = "Y-Bghcvb-yaTdjZvQt2qP1GgZmgagq7rUhBqJFHPDok"
 const tokenId       = "OeX1V1xSabUzUtNykWgu9GEaXqacBZawtK12_q5gXaA"
 let providers = {
     provider_ids: ["ld4ncW8yLSkckjia3cw6qO7silUdEe1nsdiEvMoLg-0"]
 }
 const requestIds = [
-    "d4fecf72-66e8-4b9b-ad55-84800ee3db74"
+    "9c699b01-177f-43e0-9bee-217f8f5d4b78"
 ]
 
-const requestId = "00a38f54-a48d-4505-9150-c52a3753658f"
-const callbackId = "call me back :("
-const input     = "gobledygook"
-const modulus   = "7777"
-const output    = "shamuckers"
-const proof     = "proofs???"
+const requestInputs     = 1
+const requestId         = "9c699b01-177f-43e0-9bee-217f8f5d4b78"
+const callbackId        = "call me back :("
+const input             = "gobledygook"
+const modulus           = "7777"
+const output            = "shamuckers"
+const proof             = "proofs???"
 
 async function updateBalance() {
     let tags = [
@@ -96,13 +97,16 @@ async function getStatus() {
 }
 
 async function createRequest() {
+    const callbackId        = "call me back :("
+    const inputNumber       = 11
     let tags = [
         { name: "Action", value: "Transfer" },
         { name: "Quantity", value: "100" },
         { name: "Recipient", value: processId },
         { name: "X-Providers", value: JSON.stringify(providers) },
-        { name: "X-CallbackId", value: callbackId }
-    ]
+        { name: "X-CallbackId", value: callbackId },
+        { name: "X-RequestedInputs", value: JSON.stringify({requested_inputs: inputNumber})}
+    ]   
 
     let id = await message({
         /*

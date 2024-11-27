@@ -174,9 +174,31 @@ describe("requestRandom", function()
     assert(not success, "Failure: able to create random request with no callback id")
   end)
 
-  it("should be able to request random from a registered provider with correct balance and token", function()
+  it("should be able to request random from a registered provider with correct balance and correct requested inputs and token", function()
     local userId = "Requester1"
     local providers = json.encode({provider_ids = {"Provider1"}})
+    local callbackId = "xxxx-xxxx-4xxx-xxxx"
+    local requested_inputs = json.encode({requested_inputs = 1})
+    local message = {
+      Target = ao.id,
+      From = TokenInUse,
+      Action = "Credit-Notice",
+      Quantity = "100",
+      Tags = {
+        ["X-Providers"] = providers,
+        ["X-CallbackId"] = callbackId,
+        ["X-RequestedInputs"] = requestedInputs,
+        Sender = userId
+      }
+    }
+    local success = creditNoticeHandler(message)
+
+    assert(success, "Failure: failed to create random request")
+  end)
+
+  it("should not be able to request random from no providers with correct balance and token", function()
+    local userId = "Requester1"
+    local providers = json.encode({provider_ids = {}})
     local callbackId = "xxxx-xxxx-4xxx-xxxx"
 
     local message = {
@@ -192,8 +214,9 @@ describe("requestRandom", function()
     }
     local success = creditNoticeHandler(message)
 
-    assert(success, "Failure: failed to create random request")
+    assert(not success, "Failure: able to create random request with no providers")
   end)
+
 
   it("should be able to see random status",
   function ()
@@ -345,6 +368,38 @@ describe("postVDFOutputAndProof", function()
 
     local success = postVDFOutputAndProofHandler(message)
     assert(not success, "Failure: able to post VDF output and proof from unrequested provider")
+  end)
+
+  it("should not be able to post output with no proof from a requested provider for a valid request",
+  function()
+    local output = "0x023456987678"
+    local requestId = "d6cce35c-487a-458f-bab2-9032c2621f38"
+
+    local message = {
+      Target = ao.id,
+      From = "Provider1",
+      Action = "Post-VDF-Output-And-Proof",
+      Data = json.encode({output = output, requestId = requestId})
+    }
+
+    local success = postVDFOutputAndProofHandler(message)
+    assert(not success, "Failure: able to post VDF no output and proof from requested provider")
+  end)
+
+  it("should not be able to post no output with proof from a requested provider for a valid request",
+  function()
+    local proof = "0x0567892345678"
+    local requestId = "d6cce35c-487a-458f-bab2-9032c2621f38"
+
+    local message = {
+      Target = ao.id,
+      From = "Provider1",
+      Action = "Post-VDF-Output-And-Proof",
+      Data = json.encode({proof = proof, requestId = requestId})
+    }
+
+    local success = postVDFOutputAndProofHandler(message)
+    assert(not success, "Failure: able to post VDF no output and proof from requested provider")
   end)
 
   it("should be able to post output and proof from a requested provider for a valid request",

@@ -177,6 +177,7 @@ global function postVDFChallengeHandler(msg: Message): boolean
 
   if success then
     providerManager.removeActiveRequest(userId, requestId, true)
+    randomManager.decrementRequestedInputs(requestId)
     ao.send(sendResponse(msg.From, "Posted VDF Input", SuccessMessage))
     return true
   else
@@ -207,7 +208,6 @@ global function postVDFOutputAndProofHandler(msg: Message): boolean
   local requestId = data.requestId
 
   local requested = providerManager.hasActiveRequest(userId, requestId, false)
-  
   if not requested then
     ao.send(sendResponse(msg.From, "Error", {message = "Failed to post VDF Output: " .. "not requested"}))
     return false
@@ -272,11 +272,11 @@ global function creditNoticeHandler(msg: Message): boolean
     return false
   end
 
-  local userId = msg.Sender
-  local providers = msg.Tags["X-Providers"] or nil
+  local userId            = msg.Sender
+  local providers         = msg.Tags["X-Providers"] or nil
+  local requestedInputs   = msg.Tags["X-RequestedInputs"] or ""
 
-
-  local success, err = randomManager.createRandomRequest(userId, providers, callbackId)
+  local success, err = randomManager.createRandomRequest(userId, providers, callbackId, requestedInputs)
 
   if success then
     ao.send(sendResponse(userId, "Created New Random Request", SuccessMessage))
