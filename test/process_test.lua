@@ -82,6 +82,16 @@ describe("updateProviderBalance & getProviderRandomBalance", function()
     assert.are_not.equal(err, "Provider not found")
   end)
 
+
+  it("should have a provider after updated balance for second instantiated provider", function()
+    local availableRandomValues = 11
+    local message = { Target = ao.id, From = "Provider3", Action = "Update-Providers-Random-Balance", Data = json.encode({availableRandomValues = availableRandomValues}) }
+    local success = updateProviderBalanceHandler(message)
+    assert(success, "Failure: failed to update")
+    local _, err = providerManager.getProvider("Provider3")
+    assert.are_not.equal(err, "Provider not found")
+  end)
+
   it("should update the provider balance after update", function()
     local availableRandomValues = 10
     local message = { Target = ao.id, From = "Provider1", Action = "Update-Providers-Random-Balance", Data = json.encode({availableRandomValues = availableRandomValues}) }
@@ -176,7 +186,7 @@ describe("requestRandom", function()
 
   it("should be able to request random from a registered provider with correct balance and correct requested inputs and token", function()
     local userId = "Requester1"
-    local providers = json.encode({provider_ids = {"Provider1"}})
+    local providers = json.encode({provider_ids = {"Provider1", "Provider3"}})
     local callbackId = "xxxx-xxxx-4xxx-xxxx"
     local requested_inputs = json.encode({requested_inputs = 1})
     local message = {
@@ -217,10 +227,9 @@ describe("requestRandom", function()
     assert(not success, "Failure: able to create random request with no providers")
   end)
 
-
   it("should be able to see random status",
   function ()
-    local _, err = randomManager.getRandomStatus("d6cce35c-487a-458f-bab2-9032c2621f38")
+    local status, err = randomManager.getRandomStatus("d6cce35c-487a-458f-bab2-9032c2621f38")
     assert(err == "", "Failure: no status found")
   end)
   
@@ -234,6 +243,8 @@ describe("requestRandom", function()
   function ()
     local _, err = providerManager.getActiveRequests("Provider1", true)
     assert(err == "", "Failure: no active request found")
+    local _, error = providerManager.getActiveRequests("Provider3", true)
+    assert(error == "", "Failure: no active request found")
   end)
 
   it("should not be able to retrieve active_requests for an unrequested provider",
@@ -266,6 +277,22 @@ describe("requestRandom", function()
     local _, err = providerManager.getActiveRequests("Provider1", true)
     assert(err == "", "Failure: no active request found")
   end)
+
+  it("should be able to retrieve active_requests for our second requested provider",
+  function ()
+    local providerId = "Provider3"
+    local message = {
+      Target = ao.id,
+      From = "Provider3",
+      Action = "Get-Open-Random-Requests",
+      Data = json.encode({providerId = providerId})
+    }
+    local success = getOpenRandomRequestsHandler(message)
+    assert(success, "Failure: unable to get active requests from a requested provider")
+
+    local _, err = providerManager.getActiveRequests("Provider3", true)
+    assert(err == "", "Failure: no active request found")
+  end)
 end)
 
 describe("postVDFChallenge", function()
@@ -290,6 +317,7 @@ describe("postVDFChallenge", function()
     }
 
     local success = postVDFChallengeHandler(message)
+    
     assert(not success, "Failure: able to post VDF Challenge from unrequested provider")
   end)
 
@@ -326,6 +354,41 @@ describe("postVDFChallenge", function()
     local success = postVDFChallengeHandler(message)
     assert(success, "Failure: unable to post VDF Challenge from requested provider")
   end)
+
+  it("should not be able to post output and proof from a requested provider for a valid request before all challenges are posted",
+  function()
+    local output = "0x023456987678"
+    local proof = "0x0567892345678"
+    local requestId = "d6cce35c-487a-458f-bab2-9032c2621f38"
+
+    local message = {
+      Target = ao.id,
+      From = "Provider1",
+      Action = "Post-VDF-Output-And-Proof",
+      Data = json.encode({output = output, proof = proof, requestId = requestId})
+    }
+
+    local success = postVDFOutputAndProofHandler(message)
+    assert(not success, "Failure: able to post VDF output and proof from requested provider vefore all challenges are posted")
+  end)
+  
+  it("should be able to post challenge from second requested provider for a valid request",
+  function()
+    local input = "0x023456987678"
+    local modulus = "0x0567892345678"
+    local requestId = "d6cce35c-487a-458f-bab2-9032c2621f38"
+
+    local message = {
+      Target = ao.id,
+      From = "Provider3",
+      Action = "Post-VDF-Challenge",
+      Data = json.encode({input = input, modulus = modulus, requestId = requestId})
+    }
+
+    local success = postVDFChallengeHandler(message)
+    assert(success, "Failure: unable to post VDF Challenge from requested provider")
+  end)
+
 end)
 
 describe("postVDFOutputAndProof", function()
@@ -417,6 +480,40 @@ describe("postVDFOutputAndProof", function()
 
     local success = postVDFOutputAndProofHandler(message)
     assert(success, "Failure: unable to post VDF output and proof from requested provider")
+  end)
+
+  it("should not be able to post output and proof from a requested provider for a valid request twice",
+  function()
+    local output = "0x023456987678"
+    local proof = "0x0567892345678"
+    local requestId = "d6cce35c-487a-458f-bab2-9032c2621f38"
+
+    local message = {
+      Target = ao.id,
+      From = "Provider1",
+      Action = "Post-VDF-Output-And-Proof",
+      Data = json.encode({output = output, proof = proof, requestId = requestId})
+    }
+
+    local success = postVDFOutputAndProofHandler(message)
+    assert(not success, "Failure: able to post VDF output and proof from requested provider twice")
+  end)
+
+  it("should be able to post output and proof from the second requested provider for a valid request",
+  function()
+    local output = "0x023456987678"
+    local proof = "0x0567892345678"
+    local requestId = "d6cce35c-487a-458f-bab2-9032c2621f38"
+
+    local message = {
+      Target = ao.id,
+      From = "Provider3",
+      Action = "Post-VDF-Output-And-Proof",
+      Data = json.encode({output = output, proof = proof, requestId = requestId})
+    }
+
+    local success = postVDFOutputAndProofHandler(message)
+    assert(success, "Failure: unable to post VDF output and proof from the second requested provider")
   end)
 end)
 

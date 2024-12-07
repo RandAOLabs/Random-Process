@@ -130,8 +130,6 @@ function providerManager.pushActiveRequests(providerIds: {string}, requestId: st
         success = false
         err = err .. " " .. provider.provider_id
         return success, err
-      else
-        return success, ""
       end
     else
       print("made here")
@@ -168,8 +166,6 @@ function providerManager.pushActiveRequests(providerIds: {string}, requestId: st
         success = false
         err = err .. " " .. provider.provider_id
         return success, err
-      else
-        return success, ""
       end
     end
   end

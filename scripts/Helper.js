@@ -5,8 +5,8 @@ import { message, result, createDataItemSigner, spawn } from "@permaweb/aoconnec
 const wallet = JSON.parse(readFileSync("./wallet.json").toString(),);
 const availableRandomValues = 44
 const providerId    = "ld4ncW8yLSkckjia3cw6qO7silUdEe1nsdiEvMoLg-0"
-const processId     = "NlHgeFYslkUhiOdF1JcbTC9nkxFkwCJs8wjd2sBTjf8"
-const randomTesting = "Y-Bghcvb-yaTdjZvQt2qP1GgZmgagq7rUhBqJFHPDok"
+const processId     = "-3Nvdg7g9S7ly-2scR8TtcY3QmIwtl_Gx5PDREJssiA"
+const randomTesting = "AmGZEcVGl66Wh_KB9SzY2u7SUIcRz4yUUBfvMMC5Tvc"
 const tokenId       = "OeX1V1xSabUzUtNykWgu9GEaXqacBZawtK12_q5gXaA"
 let providers = {
     provider_ids: ["ld4ncW8yLSkckjia3cw6qO7silUdEe1nsdiEvMoLg-0"]
@@ -16,12 +16,14 @@ const requestIds = [
 ]
 
 const requestInputs     = 1
-const requestId         = "9c699b01-177f-43e0-9bee-217f8f5d4b78"
+const requestId         = "ce9607a5-5945-45ed-8fbd-456b5fc7f674"
 const callbackId        = "call me back :("
 const input             = "gobledygook"
 const modulus           = "7777"
 const output            = "shamuckers"
 const proof             = "proofs???"
+
+const gameId = "1"
 
 async function updateBalance() {
     let tags = [
@@ -394,6 +396,60 @@ async function sendQuery() {
 
     })
 
+    return id;
+}
+
+async function highLow() {
+    let tags = [
+        { name: "Action", value: "High-or-Low" },
+        { name: "Guess", value: "Higher" }
+    ]
+
+    let id = await message({
+        /*
+          The arweave TXID of the process, this will become the "target".
+          This is the process the message is ultimately sent to.
+        */
+        process: randomTesting,
+        // Tags that the process will use as input.
+        tags,
+        // A signer function used to build the message "signature"
+        signer: createDataItemSigner(wallet),
+        /*
+          The "data" portion of the message
+          If not specified a random string will be generated
+        */
+
+    })
+
+    return id;
+}
+
+
+async function viewGame() {
+    let tags = [
+        { name: "Action", value: "View-Game" },
+        { name: "GameId", value: gameId }
+    ]
+
+    let id = await message({
+        /*
+          The arweave TXID of the process, this will become the "target".
+          This is the process the message is ultimately sent to.
+        */
+        process: processId,
+        // Tags that the process will use as input.
+        tags,
+        // A signer function used to build the message "signature"
+        signer: createDataItemSigner(wallet),
+        /*
+          The "data" portion of the message
+          If not specified a random string will be generated
+        */
+        data: JSON.stringify({ providerId }),
+
+    })
+
     //console.log(id)
     const { Output, Messages } = await result({
         message: id,
@@ -475,6 +531,18 @@ async function main() {
     } else if (inputArg == 11) {
         try {
             await sendQuery()
+        } catch (err) {
+            console.error("Error reading process IDs or sending messages:", err);
+        }
+    } else if (inputArg == 12) {
+        try {
+            await highLow()
+        } catch (err) {
+            console.error("Error reading process IDs or sending messages:", err);
+        }
+    } else if (inputArg == 13) {
+        try {
+            await viewGame()
         } catch (err) {
             console.error("Error reading process IDs or sending messages:", err);
         }

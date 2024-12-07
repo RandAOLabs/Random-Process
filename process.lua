@@ -344,8 +344,6 @@ function providerManager.pushActiveRequests(providerIds, requestId, challenge)
             success = false
             err = err .. " " .. provider.provider_id
             return success, err
-         else
-            return success, ""
          end
       else
          print("made here")
@@ -382,8 +380,6 @@ function providerManager.pushActiveRequests(providerIds, requestId, challenge)
             success = false
             err = err .. " " .. provider.provider_id
             return success, err
-         else
-            return success, ""
          end
       end
    end
@@ -1373,11 +1369,11 @@ RandomResponseResponse = {}
 function simulateResponseHandler()
    print("entered simulateResponseHandler")
 
-   local target = "Y-Bghcvb-yaTdjZvQt2qP1GgZmgagq7rUhBqJFHPDok"
+   local target = "AmGZEcVGl66Wh_KB9SzY2u7SUIcRz4yUUBfvMMC5Tvc"
    local action = "Random-Response"
    local data = {
-      callbackId = "samuel",
-      entropy = "777",
+      callbackId = "d9e4855a-3f2b-4e4f-bc52-9b7bd4bf15e7",
+      entropy = "774",
    }
    ao.send(sendResponse(target, action, data))
 end
