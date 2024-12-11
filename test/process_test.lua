@@ -358,7 +358,7 @@ describe("postVDFChallenge", function()
   it("should not be able to post output and proof from a requested provider for a valid request before all challenges are posted",
   function()
     local output = "0x023456987678"
-    local proof = "0x0567892345678"
+    local proof = json.encode({"0x0567892345678", "fghjkl", "0x0567892345678", "fghjkl", "0x0567892345678", "0x0567892345678", "fghjkl", "0x0567892345678", "fghjkl", "0x0567892345678" })
     local requestId = "d6cce35c-487a-458f-bab2-9032c2621f38"
 
     local message = {
@@ -402,7 +402,7 @@ describe("postVDFOutputAndProof", function()
   it("should not be able to post output and proof from an unrequested provider for a valid request",
   function()
     local output = "0x023456987678"
-    local proof = "0x0567892345678"
+    local proof = json.encode({"0x0567892345678", "fghjkl", "0x0567892345678", "fghjkl", "0x0567892345678", "0x0567892345678", "fghjkl", "0x0567892345678", "fghjkl", "0x0567892345678" })
     local requestId = "d6cce35c-487a-458f-bab2-9032c2621f38"
 
     local message = {
@@ -419,7 +419,7 @@ describe("postVDFOutputAndProof", function()
   it("should not be able to post output and proof from an unrequested provider for an invalid request",
   function()
     local output = "0x023456987678"
-    local proof = "0x0567892345678"
+    local proof = json.encode({"0x0567892345678", "fghjkl", "0x0567892345678", "fghjkl", "0x0567892345678", "0x0567892345678", "fghjkl", "0x0567892345678", "fghjkl", "0x0567892345678" })
     local requestId = "a6cce35c-487a-458f-bab2-9032c2621f38"
 
     local message = {
@@ -451,7 +451,7 @@ describe("postVDFOutputAndProof", function()
 
   it("should not be able to post no output with proof from a requested provider for a valid request",
   function()
-    local proof = "0x0567892345678"
+    local proof = json.encode({"0x0567892345678", "fghjkl", "0x0567892345678", "fghjkl", "0x0567892345678", "0x0567892345678", "fghjkl", "0x0567892345678", "fghjkl", "0x0567892345678" })
     local requestId = "d6cce35c-487a-458f-bab2-9032c2621f38"
 
     local message = {
@@ -468,7 +468,7 @@ describe("postVDFOutputAndProof", function()
   it("should be able to post output and proof from a requested provider for a valid request",
   function()
     local output = "0x023456987678"
-    local proof = "0x0567892345678"
+    local proof = json.encode({"0x0567892345678", "fghjkl", "0x0567892345678", "fghjkl", "0x0567892345678", "0x0567892345678", "fghjkl", "0x0567892345678", "fghjkl", "0x0567892345678" })
     local requestId = "d6cce35c-487a-458f-bab2-9032c2621f38"
 
     local message = {
@@ -485,7 +485,7 @@ describe("postVDFOutputAndProof", function()
   it("should not be able to post output and proof from a requested provider for a valid request twice",
   function()
     local output = "0x023456987678"
-    local proof = "0x0567892345678"
+    local proof = json.encode({"0x0567892345678", "fghjkl", "0x0567892345678", "fghjkl", "0x0567892345678", "0x0567892345678", "fghjkl", "0x0567892345678", "fghjkl", "0x0567892345678" })
     local requestId = "d6cce35c-487a-458f-bab2-9032c2621f38"
 
     local message = {
@@ -502,7 +502,7 @@ describe("postVDFOutputAndProof", function()
   it("should be able to post output and proof from the second requested provider for a valid request",
   function()
     local output = "0x023456987678"
-    local proof = "0x0567892345678"
+    local proof = json.encode({"0x0567892345678", "fghjkl", "0x0567892345678", "fghjkl", "0x0567892345678", "0x0567892345678", "fghjkl", "0x0567892345678", "fghjkl", "0x0567892345678" })
     local requestId = "d6cce35c-487a-458f-bab2-9032c2621f38"
 
     local message = {

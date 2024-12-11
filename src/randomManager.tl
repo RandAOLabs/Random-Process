@@ -2,6 +2,7 @@ require "globals"
 local json            = require "json"
 local dbUtils         = require "dbUtils"
 local providerManager = require "providerManager"
+local verifierManager = require "verifierManager"
 
 -- Type definitions
 global record ProviderVDFResult
@@ -203,6 +204,19 @@ function randomManager.getRandomRequestViaCallbackId(callbackId: string): Random
   end
 end
 
+function randomManager.getVDFResult(requestId: string, providerId: string): ProviderVDFResult, string
+  print("entered randomManager.getVDFResult")
+  
+  local stmt = DB:prepare("SELECT * FROM ProviderVDFResults WHERE request_id = :request_id AND provider_id = :provider_id")
+  stmt:bind_names({request_id = requestId, provider_id = providerId})  
+  local result = dbUtils.queryOne(stmt)
+  if result then
+    return result as ProviderVDFResult, ""
+  else
+    return {} as ProviderVDFResult, "RandomRequest not found"
+  end
+end
+
 function randomManager.getVDFResults(requestId: string): ProviderVDFResults, string
   print("entered randomManager.getVDFResults")
   
@@ -374,6 +388,20 @@ function randomManager.postVDFOutputAndProof(userId: string, requestId: string, 
     print("Post VDF Output and Proof failed: " .. execute_err)
   else
     print("VDF Output and Proof posted successfully")
+
+    -- Fetch VDF input and modulus
+    local vdfRequest = randomManager.getVDFResult(requestId, userId)
+    local input = vdfRequest.input_value
+    local modulus = vdfRequest.modulus_value
+
+    -- Call verifierManager.processProof function
+    local processResult, processError = verifierManager.processProof(requestId, input, modulus, proof, userId)
+    if not processResult then
+      print("Processing proof failed: " .. tostring(processError))
+    else
+      print("Proof processed successfully")
+    end
+    
   end
 
   return execute_ok, execute_err

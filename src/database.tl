@@ -54,6 +54,27 @@ function database.initializeDatabase(): boolean
           created_at INTEGER
         );
       ]],
+      -- Verifiers DB Table
+      [[
+        CREATE TABLE IF NOT EXISTS Verifiers (
+          process_id TEXT PRIMARY KEY,
+          status TEXT NOT NULL,
+          current_segment TEXT
+        )
+      ]],
+      -- Verifier Segments DB Table
+      [[
+        CREATE TABLE IF NOT EXISTS VerifierSegments (
+          segment_id TEXT PRIMARY KEY,
+          proof_id TEXT NOT NULL,
+          verifier_id TEXT,
+          segment_data TEXT NOT NULL,
+          status TEXT NOT NULL,
+          timestamp INTEGER NOT NULL,
+          result TEXT,
+          FOREIGN KEY(verifier_id) REFERENCES Verifiers(process_id)
+        )
+      ]],
       [[
         CREATE TABLE IF NOT EXISTS RandomRequests (
           request_id TEXT PRIMARY KEY,
