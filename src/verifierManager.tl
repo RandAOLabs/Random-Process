@@ -30,16 +30,17 @@ global record VerifierStats
 end
 
 global record VDFRequestData
-  requestId: string
+  request_id: string
+  segment_id: string
   checkpoint_input: string
   modulus: string
   expected_output: string
 end
 
 global record VDFRequestResponse
-  requestId: string
-  checkpoint_input: string
-  validity: boolean
+  request_id: string
+  segment_id: string
+  valid: boolean
 end
 
 local verifierManager = {}
@@ -152,13 +153,15 @@ function verifierManager.requestVerification(processId: string, data: VDFRequest
     
   local verificationResponse = ao.send({
     Target = processId,
-    Action = "Post-VDF-Request",
+    Action = "Validate-Checkpoint",
     Data = json.encode(data)
   }).receive().Data
   
+  print("Verification response: " .. verificationResponse)
+
   local processedResonse = json.decode(verificationResponse) as VDFRequestResponse
   
-  if processedResonse.validity == false then
+  if processedResonse.valid == false then
   return false, "Verification failed"
   end
   
@@ -241,14 +244,15 @@ function verifierManager.markAvailable(verifierId: string): boolean, string
 end
 
 -- Create new verification segment
-function verifierManager.createSegment(proofId: string, segmentId: string, segmentData: string): string, string
+function verifierManager.createSegment(proofId: string, segmentCount: string, segmentData: string): string, string
   if not DB then
     print("Database connection not initialized")
     return "", "Database connection is not initialized"
   end
   
   local timestamp = os.time()
-  
+  local segmentId = proofId .. "_" .. segmentCount
+
   local stmt = DB:prepare([[
     INSERT INTO VerifierSegments 
     (segment_id, proof_id, segment_data, status, timestamp)
@@ -403,7 +407,8 @@ function verifierManager.processProof(requestId: string, input: string, modulus:
         print("Failed to assign segment: " .. assignErr)
       else
         local requestData: VDFRequestData = {
-          requestId = requestId,
+          request_id = requestId,
+          segment_id = segmentId,
           checkpoint_input = input,
           modulus = modulus,
           expected_output = segmentId
@@ -414,6 +419,12 @@ function verifierManager.processProof(requestId: string, input: string, modulus:
   end
 
   return true, ""
+end
+
+function verifierManager.initializeVerifierManager()
+  for _, verifier in ipairs(VerifierProcesses) do  
+    verifierManager.registerVerifier(verifier)
+  end
 end
 
 return verifierManager

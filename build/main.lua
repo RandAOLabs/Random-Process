@@ -5,6 +5,7 @@ local database = require("database")
 local providerManager = require("providerManager")
 local randomManager = require("randomManager")
 local tokenManager = require("tokenManager")
+local verifierManager = require("verifierManager")
 
 
 ResponseData = {}
@@ -78,6 +79,9 @@ GetRandomRequestsResponse = {}
 
 
 database.initializeDatabase()
+
+
+verifierManager.initializeVerifierManager()
 
 
 function sendResponse(target, action, data)
@@ -212,14 +216,15 @@ function postVDFOutputAndProofHandler(msg)
       ao.send(sendResponse(msg.From, "Error", { message = "Failed to post VDF Output: " .. "not requested" }))
       return false
    end
+   providerManager.removeActiveRequest(userId, requestId, false)
 
    local success, err = randomManager.postVDFOutputAndProof(userId, requestId, output, proof)
 
    if success then
-      providerManager.removeActiveRequest(userId, requestId, false)
       ao.send(sendResponse(msg.From, "Posted VDF Output and Proof", SuccessMessage))
       return true
    else
+
       ao.send(sendResponse(msg.From, "Error", { message = "Failed to post VDF Output and Proof: " .. err }))
       return false
    end

@@ -204,8 +204,8 @@ process.lua
 
 *       local finalize_result = stmt:finalize()
 *       if finalize_result ~= sqlite3.OK then
-*          print("dbUtils.execute: SQL finalization failed: " .. DB:errmsg())
-*          return false, "dbUtils.execute: Failed to finalize SQL statement StatementHint being: " .. DB:errmsg()
+0          print("dbUtils.execute: SQL finalization failed: " .. DB:errmsg())
+0          return false, "dbUtils.execute: Failed to finalize SQL statement StatementHint being: " .. DB:errmsg()
         end
 
 *       print("dbUtils.execute: SQL execution successful")
@@ -249,6 +249,19 @@ process.lua
 *    "CRACKING",
 *    "FINALIZED",
      "FAILED",
+* }
+
+* VerifierProcesses = {
+*    "RtkXacFBEGXhw6OTjCqECKSap_y2CJMukBsGxElCd-E",
+*    "qbCteSj7907pwb_SQ1AD2kMG_HZDuUVf2IZnnm4pJxc",
+*    "toqzmcIxYC2yUQWJJVbd-ecBbCB2w1r_7Gvoq99DOzM",
+*    "G0JLVocfhW_1qHnX64yuaVBCWdpBRhSQ3T8AkGoiIJA",
+*    "Fpb42AKYswyM8nIAb6vZYBePwPUxzZhQhu72srZr1xY",
+*    "06IG1T_JXyhVV0TZ42_EEDKZ7T0kBfmdDjATTaBr8ic",
+*    "xcLnD6OdSbbO4dY_HAwNHLWRuNEPSJXoi4gRreywwi8",
+*    "bKQiEWkOg77FqygZ4yIp7lBV5mlMDQDg3_5CS36PUqg",
+*    "SqdPCK1LrMa_6-xf4a9UKchAqL26Mbj_Pg5kLk4NWxo",
+     "tgfpewpX3j7htX03Cj5pCz_CB0nOzDFlc0WJi1sRxRI",
 * }
 
 * return {}
@@ -1020,15 +1033,15 @@ process.lua
 
 
 *       local processResult, processError = verifierManager.processProof(requestId, input, modulus, proof, userId)
-*       if not processResult then
-*          print("Processing proof failed: " .. tostring(processError))
+0       if not processResult then
+0          print("Processing proof failed: " .. tostring(processError))
         else
-*          print("Proof processed successfully")
+0          print("Proof processed successfully")
         end
 
      end
 
-*    return execute_ok, execute_err
+0    return execute_ok, execute_err
   end
 
 * return randomManager
@@ -1099,6 +1112,7 @@ process.lua
 
 
 
+
 * VDFRequestResponse = {}
 
 
@@ -1109,40 +1123,40 @@ process.lua
 
 
 * function verifierManager.registerVerifier(processId)
-0    print("Registering verifier: " .. processId)
+*    print("Registering verifier: " .. processId)
 
-0    if not DB then
+*    if not DB then
 0       print("Database connection not initialized")
 0       return false, "Database connection is not initialized"
      end
 
-0    local stmt = DB:prepare([[
+*    local stmt = DB:prepare([[
       INSERT OR REPLACE INTO Verifiers
       (process_id, status)
       VALUES (:pid, 'available')
-0   ]])
+*   ]])
 
-0    if not stmt then
+*    if not stmt then
 0       print("Failed to prepare statement: " .. DB:errmsg())
 0       return false, "Failed to prepare statement: " .. DB:errmsg()
      end
 
-0    local ok = false
-0    ok = pcall(function()
-0       stmt:bind_names({ pid = processId })
+*    local ok = false
+*    ok = pcall(function()
+*       stmt:bind_names({ pid = processId })
      end)
 
-0    if not ok then
+*    if not ok then
 0       print("Failed to bind parameters")
 0       return false, "Failed to bind parameters"
      end
 
-0    local exec_ok, exec_err = dbUtils.execute(stmt, "Register verifier")
-0    if not exec_ok then
+*    local exec_ok, exec_err = dbUtils.execute(stmt, "Register verifier")
+*    if not exec_ok then
 0       return false, exec_err
      end
 
-0    return true, ""
+*    return true, ""
   end
 
 
@@ -1166,12 +1180,12 @@ process.lua
 *    local verifiers = {}
 
 *    for _, row in ipairs(rows) do
-0       local verifier = {
-           process_id = tostring(row.process_id),
-           status = tostring(row.status),
-           current_segment = row.current_segment and tostring(row.current_segment) or "",
+*       local verifier = {
+*          process_id = tostring(row.process_id),
+*          status = tostring(row.status),
+*          current_segment = row.current_segment and tostring(row.current_segment) or "",
         }
-0       table.insert(verifiers, verifier)
+*       table.insert(verifiers, verifier)
      end
 
 *    return verifiers, ""
@@ -1211,17 +1225,19 @@ process.lua
   end
 
 * function verifierManager.requestVerification(processId, data)
-0    print("Sending verification request to process: " .. processId)
+*    print("Sending verification request to process: " .. processId)
 
-0    local verificationResponse = ao.send({
-        Target = processId,
-        Action = "Post-VDF-Request",
-        Data = json.encode(data),
-0    }).receive().Data
+*    local verificationResponse = ao.send({
+*       Target = processId,
+*       Action = "Validate-Checkpoint",
+*       Data = json.encode(data),
+*    }).receive().Data
+
+0    print("Verification response: " .. verificationResponse)
 
 0    local processedResonse = json.decode(verificationResponse)
 
-0    if processedResonse.validity == false then
+0    if processedResonse.valid == false then
 0       return false, "Verification failed"
      end
 
@@ -1230,41 +1246,41 @@ process.lua
 
 
 * function verifierManager.assignSegment(verifierId, segmentId)
-0    if not DB then
+*    if not DB then
 0       print("Database connection not initialized")
 0       return false, "Database connection is not initialized"
      end
 
-0    local stmt = DB:prepare([[
+*    local stmt = DB:prepare([[
       UPDATE Verifiers
       SET status = 'busy', current_segment = :segment
       WHERE process_id = :pid AND status = 'available'
-0   ]])
+*   ]])
 
-0    if not stmt then
+*    if not stmt then
 0       print("Failed to prepare statement: " .. DB:errmsg())
 0       return false, "Failed to prepare statement: " .. DB:errmsg()
      end
 
-0    local ok = false
-0    ok = pcall(function()
-0       stmt:bind_names({
-           pid = verifierId,
-           segment = segmentId,
+*    local ok = false
+*    ok = pcall(function()
+*       stmt:bind_names({
+*          pid = verifierId,
+*          segment = segmentId,
         })
      end)
 
-0    if not ok then
+*    if not ok then
 0       print("Failed to bind parameters")
 0       return false, "Failed to bind parameters"
      end
 
-0    local exec_ok, exec_err = dbUtils.execute(stmt, "Assign segment")
-0    if not exec_ok then
+*    local exec_ok, exec_err = dbUtils.execute(stmt, "Assign segment")
+*    if not exec_ok then
 0       return false, exec_err
      end
 
-0    return true, ""
+*    return true, ""
   end
 
 
@@ -1304,13 +1320,14 @@ process.lua
   end
 
 
-* function verifierManager.createSegment(proofId, segmentId, segmentData)
+* function verifierManager.createSegment(proofId, segmentCount, segmentData)
 *    if not DB then
 0       print("Database connection not initialized")
 0       return "", "Database connection is not initialized"
      end
 
 *    local timestamp = os.time()
+*    local segmentId = proofId .. "_" .. segmentCount
 
 *    local stmt = DB:prepare([[
       INSERT INTO VerifierSegments
@@ -1340,7 +1357,7 @@ process.lua
 
 *    local exec_ok, exec_err = dbUtils.execute(stmt, "Create segment")
 *    if not exec_ok then
-*       return "", exec_err
+0       return "", exec_err
      end
 
 *    return segmentId, ""
@@ -1454,29 +1471,36 @@ process.lua
 *       segmentCount = segmentCount + 1
 
 *       if createErr ~= "" then
-*          return false, "Failed to create segment: " .. createErr
+0          return false, "Failed to create segment: " .. createErr
         end
 
 *       if #availableVerifiers > 0 then
-0          local verifierId = availableVerifiers[1]
-0          table.remove(availableVerifiers, 1)
+*          local verifierId = availableVerifiers[1]
+*          table.remove(availableVerifiers, 1)
 
-0          local assigned, assignErr = verifierManager.assignSegment(verifierId.process_id, segmentId)
-0          if not assigned then
+*          local assigned, assignErr = verifierManager.assignSegment(verifierId.process_id, segmentId)
+*          if not assigned then
 0             print("Failed to assign segment: " .. assignErr)
            else
-0             local requestData = {
-                 requestId = requestId,
-                 checkpoint_input = input,
-                 modulus = modulus,
-                 expected_output = segmentId,
+*             local requestData = {
+*                request_id = requestId,
+*                segment_id = segmentId,
+*                checkpoint_input = input,
+*                modulus = modulus,
+*                expected_output = segmentId,
               }
-0             verifierManager.requestVerification(verifierId.process_id, requestData)
+*             verifierManager.requestVerification(verifierId.process_id, requestData)
            end
         end
      end
 
-*    return true, ""
+0    return true, ""
+  end
+
+* function verifierManager.initializeVerifierManager()
+*    for _, verifier in ipairs(VerifierProcesses) do
+*       verifierManager.registerVerifier(verifier)
+     end
   end
 
 * return verifierManager
@@ -1490,6 +1514,7 @@ process.lua
 * local providerManager = require("providerManager")
 * local randomManager = require("randomManager")
 * local tokenManager = require("tokenManager")
+* local verifierManager = require("verifierManager")
 
 
 * ResponseData = {}
@@ -1563,6 +1588,9 @@ process.lua
 
 
 * database.initializeDatabase()
+
+
+* verifierManager.initializeVerifierManager()
 
 
 * function sendResponse(target, action, data)
@@ -1697,14 +1725,15 @@ process.lua
 *       ao.send(sendResponse(msg.From, "Error", { message = "Failed to post VDF Output: " .. "not requested" }))
 *       return false
      end
+*    providerManager.removeActiveRequest(userId, requestId, false)
 
 *    local success, err = randomManager.postVDFOutputAndProof(userId, requestId, output, proof)
 
-*    if success then
-*       providerManager.removeActiveRequest(userId, requestId, false)
-*       ao.send(sendResponse(msg.From, "Posted VDF Output and Proof", SuccessMessage))
-*       return true
+0    if success then
+0       ao.send(sendResponse(msg.From, "Posted VDF Output and Proof", SuccessMessage))
+0       return true
      else
+
 0       ao.send(sendResponse(msg.From, "Error", { message = "Failed to post VDF Output and Proof: " .. err }))
 0       return false
      end
@@ -2548,6 +2577,7 @@ build/main.lua
 0 local providerManager = require("providerManager")
 0 local randomManager = require("randomManager")
 0 local tokenManager = require("tokenManager")
+0 local verifierManager = require("verifierManager")
 
 
 0 ResponseData = {}
@@ -2621,6 +2651,9 @@ build/main.lua
 
 
 0 database.initializeDatabase()
+
+
+0 verifierManager.initializeVerifierManager()
 
 
 0 function sendResponse(target, action, data)
@@ -2755,14 +2788,15 @@ build/main.lua
 0       ao.send(sendResponse(msg.From, "Error", { message = "Failed to post VDF Output: " .. "not requested" }))
 0       return false
      end
+0    providerManager.removeActiveRequest(userId, requestId, false)
 
 0    local success, err = randomManager.postVDFOutputAndProof(userId, requestId, output, proof)
 
 0    if success then
-0       providerManager.removeActiveRequest(userId, requestId, false)
 0       ao.send(sendResponse(msg.From, "Posted VDF Output and Proof", SuccessMessage))
 0       return true
      else
+
 0       ao.send(sendResponse(msg.From, "Error", { message = "Failed to post VDF Output and Proof: " .. err }))
 0       return false
      end
@@ -3020,6 +3054,7 @@ build/verifierManager.lua
 
 
 
+
 0 VDFRequestResponse = {}
 
 
@@ -3136,13 +3171,15 @@ build/verifierManager.lua
 
 0    local verificationResponse = ao.send({
         Target = processId,
-        Action = "Post-VDF-Request",
+        Action = "Validate-Checkpoint",
         Data = json.encode(data),
 0    }).receive().Data
 
+0    print("Verification response: " .. verificationResponse)
+
 0    local processedResonse = json.decode(verificationResponse)
 
-0    if processedResonse.validity == false then
+0    if processedResonse.valid == false then
 0       return false, "Verification failed"
      end
 
@@ -3225,13 +3262,14 @@ build/verifierManager.lua
   end
 
 
-0 function verifierManager.createSegment(proofId, segmentId, segmentData)
+0 function verifierManager.createSegment(proofId, segmentCount, segmentData)
 0    if not DB then
 0       print("Database connection not initialized")
 0       return "", "Database connection is not initialized"
      end
 
 0    local timestamp = os.time()
+0    local segmentId = proofId .. "_" .. segmentCount
 
 0    local stmt = DB:prepare([[
       INSERT INTO VerifierSegments
@@ -3387,7 +3425,8 @@ build/verifierManager.lua
 0             print("Failed to assign segment: " .. assignErr)
            else
 0             local requestData = {
-                 requestId = requestId,
+                 request_id = requestId,
+                 segment_id = segmentId,
                  checkpoint_input = input,
                  modulus = modulus,
                  expected_output = segmentId,
@@ -3398,6 +3437,12 @@ build/verifierManager.lua
      end
 
 0    return true, ""
+  end
+
+0 function verifierManager.initializeVerifierManager()
+0    for _, verifier in ipairs(VerifierProcesses) do
+0       verifierManager.registerVerifier(verifier)
+     end
   end
 
 0 return verifierManager
@@ -3847,6 +3892,19 @@ build/globals.lua
      "FAILED",
   }
 
+0 VerifierProcesses = {
+     "RtkXacFBEGXhw6OTjCqECKSap_y2CJMukBsGxElCd-E",
+     "qbCteSj7907pwb_SQ1AD2kMG_HZDuUVf2IZnnm4pJxc",
+     "toqzmcIxYC2yUQWJJVbd-ecBbCB2w1r_7Gvoq99DOzM",
+     "G0JLVocfhW_1qHnX64yuaVBCWdpBRhSQ3T8AkGoiIJA",
+     "Fpb42AKYswyM8nIAb6vZYBePwPUxzZhQhu72srZr1xY",
+     "06IG1T_JXyhVV0TZ42_EEDKZ7T0kBfmdDjATTaBr8ic",
+     "xcLnD6OdSbbO4dY_HAwNHLWRuNEPSJXoi4gRreywwi8",
+     "bKQiEWkOg77FqygZ4yIp7lBV5mlMDQDg3_5CS36PUqg",
+     "SqdPCK1LrMa_6-xf4a9UKchAqL26Mbj_Pg5kLk4NWxo",
+     "tgfpewpX3j7htX03Cj5pCz_CB0nOzDFlc0WJi1sRxRI",
+  }
+
 0 return {}
 
 ==============================================================================
@@ -3867,8 +3925,8 @@ test/setup.lua
 *     return originalRequire("test.mocked-env.ao.handlers")
     end
 
-*   if moduleName == "aocred" then
-0     return originalRequire("test.mocked-env.processes.aocred")
+*   if moduleName == "verifier" then
+*     return originalRequire("test.mocked-env.processes.verifier")
     end
 
 *   if moduleName == ".bint" then
@@ -3924,7 +3982,31 @@ test/process_test.lua
 * _G.IsInUnitTest = true
 * _G.Owner = '123MyOwner321'
 * _G.MainProcessId = '123xyzMySelfabc321'
+
+* _G.Verifiers = {
+*   "RtkXacFBEGXhw6OTjCqECKSap_y2CJMukBsGxElCd-E",
+*   "qbCteSj7907pwb_SQ1AD2kMG_HZDuUVf2IZnnm4pJxc",
+*   "toqzmcIxYC2yUQWJJVbd-ecBbCB2w1r_7Gvoq99DOzM",
+*   "G0JLVocfhW_1qHnX64yuaVBCWdpBRhSQ3T8AkGoiIJA",
+*   "Fpb42AKYswyM8nIAb6vZYBePwPUxzZhQhu72srZr1xY",
+*   "06IG1T_JXyhVV0TZ42_EEDKZ7T0kBfmdDjATTaBr8ic",
+*   "xcLnD6OdSbbO4dY_HAwNHLWRuNEPSJXoi4gRreywwi8",
+*   "bKQiEWkOg77FqygZ4yIp7lBV5mlMDQDg3_5CS36PUqg",
+*   "SqdPCK1LrMa_6-xf4a9UKchAqL26Mbj_Pg5kLk4NWxo",
+    "tgfpewpX3j7htX03Cj5pCz_CB0nOzDFlc0WJi1sRxRI"
+* }
+
 * _G.Processes = {
+*   [_G.Verifiers[1]] = require "verifier" (_G.Verifiers[1]),
+*   [_G.Verifiers[2]] = require "verifier" (_G.Verifiers[2]),
+*   [_G.Verifiers[3]] = require "verifier" (_G.Verifiers[3]),
+*   [_G.Verifiers[4]] = require "verifier" (_G.Verifiers[4]),
+*   [_G.Verifiers[5]] = require "verifier" (_G.Verifiers[5]),
+*   [_G.Verifiers[6]] = require "verifier" (_G.Verifiers[6]),
+*   [_G.Verifiers[7]] = require "verifier" (_G.Verifiers[7]),
+*   [_G.Verifiers[8]] = require "verifier" (_G.Verifiers[8]),
+*   [_G.Verifiers[9]] = require "verifier" (_G.Verifiers[9]),
+*   [_G.Verifiers[10]] = require "verifier" (_G.Verifiers[10]),
 * }
 
 * _G.Handlers = require "handlers"
@@ -4373,7 +4455,7 @@ test/process_test.lua
 *   it("should be able to post output and proof from a requested provider for a valid request",
     function()
 *     local output = "0x023456987678"
-*     local proof = json.encode({"0x0567892345678", "fghjkl", "0x0567892345678", "fghjkl", "0x0567892345678", "0x0567892345678", "fghjkl", "0x0567892345678", "fghjkl", "0x0567892345678" })
+*     local proof = json.encode({"erwsztxdyfcuj", "ztrdyxufc", "ARTSzydxujf", "RTz", "tzyhdxjf", "TSYzu", "RTYzux", "tmrngb", "kumjtnyhbtdgv", "kyumtjynjrhbhg" })
 *     local requestId = "d6cce35c-487a-458f-bab2-9032c2621f38"
 
 *     local message = {
@@ -4384,7 +4466,7 @@ test/process_test.lua
       }
 
 *     local success = postVDFOutputAndProofHandler(message)
-*     assert(success, "Failure: unable to post VDF output and proof from requested provider")
+0     assert(success, "Failure: unable to post VDF output and proof from requested provider")
     end)
 
 *   it("should not be able to post output and proof from a requested provider for a valid request twice",
@@ -4407,7 +4489,7 @@ test/process_test.lua
 *   it("should be able to post output and proof from the second requested provider for a valid request",
     function()
 *     local output = "0x023456987678"
-*     local proof = json.encode({"0x0567892345678", "fghjkl", "0x0567892345678", "fghjkl", "0x0567892345678", "0x0567892345678", "fghjkl", "0x0567892345678", "fghjkl", "0x0567892345678" })
+*     local proof = json.encode({"srtxdyfu", "dfgfh", "sztgdh", "aeyduxficgk", "yucfi", "xuctyurvi", "wrstedf", "warstdxyfcjg", "ARSztgdxhfcj", "rztswyxduf" })
 *     local requestId = "d6cce35c-487a-458f-bab2-9032c2621f38"
 
 *     local message = {
@@ -4418,7 +4500,7 @@ test/process_test.lua
       }
 
 *     local success = postVDFOutputAndProofHandler(message)
-*     assert(success, "Failure: unable to post VDF output and proof from the second requested provider")
+0     assert(success, "Failure: unable to post VDF output and proof from the second requested provider")
     end)
   end)
 
@@ -4497,6 +4579,39 @@ test/process_test.lua
 *     assert(success, "Failure: errors out on invalid callbackId")
     end)
   end)
+
+==============================================================================
+test/mocked-env/processes/verifier.lua
+==============================================================================
+* local json = require "json"
+
+  local function newmodule(selfId)
+*   local verifier = {}
+
+*   local ao = require "ao" (selfId)
+
+*   verifier.mockBalance = "100"
+
+
+
+*   function verifier.handle(msg)
+0     if msg.Tags.Action == "Validate-Checkpoint" then
+0         print("Verifying checkpoint")
+0         local msgData = json.decode(msg.Data)
+
+0         local data = {
+              request_id = msgData.request_id,
+              segment_id = msgData.segment_id,
+0             valid = true
+          }
+
+0         msg.reply({Data=json.encode(data)})
+      end
+    end
+
+*   return verifier
+  end
+* return newmodule
 
 ==============================================================================
 test/mocked-env/processes/aocred.lua
@@ -7242,27 +7357,28 @@ test/mocked-env/ao/handlers-utils.lua
 Summary
 ==============================================================================
 
-File                                  Hits Missed Coverage
-----------------------------------------------------------
-tlconfig.lua                          0    2      0.00%
-build/tokenManager.lua                0    6      0.00%
-test/mocked-env/processes/aocred.lua  0    9      0.00%
-build/globals.lua                     0    10     0.00%
-scripts/copy_lua_package.lua          0    24     0.00%
-build/dbUtils.lua                     0    37     0.00%
-build/database.lua                    0    40     0.00%
-build/providerManager.lua             0    173    0.00%
-build/verifierManager.lua             0    191    0.00%
-build/randomManager.lua               0    211    0.00%
-build/main.lua                        0    224    0.00%
-test/mocked-env/lib/bint.lua          0    833    0.00%
-test/mocked-env/ao/handlers.lua       22   84     20.75%
-test/mocked-env/lib/utils.lua         23   74     23.71%
-test/mocked-env/ao/handlers-utils.lua 11   19     36.67%
-test/mocked-env/ao/ao.lua             36   22     62.07%
-process.lua                           668  269    71.29%
-test/mocked-env/lib/json.lua          148  52     74.00%
-test/setup.lua                        15   4      78.95%
-test/process_test.lua                 366  6      98.39%
-----------------------------------------------------------
-Total                                 1289 2290   36.02%
+File                                   Hits Missed Coverage
+-----------------------------------------------------------
+tlconfig.lua                           0    2      0.00%
+build/tokenManager.lua                 0    6      0.00%
+test/mocked-env/processes/aocred.lua   0    9      0.00%
+build/globals.lua                      0    11     0.00%
+scripts/copy_lua_package.lua           0    24     0.00%
+build/dbUtils.lua                      0    37     0.00%
+build/database.lua                     0    40     0.00%
+build/providerManager.lua              0    173    0.00%
+build/verifierManager.lua              0    196    0.00%
+build/randomManager.lua                0    211    0.00%
+build/main.lua                         0    226    0.00%
+test/mocked-env/lib/bint.lua           0    833    0.00%
+test/mocked-env/ao/handlers.lua        22   84     20.75%
+test/mocked-env/lib/utils.lua          23   74     23.71%
+test/mocked-env/ao/handlers-utils.lua  11   19     36.67%
+test/mocked-env/processes/verifier.lua 7    6      53.85%
+test/mocked-env/ao/ao.lua              36   22     62.07%
+test/mocked-env/lib/json.lua           148  52     74.00%
+process.lua                            720  248    74.38%
+test/setup.lua                         16   3      84.21%
+test/process_test.lua                  385  8      97.96%
+-----------------------------------------------------------
+Total                                  1368 2284   37.46%

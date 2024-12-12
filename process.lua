@@ -226,6 +226,19 @@ Status = {
    "FAILED",
 }
 
+VerifierProcesses = {
+   "RtkXacFBEGXhw6OTjCqECKSap_y2CJMukBsGxElCd-E",
+   "qbCteSj7907pwb_SQ1AD2kMG_HZDuUVf2IZnnm4pJxc",
+   "toqzmcIxYC2yUQWJJVbd-ecBbCB2w1r_7Gvoq99DOzM",
+   "G0JLVocfhW_1qHnX64yuaVBCWdpBRhSQ3T8AkGoiIJA",
+   "Fpb42AKYswyM8nIAb6vZYBePwPUxzZhQhu72srZr1xY",
+   "06IG1T_JXyhVV0TZ42_EEDKZ7T0kBfmdDjATTaBr8ic",
+   "xcLnD6OdSbbO4dY_HAwNHLWRuNEPSJXoi4gRreywwi8",
+   "bKQiEWkOg77FqygZ4yIp7lBV5mlMDQDg3_5CS36PUqg",
+   "SqdPCK1LrMa_6-xf4a9UKchAqL26Mbj_Pg5kLk4NWxo",
+   "tgfpewpX3j7htX03Cj5pCz_CB0nOzDFlc0WJi1sRxRI",
+}
+
 return {}
 end
 end
@@ -1074,6 +1087,7 @@ VDFRequestData = {}
 
 
 
+
 VDFRequestResponse = {}
 
 
@@ -1190,13 +1204,15 @@ function verifierManager.requestVerification(processId, data)
 
    local verificationResponse = ao.send({
       Target = processId,
-      Action = "Post-VDF-Request",
+      Action = "Validate-Checkpoint",
       Data = json.encode(data),
    }).receive().Data
 
+   print("Verification response: " .. verificationResponse)
+
    local processedResonse = json.decode(verificationResponse)
 
-   if processedResonse.validity == false then
+   if processedResonse.valid == false then
       return false, "Verification failed"
    end
 
@@ -1279,13 +1295,14 @@ function verifierManager.markAvailable(verifierId)
 end
 
 
-function verifierManager.createSegment(proofId, segmentId, segmentData)
+function verifierManager.createSegment(proofId, segmentCount, segmentData)
    if not DB then
       print("Database connection not initialized")
       return "", "Database connection is not initialized"
    end
 
    local timestamp = os.time()
+   local segmentId = proofId .. "_" .. segmentCount
 
    local stmt = DB:prepare([[
     INSERT INTO VerifierSegments
@@ -1441,7 +1458,8 @@ function verifierManager.processProof(requestId, input, modulus, proofJson, prov
             print("Failed to assign segment: " .. assignErr)
          else
             local requestData = {
-               requestId = requestId,
+               request_id = requestId,
+               segment_id = segmentId,
                checkpoint_input = input,
                modulus = modulus,
                expected_output = segmentId,
@@ -1452,6 +1470,12 @@ function verifierManager.processProof(requestId, input, modulus, proofJson, prov
    end
 
    return true, ""
+end
+
+function verifierManager.initializeVerifierManager()
+   for _, verifier in ipairs(VerifierProcesses) do
+      verifierManager.registerVerifier(verifier)
+   end
 end
 
 return verifierManager
@@ -1465,6 +1489,7 @@ local database = require("database")
 local providerManager = require("providerManager")
 local randomManager = require("randomManager")
 local tokenManager = require("tokenManager")
+local verifierManager = require("verifierManager")
 
 
 ResponseData = {}
@@ -1538,6 +1563,9 @@ GetRandomRequestsResponse = {}
 
 
 database.initializeDatabase()
+
+
+verifierManager.initializeVerifierManager()
 
 
 function sendResponse(target, action, data)
@@ -1672,14 +1700,15 @@ function postVDFOutputAndProofHandler(msg)
       ao.send(sendResponse(msg.From, "Error", { message = "Failed to post VDF Output: " .. "not requested" }))
       return false
    end
+   providerManager.removeActiveRequest(userId, requestId, false)
 
    local success, err = randomManager.postVDFOutputAndProof(userId, requestId, output, proof)
 
    if success then
-      providerManager.removeActiveRequest(userId, requestId, false)
       ao.send(sendResponse(msg.From, "Posted VDF Output and Proof", SuccessMessage))
       return true
    else
+
       ao.send(sendResponse(msg.From, "Error", { message = "Failed to post VDF Output and Proof: " .. err }))
       return false
    end

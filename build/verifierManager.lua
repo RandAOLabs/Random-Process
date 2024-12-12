@@ -36,6 +36,7 @@ VDFRequestData = {}
 
 
 
+
 VDFRequestResponse = {}
 
 
@@ -152,13 +153,15 @@ function verifierManager.requestVerification(processId, data)
 
    local verificationResponse = ao.send({
       Target = processId,
-      Action = "Post-VDF-Request",
+      Action = "Validate-Checkpoint",
       Data = json.encode(data),
    }).receive().Data
 
+   print("Verification response: " .. verificationResponse)
+
    local processedResonse = json.decode(verificationResponse)
 
-   if processedResonse.validity == false then
+   if processedResonse.valid == false then
       return false, "Verification failed"
    end
 
@@ -241,13 +244,14 @@ function verifierManager.markAvailable(verifierId)
 end
 
 
-function verifierManager.createSegment(proofId, segmentId, segmentData)
+function verifierManager.createSegment(proofId, segmentCount, segmentData)
    if not DB then
       print("Database connection not initialized")
       return "", "Database connection is not initialized"
    end
 
    local timestamp = os.time()
+   local segmentId = proofId .. "_" .. segmentCount
 
    local stmt = DB:prepare([[
     INSERT INTO VerifierSegments
@@ -403,7 +407,8 @@ function verifierManager.processProof(requestId, input, modulus, proofJson, prov
             print("Failed to assign segment: " .. assignErr)
          else
             local requestData = {
-               requestId = requestId,
+               request_id = requestId,
+               segment_id = segmentId,
                checkpoint_input = input,
                modulus = modulus,
                expected_output = segmentId,
@@ -414,6 +419,12 @@ function verifierManager.processProof(requestId, input, modulus, proofJson, prov
    end
 
    return true, ""
+end
+
+function verifierManager.initializeVerifierManager()
+   for _, verifier in ipairs(VerifierProcesses) do
+      verifierManager.registerVerifier(verifier)
+   end
 end
 
 return verifierManager

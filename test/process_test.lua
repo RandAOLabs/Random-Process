@@ -19,7 +19,31 @@ end
 _G.IsInUnitTest = true
 _G.Owner = '123MyOwner321'
 _G.MainProcessId = '123xyzMySelfabc321'
+
+_G.Verifiers = {
+  "RtkXacFBEGXhw6OTjCqECKSap_y2CJMukBsGxElCd-E",
+  "qbCteSj7907pwb_SQ1AD2kMG_HZDuUVf2IZnnm4pJxc",
+  "toqzmcIxYC2yUQWJJVbd-ecBbCB2w1r_7Gvoq99DOzM",
+  "G0JLVocfhW_1qHnX64yuaVBCWdpBRhSQ3T8AkGoiIJA",
+  "Fpb42AKYswyM8nIAb6vZYBePwPUxzZhQhu72srZr1xY",
+  "06IG1T_JXyhVV0TZ42_EEDKZ7T0kBfmdDjATTaBr8ic",
+  "xcLnD6OdSbbO4dY_HAwNHLWRuNEPSJXoi4gRreywwi8",
+  "bKQiEWkOg77FqygZ4yIp7lBV5mlMDQDg3_5CS36PUqg",
+  "SqdPCK1LrMa_6-xf4a9UKchAqL26Mbj_Pg5kLk4NWxo",
+  "tgfpewpX3j7htX03Cj5pCz_CB0nOzDFlc0WJi1sRxRI"
+}
+
 _G.Processes = {
+  [_G.Verifiers[1]] = require "verifier" (_G.Verifiers[1]),
+  [_G.Verifiers[2]] = require "verifier" (_G.Verifiers[2]),
+  [_G.Verifiers[3]] = require "verifier" (_G.Verifiers[3]),
+  [_G.Verifiers[4]] = require "verifier" (_G.Verifiers[4]),
+  [_G.Verifiers[5]] = require "verifier" (_G.Verifiers[5]),
+  [_G.Verifiers[6]] = require "verifier" (_G.Verifiers[6]),
+  [_G.Verifiers[7]] = require "verifier" (_G.Verifiers[7]),
+  [_G.Verifiers[8]] = require "verifier" (_G.Verifiers[8]),
+  [_G.Verifiers[9]] = require "verifier" (_G.Verifiers[9]),
+  [_G.Verifiers[10]] = require "verifier" (_G.Verifiers[10]),
 }
 
 _G.Handlers = require "handlers"
@@ -468,7 +492,7 @@ describe("postVDFOutputAndProof", function()
   it("should be able to post output and proof from a requested provider for a valid request",
   function()
     local output = "0x023456987678"
-    local proof = json.encode({"0x0567892345678", "fghjkl", "0x0567892345678", "fghjkl", "0x0567892345678", "0x0567892345678", "fghjkl", "0x0567892345678", "fghjkl", "0x0567892345678" })
+    local proof = json.encode({"erwsztxdyfcuj", "ztrdyxufc", "ARTSzydxujf", "RTz", "tzyhdxjf", "TSYzu", "RTYzux", "tmrngb", "kumjtnyhbtdgv", "kyumtjynjrhbhg" })
     local requestId = "d6cce35c-487a-458f-bab2-9032c2621f38"
 
     local message = {
@@ -502,7 +526,7 @@ describe("postVDFOutputAndProof", function()
   it("should be able to post output and proof from the second requested provider for a valid request",
   function()
     local output = "0x023456987678"
-    local proof = json.encode({"0x0567892345678", "fghjkl", "0x0567892345678", "fghjkl", "0x0567892345678", "0x0567892345678", "fghjkl", "0x0567892345678", "fghjkl", "0x0567892345678" })
+    local proof = json.encode({"srtxdyfu", "dfgfh", "sztgdh", "aeyduxficgk", "yucfi", "xuctyurvi", "wrstedf", "warstdxyfcjg", "ARSztgdxhfcj", "rztswyxduf" })
     local requestId = "d6cce35c-487a-458f-bab2-9032c2621f38"
 
     local message = {

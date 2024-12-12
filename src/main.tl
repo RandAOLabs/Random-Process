@@ -5,6 +5,7 @@ local database        = require "database"
 local providerManager = require "providerManager"
 local randomManager   = require "randomManager"
 local tokenManager    = require "tokenManager"
+local verifierManager = require "verifierManager"
 
 -- Type definitions
 global record ResponseData
@@ -78,6 +79,9 @@ end
 
 -- Initialize the database
 database.initializeDatabase()
+
+-- Initialize the verifier manager
+verifierManager.initializeVerifierManager()
 
 -- Helper function to send a response
 global function sendResponse(target: string, action: string, data: any): ResponseData
@@ -212,14 +216,15 @@ global function postVDFOutputAndProofHandler(msg: Message): boolean
     ao.send(sendResponse(msg.From, "Error", {message = "Failed to post VDF Output: " .. "not requested"}))
     return false
   end
+  providerManager.removeActiveRequest(userId, requestId, false)
 
   local success, err = randomManager.postVDFOutputAndProof(userId, requestId, output, proof)
 
   if success then
-    providerManager.removeActiveRequest(userId, requestId, false)
     ao.send(sendResponse(msg.From, "Posted VDF Output and Proof", SuccessMessage))
     return true
   else
+    -- need to hella revert shit if this fails
     ao.send(sendResponse(msg.From, "Error", {message = "Failed to post VDF Output and Proof: " .. err}))
     return false
   end
