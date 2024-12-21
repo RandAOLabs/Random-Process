@@ -35,6 +35,12 @@ PostVDFOutputAndProofData = {}
 
 
 
+CheckpointResponseData = {}
+
+
+
+
+
 GetProviderRandomBalanceData = {}
 
 
@@ -148,13 +154,13 @@ function updateProviderBalanceHandler(msg)
 
    local data = (json.decode(msg.Data))
    local balance = data.availableRandomValues
-   local success, err = providerManager.updateProviderBalance(userId, balance)
+   local success, _err = providerManager.updateProviderBalance(userId, balance)
 
    if success then
-      ao.send(sendResponse(msg.From, "Updated Provider Random Balance", SuccessMessage))
+
       return true
    else
-      ao.send(sendResponse(msg.From, "Error", { message = "Failed to update provider balance: " .. err }))
+
       return false
    end
 end
@@ -177,15 +183,15 @@ function postVDFChallengeHandler(msg)
       return false
    end
 
-   local success, err = randomManager.postVDFChallenge(userId, requestId, input, modulus)
+   local success, _err = randomManager.postVDFChallenge(userId, requestId, input, modulus)
 
    if success then
       providerManager.removeActiveRequest(userId, requestId, true)
       randomManager.decrementRequestedInputs(requestId)
-      ao.send(sendResponse(msg.From, "Posted VDF Input", SuccessMessage))
+
       return true
    else
-      ao.send(sendResponse(msg.From, "Error", { message = "Failed to post VDF Input: " .. err }))
+
       return false
    end
 end
@@ -218,14 +224,50 @@ function postVDFOutputAndProofHandler(msg)
    end
    providerManager.removeActiveRequest(userId, requestId, false)
 
-   local success, err = randomManager.postVDFOutputAndProof(userId, requestId, output, proof)
+   local success, _err = randomManager.postVDFOutputAndProof(userId, requestId, output, proof)
 
    if success then
-      ao.send(sendResponse(msg.From, "Posted VDF Output and Proof", SuccessMessage))
+      randomManager.decrementRequestedInputs(requestId)
+
       return true
    else
 
-      ao.send(sendResponse(msg.From, "Error", { message = "Failed to post VDF Output and Proof: " .. err }))
+
+      return false
+   end
+end
+
+
+function postVerificationHandler(msg)
+   print("entered postVerification")
+
+   local verifierId = msg.From
+
+   local data = (json.decode(msg.Data))
+
+   local valid = data.valid
+   local requestId = data.request_id
+   local segmentId = data.segment_id
+
+   local function validateVerificationInputs(_valid, _requestId, _segmentId)
+      return true
+   end
+
+   if valid == nil or segmentId == nil or requestId == nil or not validateVerificationInputs(valid, requestId, segmentId) then
+      print("Failed to post Verification: " .. "values not provided or malformed")
+      ao.send(sendResponse(msg.From, "Error", { message = "Failed to post Verification: " .. "values not provided or malformed" }))
+      return false
+   end
+
+   local success, _err = verifierManager.processVerification(verifierId, requestId, segmentId, valid)
+
+   if success then
+      randomManager.decrementRequestedInputs(requestId)
+
+      return true
+   else
+
+
       return false
    end
 end
@@ -380,23 +422,6 @@ function getRandomRequestViaCallbackIdHandler(msg)
    return true
 end
 
-RandomResponseResponse = {}
-
-
-
-
-function simulateResponseHandler()
-   print("entered simulateResponseHandler")
-
-   local target = "AmGZEcVGl66Wh_KB9SzY2u7SUIcRz4yUUBfvMMC5Tvc"
-   local action = "Random-Response"
-   local data = {
-      callbackId = "d9e4855a-3f2b-4e4f-bc52-9b7bd4bf15e7",
-      entropy = "774",
-   }
-   ao.send(sendResponse(target, action, data))
-end
-
 
 Handlers.add('info',
 Handlers.utils.hasMatchingTag('Action', 'Info'),
@@ -413,6 +438,10 @@ wrapHandler(postVDFChallengeHandler))
 Handlers.add('postVDFOutputAndProof',
 Handlers.utils.hasMatchingTag('Action', 'Post-VDF-Output-And-Proof'),
 wrapHandler(postVDFOutputAndProofHandler))
+
+Handlers.add('postVerification',
+Handlers.utils.hasMatchingTag('Action', 'Post-Verification'),
+wrapHandler(postVerificationHandler))
 
 Handlers.add('getProviderRandomBalance',
 Handlers.utils.hasMatchingTag('Action', 'Get-Providers-Random-Balance'),
@@ -433,10 +462,6 @@ wrapHandler(getRandomRequestsHandler))
 Handlers.add('getRandomRequestViaCallbackId',
 Handlers.utils.hasMatchingTag('Action', 'Get-Random-Request-Via-Callback-Id'),
 wrapHandler(getRandomRequestViaCallbackIdHandler))
-
-Handlers.add('simulateResponse',
-Handlers.utils.hasMatchingTag('Action', 'Simulate-Response'),
-wrapHandler(simulateResponseHandler))
 
 
 print("RandAO Process Initialized")

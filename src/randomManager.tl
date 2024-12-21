@@ -42,6 +42,11 @@ global record ProviderVDFResults
   requestResponses: {ProviderVDFResult}
 end
 
+global record RandomResponseResponse 
+  callbackId: string
+  entropy:    string
+end
+
 local randomManager = {}
 
 function randomManager.generateUUID(): string
@@ -122,6 +127,141 @@ function randomManager.getRandomRequestedInputs(requestId: string): integer, str
   end
 end
 
+function randomManager.getRandomStatus(requestId: string): string, string
+  print("entered randomManager.getRandomStatus")
+
+  local stmt = DB:prepare("SELECT status FROM RandomRequests WHERE request_id = :request_id")
+  stmt:bind_names({request_id = requestId})  
+  local result = dbUtils.queryOne(stmt) as RandomStatus
+  if result then
+    return result.status, ""
+  else
+    return "", "RandomRequest status not found"
+  end
+end
+
+function randomManager.resetRandomRequestRequestedInputs(requestId: string, newRequestedInputs: integer): boolean, string
+  print("Entered randomManager.resetRandomRequestRequestedInputs")
+
+  -- Prepare the SQL statement to update the requested inputs
+  local stmt = DB:prepare([[
+    UPDATE RandomRequests
+    SET requested_inputs = :requested_inputs
+    WHERE request_id = :request_id;
+  ]])
+  if not stmt then
+    return false, "Failed to prepare statement: " .. DB:errmsg()
+  end
+
+  -- Bind the parameters
+  stmt:bind_names({requested_inputs = newRequestedInputs, request_id = requestId})
+
+  -- Execute the statement
+  local execute_ok, execute_err = dbUtils.execute(stmt, "Update random request requested inputs")
+
+  if not execute_ok then
+    return false, "Failed to update random request requested inputs: " .. tostring(execute_err)
+  end
+
+  print("Random request requested inputs updated successfully to: " .. newRequestedInputs)
+  return true, ""
+end
+
+function randomManager.getVDFResults(requestId: string): ProviderVDFResults, string
+  print("entered randomManager.getVDFResults")
+  
+  local stmt = DB:prepare("SELECT * FROM ProviderVDFResults WHERE request_id = :request_id")
+  stmt:bind_names({request_id = requestId})  
+  local queryResult = dbUtils.queryMany(stmt)
+  print(json.encode(queryResult))
+  print(json.encode(queryResult[1]))
+  local result: ProviderVDFResults = { 
+    requestResponses = {}
+  }
+
+  for _, response in ipairs(queryResult) do
+    table.insert(result.requestResponses, response as ProviderVDFResult)
+  end
+
+  print(json.encode(result))
+
+  if result then
+    return result, ""
+  else
+    return {} as ProviderVDFResults, "RandomRequest not found"
+  end
+end
+
+function randomManager.getRandomRequest(requestId: string): RandomRequest, string
+  print("entered randomManager.getRandomRequest")
+
+  local stmt = DB:prepare("SELECT * FROM RandomRequests WHERE request_id = :request_id")
+  stmt:bind_names({request_id = requestId})  
+  local result = dbUtils.queryOne(stmt)
+  if result then
+    return result as RandomRequest, ""
+  else
+    return {} as RandomRequest, "RandomRequest not found"
+  end
+end
+
+-- TODO : Refactor with hashing instead of XOR
+function randomManager.processEntropy(requestId: string): string, string
+  print("entered randomManager.processEntropy")
+  
+  local results, err = randomManager.getVDFResults(requestId)
+  if err ~= "" then
+    print("Failed to get VDF results: " .. err)
+    return "", err
+  end
+
+  results = results as ProviderVDFResults
+
+  -- Start with the first value
+  local mixed = tonumber(results.requestResponses[1].output_value)
+
+  -- XOR and mix subsequent values
+  for i = 2, #results.requestResponses do
+      local value = tonumber(results.requestResponses[i].output_value)
+      mixed = (mixed ~ (value >> 32) ~ (value & 0xFFFFFFFF))
+      -- Combine with a prime multiplier and modulus to reduce overflow
+      mixed = (mixed * 0x5bd1e995 + value) % (2^31 - 1)
+  end
+
+  local entropy = tostring(math.floor(mixed)) -- Convert to string representation of the mixed value
+  print("entropy: " .. entropy)
+  return entropy, ""
+end
+
+function randomManager.simulateRandomResponse(requestId: string): boolean
+  print("entered simulateRandomResponse")
+
+  local randomRequest, err = randomManager.getRandomRequest(requestId)
+
+  if err ~= "" then
+    print("Failed to get random request: " .. err)
+    return false
+  end
+
+  local target                            = randomRequest.requester
+  local callbackId                        = randomRequest.callback_id
+  local entropy                           = randomManager.processEntropy(requestId)
+  local action                            = "Random-Response"
+  
+  local data: RandomResponseResponse      = {
+    callbackId  = callbackId,
+    entropy     = entropy
+  }
+  
+  ao.send({
+    Target = target, 
+    Tags = {
+      Action = action, 
+    },
+    Data = data
+  })
+end
+
 function randomManager.decrementRequestedInputs(requestId: string): boolean, string
   print("Entered randomManager.decrementRequestedInputs")
 
@@ -131,8 +271,9 @@ function randomManager.decrementRequestedInputs(requestId: string): boolean, str
     return false, "Failure: can not decrement needed below 0"
   end
 
-  requested = requested - 1
+  print("Requested: " .. requested)
 
+  requested = requested - 1
   -- Prepare the SQL statement to update the value
   local stmt = DB:prepare([[
     UPDATE RandomRequests
@@ -155,40 +296,36 @@ function randomManager.decrementRequestedInputs(requestId: string): boolean, str
   end
 
   if requested == 0 then
-    local status        = Status[2]
-    local providerList  = randomManager.getRandomProviderList(requestId) as ProviderList
-    randomManager.updateRandomRequestStatus(requestId, status)
-    providerManager.pushActiveRequests(providerList.provider_ids, requestId, false)
+    local status, err = randomManager.getRandomStatus(requestId)
+    
+    if err == "" then
+      -- Finished collecting inputs update requested inputs start collecting outputs
+      if status == Status[1] then
+        print("Random request finished collecting inputs")
+        local providerList  = randomManager.getRandomProviderList(requestId) as ProviderList
+        randomManager.resetRandomRequestRequestedInputs(requestId, #providerList.provider_ids)
+        providerManager.pushActiveRequests(providerList.provider_ids, requestId, false)
+        randomManager.updateRandomRequestStatus(requestId, Status[2])
+        -- Finished collecting outputs update requested inputs start verifying
+      elseif status == Status[2] then
+        print("Random request finished collecting outputs")
+        local providerList  = randomManager.getRandomProviderList(requestId) as ProviderList
+        local requestedValue = #providerList.provider_ids * 11
+        randomManager.resetRandomRequestRequestedInputs(requestId, requestedValue) -- multiply this number by segment count TODO non hardcode
+        randomManager.updateRandomRequestStatus(requestId, Status[3])
+      -- Finished verifying send random response
+      elseif status == Status[3] then
+        print("Random request finished successfully")
+        randomManager.simulateRandomResponse(requestId)
+        randomManager.updateRandomRequestStatus(requestId, Status[5])
+      end
+    else
+      return false, err
+    end
   end
 
   print("Random request requested_inputs updated successfully to: " .. requested)
   return true, ""
-end
-
-function randomManager.getRandomStatus(requestId: string): string, string
-  print("entered randomManager.getRandomStatus")
-
-  local stmt = DB:prepare("SELECT status FROM RandomRequests WHERE request_id = :request_id")
-  stmt:bind_names({request_id = requestId})  
-  local result = dbUtils.queryOne(stmt) as RandomStatus
-  if result then
-    return result.status, ""
-  else
-    return "", "RandomRequest status not found"
-  end
-end
-
-function randomManager.getRandomRequest(requestId: string): RandomRequest, string
-  print("entered randomManager.getRandomRequest")
-
-  local stmt = DB:prepare("SELECT * FROM RandomRequests WHERE request_id = :request_id")
-  stmt:bind_names({request_id = requestId})  
-  local result = dbUtils.queryOne(stmt)
-  if result then
-    return result as RandomRequest, ""
-  else
-    return {} as RandomRequest, "RandomRequest not found"
-  end
 end
 
 function randomManager.getRandomRequestViaCallbackId(callbackId: string): RandomRequest, string
@@ -214,19 +351,6 @@ function randomManager.getVDFResult(requestId: string, providerId: string): Prov
     return result as ProviderVDFResult, ""
   else
     return {} as ProviderVDFResult, "RandomRequest not found"
-  end
-end
-
-function randomManager.getVDFResults(requestId: string): ProviderVDFResults, string
-  print("entered randomManager.getVDFResults")
-  
-  local stmt = DB:prepare("SELECT * FROM ProviderVDFResults WHERE request_id = :request_id")
-  stmt:bind_names({request_id = requestId})  
-  local result = dbUtils.queryMany(stmt)
-  if result then
-    return result as ProviderVDFResults, ""
-  else
-    return {} as ProviderVDFResults, "RandomRequest not found"
   end
 end
 
@@ -393,9 +517,9 @@ function randomManager.postVDFOutputAndProof(userId: string, requestId: string, 
     local vdfRequest = randomManager.getVDFResult(requestId, userId)
     local input = vdfRequest.input_value
     local modulus = vdfRequest.modulus_value
-
+    
     -- Call verifierManager.processProof function
-    local processResult, processError = verifierManager.processProof(requestId, input, modulus, proof, userId)
+    local processResult, processError = verifierManager.processProof(requestId, input, modulus, proof, userId, outputValue)
     if not processResult then
       print("Processing proof failed: " .. tostring(processError))
     else

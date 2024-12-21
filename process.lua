@@ -227,16 +227,106 @@ Status = {
 }
 
 VerifierProcesses = {
-   "RtkXacFBEGXhw6OTjCqECKSap_y2CJMukBsGxElCd-E",
-   "qbCteSj7907pwb_SQ1AD2kMG_HZDuUVf2IZnnm4pJxc",
-   "toqzmcIxYC2yUQWJJVbd-ecBbCB2w1r_7Gvoq99DOzM",
-   "G0JLVocfhW_1qHnX64yuaVBCWdpBRhSQ3T8AkGoiIJA",
-   "Fpb42AKYswyM8nIAb6vZYBePwPUxzZhQhu72srZr1xY",
-   "06IG1T_JXyhVV0TZ42_EEDKZ7T0kBfmdDjATTaBr8ic",
-   "xcLnD6OdSbbO4dY_HAwNHLWRuNEPSJXoi4gRreywwi8",
-   "bKQiEWkOg77FqygZ4yIp7lBV5mlMDQDg3_5CS36PUqg",
-   "SqdPCK1LrMa_6-xf4a9UKchAqL26Mbj_Pg5kLk4NWxo",
-   "tgfpewpX3j7htX03Cj5pCz_CB0nOzDFlc0WJi1sRxRI",
+   "9xtciDYCCN76fXIq1cKosh3XNzG_Qj1D3Z5XK1g5nOE",
+   "RG6r_xD_NZtbw7t2QcfrUXjrlZe3w3a9vK_Z4kTrZyc",
+   "aDKAxaGZSMh120sVO-XMHc2oNxpl4Zst_KaC_YB3AK0",
+   "bHNe_KSStb-pmhttS6x9B2QTZ8s_duspz-r3Fz89HmI",
+   "hE4pw01XluNHiUfZONVCPEQJvy7A83FzR5GJgylJ2jE",
+   "aIiqaop1mZ9XuIPLd_1xVDjkQ-_wEG0L3xCB1pwf6Zg",
+   "1musHHlIsIqWL-v8zuLQCclWNOH0xEtM5Bop9npHIZ0",
+   "E-hoJqDj2GB6J-oveM4B5J5c6WLFQ9f9P9MeVB7ZfRs",
+   "bQbqmx4ju8QHIUsTTWRXbA8VD_LxZqhxHm79dE0xqB8",
+   "1Rk_Nf0ohtQ8CcD31OYDYJv4pstJFJWhU5TOMdBgWNU",
+   "Ca_j7Jcx9GtCZnGnhvSHKZQZiMdOOSyYlC5g74sofAM",
+   "cjTEdlZPE2By_mVk6TYRotUIrGN5jZUom6mLsFFK7ZI",
+   "HdwaaNv84kWolAAxxFcq-fj6GxchSojnSamYBfAdOlw",
+   "m9YnpeUM7d0FMS647VFZKqwcq6yN6NDU_7388ZDIWgk",
+   "5JLl8vaqbNJK-3Z9snnOx7cDciGR43nCKcm2X1g8LQs",
+   "Lgyp9EmNChaHBvxzN2aGyQcsRQcJSoIYHiMy1UGHgVc",
+   "QrDVen99sF88EvE_vffdpHzMWRP5weVzH84gXfKct3Y",
+   "sREsSXZC8UdLfBiic5Nsbl16gsdooRssbdZqtHR47xk",
+   "LMli3AiUXlCZcr8lSacqqrqTiTQpuMQS1TFuFSYyYCc",
+   "eme9ov7v6uvLOQ9xs7TPVw31liudHbjpmoSsJrb9yKM",
+   "emiZ11GY1FLPItxbgDBtuDuZFwosSKydxdX2Y3X3syU",
+   "3-TUgiU4CYXybgL7X2TCGAdGkGlFQgmJh63w9ah54p8",
+   "6zdG4WZnHFq0iFrqt8if0VJjLD0uMTpwI3PKE2ebMuE",
+   "f8DRxguG-ebm8qkeW87TfqQPfpjDx1zFawFLqdyVqEE",
+   "-3FR3L_y41ChqUg9f3LzOOjCeEYqxZnxOPBSVJvhc4g",
+   "7MyjbWK2ui4YCZvI4pAei632cTYZpkPyRsYSMpqVSjk",
+   "o3F_-U5FD69JHSxZJcLU8CZnM6A0lJVaJEjb3tdpyHw",
+   "ocTw1Q0119A6b25W9xPNpLP2whkeTkn2AvM_1vr6dwg",
+   "5uckHZGTWwxJU7MfuBTrPwe6awdqpKxV0O-L6_kmuM0",
+   "KYonYg0dcgjIZHur58aq1l_Xd6FV2995C9M7IKx9ToY",
+   "pCO8DCinMo2iBEYSxnpzMsQsVICnM9I3iFpHvJhiquU",
+   "Zg7NsaOfedtTYZwu6HyCjpfiAMDJU2L-5zube7Pnnoc",
+   "RwPOZCTE2N9GkztErOqgVWcPOQCvbkMtv6-OxIqtb3Y",
+   "tNpWqM0aGL6-6CSpHb2Wrw4jCH3irwrsrpubpK9c_jg",
+   "liUYPzYtFcSmtZw-kixB5fYWAAIwqoeiYcy3LqI0r5g",
+   "mFSAyqgeAqph4uPNAbONTvxrYR-5-BFGpvSzbl89rEM",
+   "VZjKTKen3yCRwS3fhlzb8gy040-o6cB4nc4WuzMhO_0",
+   "jb5PbvwDOPvv2VQJhDBaRapsS7Hg0_nbgklRqy4NCRo",
+   "MdOSjRFFPXVPZ1QuFc24aS2iH6LPBMMVtz0Hfou_YTY",
+   "7lUE6vTtYzz9DX7Vel0PiVr9Gt7WXsraBfGbzsb-J0o",
+   "Ad5zPlVDcyO8A_gZuCZafRG-hloEG4GEiuM3i5q_7ew",
+   "0UHuoupRYAWi2ES727gWXxiB6NywyY5uSXv5pPQmWF4",
+   "5zkXkGJxhXiBeHj8rFV7pMexegQYYurqR7iXuK_OeTA",
+   "6NcC5lNFwyrZTyXEZ_BUpED8tlz-ml3UDVEnpsqn7NQ",
+   "-B2h9yKLQ6Gmz53K2Y0B7I-maT6n3LyuX86nxp0caak",
+   "ieFMM-zqmQpGrVmnFgsyqM865GS1-A5R37krMZ2PahI",
+   "jrZ5KxMErZL_2aet5OVdYQZH1iyFn4MYoZ3qDeRADb0",
+   "vjoC1Vu46Kz_MXcEOQJM6tuSgkpdnJZoVCjJv8_15w8",
+   "YhQ9OPQQnjQXumInOLad4jp73Rv6OEEcE6FIjLnIs_g",
+   "8n5FmNyOXz_y5WtROyaNdlKYjCmPN5Xz0nYlYu4HRKs",
+   "GlPXlvwNgnu1wmYgDdSxX9pRCAlVUU-FeHznW5pFAX4",
+   "6fzr6mfZMyY7J0gn5k2Lx-YzZpuJRDVVIIQ30eqvxIw",
+   "XMjyw1B5ovTM1vuzWFiivD9C7HvTv-fzanl2ygpanRU",
+   "1BaATgamA1HmAhAIaN6QzoXpjxNhNmSv41ZzQzVwlE4",
+   "oIhKTSdl953AAly5HqnVnjlqdIkAMj5FxaG5QCMZ5OY",
+   "8psb-hqCnQQpHPUVo7FASXA05f6GModOEryfBwR7jpc",
+   "BfC87x5k19oU0dpCyoRQWrsjXhtM-1xzqLebQdki1JA",
+   "HgY9erwSLwyUpXm3N6DhhSxbIzJ3XjFTqNJDVg9WJTY",
+   "Bs5eEY7k5tDxO57l1SxgeWUx502-oLzegJIq5-eMz0Q",
+   "3bu5EGUaF1RyR8_B28r_m2R4kpCytXWNikDQ4qDrPQM",
+   "PjSK3CiGVn6iAGO5WCLIiLsrUabTXtXl6eyDFtUDrPU",
+   "A5x89r00o1K_EEcYJhLTwfSmNHcU04KpslFE2GZUNEM",
+   "0McQMqhI_G8F2S5R1oh5g4S4sGWxkMcD2MaVa5ELUAM",
+   "iMMa2HbP-FQwiTdoK7W4GVHKD543KB221P6HAkfIKP0",
+   "8gJT4MviAqdthfUjjXWrL9WDIO1zhwKNdF1HHjlsWGw",
+   "JRt6hoW9blsADCdJbY8ThqJirDrj3SLSqM4CrUd1bh0",
+   "mVbZzo75noxadsLdqUq64GE2fMBDvS6MB29gDnK2V4c",
+   "0auksaSe4yV5Snv3MzLcJegJh7GyxXMYXP6ncjyfOfk",
+   "am7uRfcD71c9ynlSXHjQZonPj8mRyp2Hz_PmzHLQ60Y",
+   "NQcOoJM8m5-nxTXcJnuAeZW3PP1pT3vfi0FU9Vh5yTY",
+   "k5PGnF9aoVZd26mo4e2W_6uZKl_ETATFZ4dzu9-NA-w",
+   "c_0ye66-HsNRp0Dqmw4wga_XcYkK7YFIiiaPGeMY1uQ",
+   "pOM79mJ6_6_2m5oLSMqFTKMC-eWUub8NU1MBgyluHA8",
+   "ZC2FgZe2QPgKD4-C5120ISgull4zaJXSxz0wZqITLss",
+   "gwCxgBfhdGu3gxYuuUl3pk_KVQF0V3ACpWPH2W0piLE",
+   "4eVREWXvmKAMJ4RMiq9nhKbO93Sodme9a5MnMa_ObYs",
+   "WyXBXMLGYpNcRhvrHrshjhFoV4PvTi1Gjj-CJh7zqto",
+   "347w4pv7GnEI_0ZiqmXtl3lC3bXIBh-rhKwl1zuB0BM",
+   "ccZiKD1yn8_bBHo69GVp8KOygbGh_tEn8lJHs6PGOzc",
+   "0v9AAs9fhDkJyjYG7M0rViBOLlJ_DmJA-81MV7LSNnA",
+   "EPocFs8XlXJhSNtcRTAjfkAUeWLG41tkSWFwK35iNfk",
+   "EdvD-KQjeWtMzjW_atVR22jWJBCyNKv5ajolm0PYBj0",
+   "n-CRbJNzKejlnqLNnse4aDzx4lKe0nAwcx1FrvY4pnI",
+   "j2d4SznuLaSegIpN3_u85v9adVAL8NM2IrZFjjTty5k",
+   "NUs5IVOr5KjydjjqLkkA6pstAgmtcPxJWknGRfA9JeY",
+   "Dy45_39YaFd965jVbo57JiG-zbX9O6MpPqH5h6J9-ss",
+   "1aF5qXxLA9bXihNZOmi_Gr9axwYdX8ZxIqjYTZpYITQ",
+   "BEpOW5X2CPTlaKeE4NdKxzcN9Xjisic5Rmo5YebwZb8",
+   "bLEW4XGsGo5IBXvXE2G5-Ai9GjymrHl5gWKwoUXyD1c",
+   "4iYpSip0GqQ8Xekz-OdUf4n3AqFRwyyGEySeIcOapiw",
+   "xh0satyfKYauDygZXCGwYlshCcEiec2vgYAAZvlC2aA",
+   "FQ3XFhjwm7DT156S2MEi_wakF9s1n6LYPv2J8f-Ay1E",
+   "HcCyWiR5eB-qAZclP_-aB5dsujK-TUHWU___Bkx5uAk",
+   "zq_JQLzR2fVaw_PWxmA2WD0hJX7QFJgz3TF1XTJ5JQk",
+   "kN6avGRarPdvCWMUDi5R7XFEnpRXdOy2FCv1QWkZtRc",
+   "C1CElYtiNFeXaJ3YoGMNPTUv_NxJaF197F31qSHrmDI",
+   "YLzRgccaT2XrRpeSrVkSJ--DGDCaW7ngkOTtVVQcG5o",
+   "cjusi39QOnOdXinkJi3vcvWb8EDvNhs2qRL-M0Do9OA",
+   "G6bjwtb3GIksAyF4N2zIJLcpDcXpsl3Icx2McOgoxEE",
+   "H5wGgdYLz2RNtH4oAOe8ssBpABI5a5Dz2phktms6Hyk",
 }
 
 return {}
@@ -332,7 +422,6 @@ end
 
 function providerManager.pushActiveRequests(providerIds, requestId, challenge)
    print("entered providerManager.pushActiveRequests")
-
    local success = true
    local err = ""
 
@@ -395,8 +484,6 @@ function providerManager.pushActiveRequests(providerIds, requestId, challenge)
 
 
          local stringified_requests = json.encode(active_output_requests)
-
-         print("LLL: " .. stringified_requests)
 
          local stmt = DB:prepare([[
         UPDATE Providers
@@ -610,7 +697,7 @@ end
 do
 local _ENV = _ENV
 package.preload[ "randomManager" ] = function( ... ) local arg = _G.arg;
-local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local math = _tl_compat and _tl_compat.math or math; local os = _tl_compat and _tl_compat.os or os; local pcall = _tl_compat and _tl_compat.pcall or pcall; local string = _tl_compat and _tl_compat.string or string; require("globals")
+local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local math = _tl_compat and _tl_compat.math or math; local os = _tl_compat and _tl_compat.os or os; local pcall = _tl_compat and _tl_compat.pcall or pcall; local string = _tl_compat and _tl_compat.string or string; local table = _tl_compat and _tl_compat.table or table; require("globals")
 local json = require("json")
 local dbUtils = require("dbUtils")
 local providerManager = require("providerManager")
@@ -651,6 +738,11 @@ RequestedInputs = {}
 
 
 ProviderVDFResults = {}
+
+
+
+RandomResponseResponse = {}
+
 
 
 
@@ -734,6 +826,141 @@ function randomManager.getRandomRequestedInputs(requestId)
    end
 end
 
+function randomManager.getRandomStatus(requestId)
+   print("entered randomManager.getRandomStatus")
+
+   local stmt = DB:prepare("SELECT status FROM RandomRequests WHERE request_id = :request_id")
+   stmt:bind_names({ request_id = requestId })
+   local result = dbUtils.queryOne(stmt)
+   if result then
+      return result.status, ""
+   else
+      return "", "RandomRequest status not found"
+   end
+end
+
+function randomManager.resetRandomRequestRequestedInputs(requestId, newRequestedInputs)
+   print("Entered randomManager.resetRandomRequestRequestedInputs")
+
+
+   local stmt = DB:prepare([[
+    UPDATE RandomRequests
+    SET requested_inputs = :requested_inputs
+    WHERE request_id = :request_id;
+  ]])
+   if not stmt then
+      return false, "Failed to prepare statement: " .. DB:errmsg()
+   end
+
+
+   stmt:bind_names({ requested_inputs = newRequestedInputs, request_id = requestId })
+
+
+   local execute_ok, execute_err = dbUtils.execute(stmt, "Update random request requested inputs")
+
+   if not execute_ok then
+      return false, "Failed to update random request requested inputs: " .. tostring(execute_err)
+   end
+
+   print("Random request requested inputs updated successfully to: " .. newRequestedInputs)
+   return true, ""
+end
+
+function randomManager.getVDFResults(requestId)
+   print("entered randomManager.getVDFResults")
+
+   local stmt = DB:prepare("SELECT * FROM ProviderVDFResults WHERE request_id = :request_id")
+   stmt:bind_names({ request_id = requestId })
+   local queryResult = dbUtils.queryMany(stmt)
+   print(json.encode(queryResult))
+   print(json.encode(queryResult[1]))
+   local result = {
+      requestResponses = {},
+   }
+
+   for _, response in ipairs(queryResult) do
+      table.insert(result.requestResponses, response)
+   end
+
+   print(json.encode(result))
+
+   if result then
+      return result, ""
+   else
+      return {}, "RandomRequest not found"
+   end
+end
+
+function randomManager.getRandomRequest(requestId)
+   print("entered randomManager.getRandomRequest")
+
+   local stmt = DB:prepare("SELECT * FROM RandomRequests WHERE request_id = :request_id")
+   stmt:bind_names({ request_id = requestId })
+   local result = dbUtils.queryOne(stmt)
+   if result then
+      return result, ""
+   else
+      return {}, "RandomRequest not found"
+   end
+end
+
+
+function randomManager.processEntropy(requestId)
+   print("entered randomManager.processEntropy")
+
+   local results, err = randomManager.getVDFResults(requestId)
+   if err ~= "" then
+      print("Failed to get VDF results: " .. err)
+      return "", err
+   end
+
+   results = results
+
+
+   local mixed = tonumber(results.requestResponses[1].output_value)
+
+
+   for i = 2, #results.requestResponses do
+      local value = tonumber(results.requestResponses[i].output_value)
+      mixed = (mixed ~ (value >> 32) ~ (value & 0xFFFFFFFF))
+
+      mixed = (mixed * 0x5bd1e995 + value) % (2 ^ 31 - 1)
+   end
+
+   local entropy = tostring(mixed)
+   print("entropy: " .. entropy)
+   return entropy, ""
+end
+
+function randomManager.simulateRandomResponse(requestId)
+   print("entered simulateRandomResponse")
+
+   local randomRequest, err = randomManager.getRandomRequest(requestId)
+
+   if err ~= "" then
+      print("Failed to get random request: " .. err)
+      return false
+   end
+
+   local target = randomRequest.requester
+   local callbackId = randomRequest.callback_id
+   local entropy = randomManager.processEntropy(requestId)
+   local action = "Random-Response"
+
+   local data = {
+      callbackId = callbackId,
+      entropy = entropy,
+   }
+
+   ao.send({
+      Target = target,
+      Tags = {
+         Action = action,
+      },
+      Data = data,
+   })
+end
+
 function randomManager.decrementRequestedInputs(requestId)
    print("Entered randomManager.decrementRequestedInputs")
 
@@ -743,8 +970,9 @@ function randomManager.decrementRequestedInputs(requestId)
       return false, "Failure: can not decrement needed below 0"
    end
 
-   requested = requested - 1
+   print("Requested: " .. requested)
 
+   requested = requested - 1
 
    local stmt = DB:prepare([[
     UPDATE RandomRequests
@@ -767,40 +995,36 @@ function randomManager.decrementRequestedInputs(requestId)
    end
 
    if requested == 0 then
-      local status = Status[2]
-      local providerList = randomManager.getRandomProviderList(requestId)
-      randomManager.updateRandomRequestStatus(requestId, status)
-      providerManager.pushActiveRequests(providerList.provider_ids, requestId, false)
+      local status, err = randomManager.getRandomStatus(requestId)
+
+      if err == "" then
+
+         if status == Status[1] then
+            print("Random request finished collecting inputs")
+            local providerList = randomManager.getRandomProviderList(requestId)
+            randomManager.resetRandomRequestRequestedInputs(requestId, #providerList.provider_ids)
+            providerManager.pushActiveRequests(providerList.provider_ids, requestId, false)
+            randomManager.updateRandomRequestStatus(requestId, Status[2])
+
+         elseif status == Status[2] then
+            print("Random request finished collecting outputs")
+            local providerList = randomManager.getRandomProviderList(requestId)
+            local requestedValue = #providerList.provider_ids * 11
+            randomManager.resetRandomRequestRequestedInputs(requestId, requestedValue)
+            randomManager.updateRandomRequestStatus(requestId, Status[3])
+
+         elseif status == Status[3] then
+            print("Random request finished successfully")
+            randomManager.simulateRandomResponse(requestId)
+            randomManager.updateRandomRequestStatus(requestId, Status[5])
+         end
+      else
+         return false, err
+      end
    end
 
    print("Random request requested_inputs updated successfully to: " .. requested)
    return true, ""
-end
-
-function randomManager.getRandomStatus(requestId)
-   print("entered randomManager.getRandomStatus")
-
-   local stmt = DB:prepare("SELECT status FROM RandomRequests WHERE request_id = :request_id")
-   stmt:bind_names({ request_id = requestId })
-   local result = dbUtils.queryOne(stmt)
-   if result then
-      return result.status, ""
-   else
-      return "", "RandomRequest status not found"
-   end
-end
-
-function randomManager.getRandomRequest(requestId)
-   print("entered randomManager.getRandomRequest")
-
-   local stmt = DB:prepare("SELECT * FROM RandomRequests WHERE request_id = :request_id")
-   stmt:bind_names({ request_id = requestId })
-   local result = dbUtils.queryOne(stmt)
-   if result then
-      return result, ""
-   else
-      return {}, "RandomRequest not found"
-   end
 end
 
 function randomManager.getRandomRequestViaCallbackId(callbackId)
@@ -822,19 +1046,6 @@ function randomManager.getVDFResult(requestId, providerId)
    local stmt = DB:prepare("SELECT * FROM ProviderVDFResults WHERE request_id = :request_id AND provider_id = :provider_id")
    stmt:bind_names({ request_id = requestId, provider_id = providerId })
    local result = dbUtils.queryOne(stmt)
-   if result then
-      return result, ""
-   else
-      return {}, "RandomRequest not found"
-   end
-end
-
-function randomManager.getVDFResults(requestId)
-   print("entered randomManager.getVDFResults")
-
-   local stmt = DB:prepare("SELECT * FROM ProviderVDFResults WHERE request_id = :request_id")
-   stmt:bind_names({ request_id = requestId })
-   local result = dbUtils.queryMany(stmt)
    if result then
       return result, ""
    else
@@ -1007,7 +1218,7 @@ function randomManager.postVDFOutputAndProof(userId, requestId, outputValue, pro
       local modulus = vdfRequest.modulus_value
 
 
-      local processResult, processError = verifierManager.processProof(requestId, input, modulus, proof, userId)
+      local processResult, processError = verifierManager.processProof(requestId, input, modulus, proof, userId, outputValue)
       if not processResult then
          print("Processing proof failed: " .. tostring(processError))
       else
@@ -1081,6 +1292,7 @@ VerifierStats = {}
 
 
 VDFRequestData = {}
+
 
 
 
@@ -1199,24 +1411,23 @@ function verifierManager.getStats()
    return stats
 end
 
-function verifierManager.requestVerification(processId, data)
+function verifierManager.requestVerification(processId, data, checkpoint)
    print("Sending verification request to process: " .. processId)
 
-   local verificationResponse = ao.send({
-      Target = processId,
-      Action = "Validate-Checkpoint",
-      Data = json.encode(data),
-   }).receive().Data
-
-   print("Verification response: " .. verificationResponse)
-
-   local processedResonse = json.decode(verificationResponse)
-
-   if processedResonse.valid == false then
-      return false, "Verification failed"
+   if checkpoint then
+      local _ = ao.send({
+         Target = processId,
+         Action = "Validate-Checkpoint",
+         Data = json.encode(data),
+      })
+      return
+   else
+      local _ = ao.send({
+         Target = processId,
+         Action = "Validate-Output",
+         Data = json.encode(data),
+      })
    end
-
-   return true, ""
 end
 
 
@@ -1260,6 +1471,7 @@ end
 
 
 function verifierManager.markAvailable(verifierId)
+   print("Marking verifier as available: " .. verifierId)
    if not DB then
       print("Database connection not initialized")
       return false, "Database connection is not initialized"
@@ -1290,6 +1502,48 @@ function verifierManager.markAvailable(verifierId)
    if not exec_ok then
       return false, exec_err
    end
+
+   return true, ""
+end
+
+
+function verifierManager.processVerification(verifierId, requestId, segmentId, result)
+   print("Processing verification result for segment: " .. segmentId)
+   if not DB then
+      print("Database connection not initialized")
+      return false, "Database connection is not initialized"
+   end
+
+   local stmt = DB:prepare([[
+    UPDATE VerifierSegments
+    SET status = 'processed', result = :result
+    WHERE segment_id = :sid
+  ]])
+
+   if not stmt then
+      print("Failed to prepare statement: " .. DB:errmsg())
+      return false, "Failed to prepare statement: " .. DB:errmsg()
+   end
+
+   local ok = false
+   ok = pcall(function()
+      stmt:bind_names({
+         sid = segmentId,
+         result = result,
+      })
+   end)
+
+   if not ok then
+      print("Failed to bind parameters")
+      return false, "Failed to bind parameters"
+   end
+
+   local exec_ok, exec_err = dbUtils.execute(stmt, "Process result")
+   if not exec_ok then
+      return false, exec_err
+   end
+
+   verifierManager.markAvailable(verifierId)
 
    return true, ""
 end
@@ -1379,7 +1633,7 @@ function verifierManager.updateSegmentStatus(segmentId, status, result)
 end
 
 
-function verifierManager.getProofSegments(proofId)
+function verifierManager.getProofSegments(proofId, expectedOutput)
    if not DB then
       print("Database connection not initialized")
       return {}, "Database connection is not initialized"
@@ -1425,7 +1679,7 @@ function verifierManager.getProofSegments(proofId)
 end
 
 
-function verifierManager.processProof(requestId, input, modulus, proofJson, providerId)
+function verifierManager.processProof(requestId, input, modulus, proofJson, providerId, modExpectedOutput)
 
    local proofArray = json.decode(proofJson)
    if not proofArray then
@@ -1437,6 +1691,38 @@ function verifierManager.processProof(requestId, input, modulus, proofJson, prov
 
    local proofId = requestId .. "_" .. providerId
    local availableVerifiers = verifierManager.getAvailableVerifiers()
+
+
+
+
+
+   local outputSegmentId, segmentCreateErr = verifierManager.createSegment(proofId, "output", modExpectedOutput)
+
+   if segmentCreateErr ~= "" then
+      return false, "Failed to create segment: " .. segmentCreateErr
+   end
+
+   local outputVerifierId = availableVerifiers[1]
+   table.remove(availableVerifiers, 1)
+
+   local assigned, assignErr = verifierManager.assignSegment(outputVerifierId.process_id, outputSegmentId)
+   if not assigned then
+      print("Failed to assign segment: " .. assignErr)
+   else
+      local outputSegmentInput = proofArray[10]
+      local segmentExpectedOutput = modExpectedOutput
+
+      local requestData = {
+         request_id = requestId,
+         segment_id = outputSegmentId,
+         input = outputSegmentInput,
+         expected_output = segmentExpectedOutput,
+      }
+
+      verifierManager.requestVerification(outputVerifierId.process_id, requestData, false)
+   end
+
+
 
    local segmentCount = 1
    for _, segment in ipairs(proof.proof) do
@@ -1457,16 +1743,27 @@ function verifierManager.processProof(requestId, input, modulus, proofJson, prov
          if not assigned then
             print("Failed to assign segment: " .. assignErr)
          else
+            local segmentInput = input
+            local segmentExpectedOutput = proofArray[segmentCount - 1]
+
+            if segmentCount > 2 then
+               segmentInput = proofArray[segmentCount - 2]
+            end
+
             local requestData = {
                request_id = requestId,
                segment_id = segmentId,
-               checkpoint_input = input,
+               checkpoint_input = segmentInput,
                modulus = modulus,
-               expected_output = segmentId,
+               expected_output = segmentExpectedOutput,
             }
-            verifierManager.requestVerification(verifierId.process_id, requestData)
+
+            verifierManager.requestVerification(verifierId.process_id, requestData, true)
          end
+      else
+         print("No verifiers available for segment: " .. segmentId)
       end
+
    end
 
    return true, ""
@@ -1476,6 +1773,7 @@ function verifierManager.initializeVerifierManager()
    for _, verifier in ipairs(VerifierProcesses) do
       verifierManager.registerVerifier(verifier)
    end
+   print("Verifier manager and processes initialized")
 end
 
 return verifierManager
@@ -1514,6 +1812,12 @@ PostVDFChallengeData = {}
 
 
 PostVDFOutputAndProofData = {}
+
+
+
+
+
+CheckpointResponseData = {}
 
 
 
@@ -1632,13 +1936,13 @@ function updateProviderBalanceHandler(msg)
 
    local data = (json.decode(msg.Data))
    local balance = data.availableRandomValues
-   local success, err = providerManager.updateProviderBalance(userId, balance)
+   local success, _err = providerManager.updateProviderBalance(userId, balance)
 
    if success then
-      ao.send(sendResponse(msg.From, "Updated Provider Random Balance", SuccessMessage))
+
       return true
    else
-      ao.send(sendResponse(msg.From, "Error", { message = "Failed to update provider balance: " .. err }))
+
       return false
    end
 end
@@ -1661,15 +1965,15 @@ function postVDFChallengeHandler(msg)
       return false
    end
 
-   local success, err = randomManager.postVDFChallenge(userId, requestId, input, modulus)
+   local success, _err = randomManager.postVDFChallenge(userId, requestId, input, modulus)
 
    if success then
       providerManager.removeActiveRequest(userId, requestId, true)
       randomManager.decrementRequestedInputs(requestId)
-      ao.send(sendResponse(msg.From, "Posted VDF Input", SuccessMessage))
+
       return true
    else
-      ao.send(sendResponse(msg.From, "Error", { message = "Failed to post VDF Input: " .. err }))
+
       return false
    end
 end
@@ -1702,14 +2006,50 @@ function postVDFOutputAndProofHandler(msg)
    end
    providerManager.removeActiveRequest(userId, requestId, false)
 
-   local success, err = randomManager.postVDFOutputAndProof(userId, requestId, output, proof)
+   local success, _err = randomManager.postVDFOutputAndProof(userId, requestId, output, proof)
 
    if success then
-      ao.send(sendResponse(msg.From, "Posted VDF Output and Proof", SuccessMessage))
+      randomManager.decrementRequestedInputs(requestId)
+
       return true
    else
 
-      ao.send(sendResponse(msg.From, "Error", { message = "Failed to post VDF Output and Proof: " .. err }))
+
+      return false
+   end
+end
+
+
+function postVerificationHandler(msg)
+   print("entered postVerification")
+
+   local verifierId = msg.From
+
+   local data = (json.decode(msg.Data))
+
+   local valid = data.valid
+   local requestId = data.request_id
+   local segmentId = data.segment_id
+
+   local function validateVerificationInputs(_valid, _requestId, _segmentId)
+      return true
+   end
+
+   if valid == nil or segmentId == nil or requestId == nil or not validateVerificationInputs(valid, requestId, segmentId) then
+      print("Failed to post Verification: " .. "values not provided or malformed")
+      ao.send(sendResponse(msg.From, "Error", { message = "Failed to post Verification: " .. "values not provided or malformed" }))
+      return false
+   end
+
+   local success, _err = verifierManager.processVerification(verifierId, requestId, segmentId, valid)
+
+   if success then
+      randomManager.decrementRequestedInputs(requestId)
+
+      return true
+   else
+
+
       return false
    end
 end
@@ -1864,23 +2204,6 @@ function getRandomRequestViaCallbackIdHandler(msg)
    return true
 end
 
-RandomResponseResponse = {}
-
-
-
-
-function simulateResponseHandler()
-   print("entered simulateResponseHandler")
-
-   local target = "AmGZEcVGl66Wh_KB9SzY2u7SUIcRz4yUUBfvMMC5Tvc"
-   local action = "Random-Response"
-   local data = {
-      callbackId = "d9e4855a-3f2b-4e4f-bc52-9b7bd4bf15e7",
-      entropy = "774",
-   }
-   ao.send(sendResponse(target, action, data))
-end
-
 
 Handlers.add('info',
 Handlers.utils.hasMatchingTag('Action', 'Info'),
@@ -1897,6 +2220,10 @@ wrapHandler(postVDFChallengeHandler))
 Handlers.add('postVDFOutputAndProof',
 Handlers.utils.hasMatchingTag('Action', 'Post-VDF-Output-And-Proof'),
 wrapHandler(postVDFOutputAndProofHandler))
+
+Handlers.add('postVerification',
+Handlers.utils.hasMatchingTag('Action', 'Post-Verification'),
+wrapHandler(postVerificationHandler))
 
 Handlers.add('getProviderRandomBalance',
 Handlers.utils.hasMatchingTag('Action', 'Get-Providers-Random-Balance'),
@@ -1917,10 +2244,6 @@ wrapHandler(getRandomRequestsHandler))
 Handlers.add('getRandomRequestViaCallbackId',
 Handlers.utils.hasMatchingTag('Action', 'Get-Random-Request-Via-Callback-Id'),
 wrapHandler(getRandomRequestViaCallbackIdHandler))
-
-Handlers.add('simulateResponse',
-Handlers.utils.hasMatchingTag('Action', 'Simulate-Response'),
-wrapHandler(simulateResponseHandler))
 
 
 print("RandAO Process Initialized")

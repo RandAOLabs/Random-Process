@@ -33,6 +33,7 @@ global record VDFRequestData
   request_id: string
   segment_id: string
   checkpoint_input: string
+  input: string
   modulus: string
   expected_output: string
 end
@@ -148,26 +149,25 @@ function verifierManager.getStats(): VerifierStats
   return stats
 end
 
-function verifierManager.requestVerification(processId: string, data: VDFRequestData): boolean, string
+function verifierManager.requestVerification(processId: string, data: VDFRequestData, checkpoint: boolean)
   print("Sending verification request to process: " .. processId)
-    
-  local verificationResponse = ao.send({
-    Target = processId,
-    Action = "Validate-Checkpoint",
-    Data = json.encode(data)
-  }).receive().Data
   
-  print("Verification response: " .. verificationResponse)
-
-  local processedResonse = json.decode(verificationResponse) as VDFRequestResponse
-  
-  if processedResonse.valid == false then
-  return false, "Verification failed"
+  if checkpoint then
+    local _ = ao.send({
+      Target = processId,
+      Action = "Validate-Checkpoint",
+      Data = json.encode(data)
+    })
+    return
+  else
+    local _ = ao.send({
+      Target = processId,
+      Action = "Validate-Output",
+      Data = json.encode(data)
+    })
   end
-  
-  return true, ""
 end
-  
+
 -- Assign segment to verifier
 function verifierManager.assignSegment(verifierId: string, segmentId: string): boolean, string
   if not DB then
@@ -209,6 +209,7 @@ end
 
 -- Mark verifier as available
 function verifierManager.markAvailable(verifierId: string): boolean, string
+  print("Marking verifier as available: " .. verifierId)
   if not DB then
     print("Database connection not initialized")
     return false, "Database connection is not initialized"
@@ -239,6 +240,48 @@ function verifierManager.markAvailable(verifierId: string): boolean, string
   if not exec_ok then
     return false, exec_err
   end
+  
+  return true, ""
+end
+
+-- Process verification result
+function verifierManager.processVerification(verifierId: string, requestId: string, segmentId: string, result: boolean): boolean, string
+  print("Processing verification result for segment: " .. segmentId)
+  if not DB then
+    print("Database connection not initialized")
+    return false, "Database connection is not initialized"
+  end
+  
+  local stmt = DB:prepare([[
+    UPDATE VerifierSegments 
+    SET status = 'processed', result = :result
+    WHERE segment_id = :sid
+  ]])
+  
+  if not stmt then
+    print("Failed to prepare statement: " .. DB:errmsg())
+    return false, "Failed to prepare statement: " .. DB:errmsg()
+  end
+  
+  local ok = false
+  ok = pcall(function()
+    stmt:bind_names({
+      sid = segmentId,
+      result = result
+    })
+  end)
+  
+  if not ok then
+    print("Failed to bind parameters")
+    return false, "Failed to bind parameters"
+  end
+  
+  local exec_ok, exec_err = dbUtils.execute(stmt, "Process result")
+  if not exec_ok then
+    return false, exec_err
+  end
+
+  verifierManager.markAvailable(verifierId)
   
   return true, ""
 end
@@ -328,7 +371,7 @@ function verifierManager.updateSegmentStatus(segmentId: string, status: string, 
 end
 
 -- Get segments for a proof
-function verifierManager.getProofSegments(proofId: string): {VerifierSegment}, string
+function verifierManager.getProofSegments(proofId: string, expectedOutput: string): {VerifierSegment}, string
   if not DB then
     print("Database connection not initialized")
     return {}, "Database connection is not initialized"
@@ -374,7 +417,7 @@ function verifierManager.getProofSegments(proofId: string): {VerifierSegment}, s
 end
 
 -- Process VDF proofs
-function verifierManager.processProof(requestId: string, input: string, modulus: string, proofJson: string, providerId: string): boolean, string  
+function verifierManager.processProof(requestId: string, input: string, modulus: string, proofJson: string, providerId: string, modExpectedOutput: string): boolean, string  
   -- First decode the proofJson string since it's already JSON encoded
   local proofArray = json.decode(proofJson) as {string}
   if not proofArray then
@@ -387,6 +430,38 @@ function verifierManager.processProof(requestId: string, input: string, modulus:
   local proofId = requestId .. "_" .. providerId
   local availableVerifiers = verifierManager.getAvailableVerifiers()
 
+
+
+
+
+  local outputSegmentId, segmentCreateErr = verifierManager.createSegment(proofId, "output", modExpectedOutput)
+
+  if segmentCreateErr ~= "" then
+    return false, "Failed to create segment: " .. segmentCreateErr
+  end
+  
+  local outputVerifierId = availableVerifiers[1]
+  table.remove(availableVerifiers, 1)
+
+  local assigned, assignErr = verifierManager.assignSegment(outputVerifierId.process_id, outputSegmentId)
+  if not assigned then
+    print("Failed to assign segment: " .. assignErr)
+  else
+    local outputSegmentInput = proofArray[10]
+    local segmentExpectedOutput = modExpectedOutput
+
+    local requestData: VDFRequestData = {
+      request_id = requestId,
+      segment_id = outputSegmentId,
+      input = outputSegmentInput,
+      expected_output = segmentExpectedOutput
+    }
+    
+    verifierManager.requestVerification(outputVerifierId.process_id, requestData, false)
+  end
+
+
+
   local segmentCount = 1
   for _, segment in ipairs(proof.proof) do
     print("Processing segment: " .. segment .. " count: " ..  segmentCount)
@@ -397,7 +472,7 @@ function verifierManager.processProof(requestId: string, input: string, modulus:
     if createErr ~= "" then
       return false, "Failed to create segment: " .. createErr
     end
-
+    
     if #availableVerifiers > 0 then
       local verifierId = availableVerifiers[1]
       table.remove(availableVerifiers, 1)
@@ -406,16 +481,27 @@ function verifierManager.processProof(requestId: string, input: string, modulus:
       if not assigned then
         print("Failed to assign segment: " .. assignErr)
       else
+        local segmentInput = input
+        local segmentExpectedOutput = proofArray[segmentCount - 1]
+        
+        if segmentCount > 2 then
+          segmentInput = proofArray[segmentCount - 2]
+        end
+        
         local requestData: VDFRequestData = {
           request_id = requestId,
           segment_id = segmentId,
-          checkpoint_input = input,
+          checkpoint_input = segmentInput,
           modulus = modulus,
-          expected_output = segmentId
+          expected_output = segmentExpectedOutput
         }
-        verifierManager.requestVerification(verifierId.process_id, requestData)
+        
+        verifierManager.requestVerification(verifierId.process_id, requestData, true)
       end
+    else
+      print("No verifiers available for segment: " .. segmentId)
     end
+    
   end
 
   return true, ""
@@ -425,6 +511,7 @@ function verifierManager.initializeVerifierManager()
   for _, verifier in ipairs(VerifierProcesses) do  
     verifierManager.registerVerifier(verifier)
   end
+  print("Verifier manager and processes initialized")
 end
 
 return verifierManager

@@ -35,6 +35,12 @@ global record PostVDFOutputAndProofData
   proof: string
 end
 
+global record CheckpointResponseData
+  request_id: string
+  segment_id: string
+  valid: boolean
+end
+
 global record GetProviderRandomBalanceData
   providerId: string
 end
@@ -148,13 +154,13 @@ global function updateProviderBalanceHandler(msg: Message): boolean
 
   local data = (json.decode(msg.Data as string) as UpdateProviderRandomBalanceData)
   local balance = data.availableRandomValues
-  local success, err = providerManager.updateProviderBalance(userId, balance)
+  local success, _err = providerManager.updateProviderBalance(userId, balance)
 
   if success then
-    ao.send(sendResponse(msg.From, "Updated Provider Random Balance", SuccessMessage))
+    --ao.send(sendResponse(msg.From, "Updated Provider Random Balance", SuccessMessage))
     return true
   else
-    ao.send(sendResponse(msg.From, "Error", {message = "Failed to update provider balance: " .. err}))
+    --ao.send(sendResponse(msg.From, "Error", {message = "Failed to update provider balance: " .. err}))
     return false
   end
 end
@@ -177,15 +183,15 @@ global function postVDFChallengeHandler(msg: Message): boolean
     return false
   end
 
-  local success, err = randomManager.postVDFChallenge(userId, requestId, input, modulus)
+  local success, _err = randomManager.postVDFChallenge(userId, requestId, input, modulus)
 
   if success then
     providerManager.removeActiveRequest(userId, requestId, true)
     randomManager.decrementRequestedInputs(requestId)
-    ao.send(sendResponse(msg.From, "Posted VDF Input", SuccessMessage))
+    --ao.send(sendResponse(msg.From, "Posted VDF Input", SuccessMessage))
     return true
   else
-    ao.send(sendResponse(msg.From, "Error", {message = "Failed to post VDF Input: " .. err}))
+    --ao.send(sendResponse(msg.From, "Error", {message = "Failed to post VDF Input: " .. err}))
     return false
   end
 end
@@ -218,14 +224,50 @@ global function postVDFOutputAndProofHandler(msg: Message): boolean
   end
   providerManager.removeActiveRequest(userId, requestId, false)
 
-  local success, err = randomManager.postVDFOutputAndProof(userId, requestId, output, proof)
+  local success, _err = randomManager.postVDFOutputAndProof(userId, requestId, output, proof)
 
   if success then
-    ao.send(sendResponse(msg.From, "Posted VDF Output and Proof", SuccessMessage))
+    randomManager.decrementRequestedInputs(requestId)
+    --ao.send(sendResponse(msg.From, "Posted VDF Output and Proof", SuccessMessage))
     return true
   else
     -- need to hella revert shit if this fails
-    ao.send(sendResponse(msg.From, "Error", {message = "Failed to post VDF Output and Proof: " .. err}))
+    --ao.send(sendResponse(msg.From, "Error", {message = "Failed to post VDF Output and Proof: " .. err}))
+    return false
+  end
+end
+
+-- Handler for posting VDF output and proof
+global function postVerificationHandler(msg: Message): boolean
+  print("entered postVerification")
+
+  local verifierId = msg.From
+
+  local data = (json.decode(msg.Data as string) as CheckpointResponseData)
+
+  local valid = data.valid
+  local requestId = data.request_id
+  local segmentId = data.segment_id
+
+  local function validateVerificationInputs(_valid: boolean, _requestId: string, _segmentId: string): boolean
+    return true
+  end
+  
+  if valid == nil or segmentId == nil or requestId == nil or not validateVerificationInputs(valid, requestId, segmentId) then
+    print("Failed to post Verification: " .. "values not provided or malformed")
+    ao.send(sendResponse(msg.From, "Error", {message = "Failed to post Verification: " .. "values not provided or malformed"}))
+    return false
+  end
+  
+  local success, _err = verifierManager.processVerification(verifierId, requestId, segmentId, valid)
+  
+  if success then
+    randomManager.decrementRequestedInputs(requestId)
+    --ao.send(sendResponse(msg.From, "Posted Verification", SuccessMessage))
+    return true
+  else
+    -- need to hella revert shit if this fails
+    --ao.send(sendResponse(msg.From, "Error", {message = "Failed to post Verification: " .. err}))
     return false
   end
 end
@@ -380,23 +422,6 @@ global function getRandomRequestViaCallbackIdHandler(msg: Message): boolean
   return true
 end
 
-global record RandomResponseResponse 
-  callbackId: string
-  entropy:    string
-end
-
-global function simulateResponseHandler(): boolean
-  print("entered simulateResponseHandler")
-
-  local target                            = "AmGZEcVGl66Wh_KB9SzY2u7SUIcRz4yUUBfvMMC5Tvc"
-  local action                            = "Random-Response"
-  local data: RandomResponseResponse      = {
-    callbackId  = "d9e4855a-3f2b-4e4f-bc52-9b7bd4bf15e7",
-    entropy     = "774"
-  }
-  ao.send(sendResponse(target, action, data))
-end
-
 -- Add handlers
 Handlers.add('info', 
 Handlers.utils.hasMatchingTag('Action', 'Info'), 
@@ -413,6 +438,10 @@ wrapHandler(postVDFChallengeHandler))
 Handlers.add('postVDFOutputAndProof', 
 Handlers.utils.hasMatchingTag('Action', 'Post-VDF-Output-And-Proof'), 
 wrapHandler(postVDFOutputAndProofHandler))
+
+Handlers.add('postVerification',
+Handlers.utils.hasMatchingTag('Action', 'Post-Verification'),
+wrapHandler(postVerificationHandler))
 
 Handlers.add('getProviderRandomBalance', 
 Handlers.utils.hasMatchingTag('Action', 'Get-Providers-Random-Balance'), 
@@ -433,10 +462,6 @@ wrapHandler(getRandomRequestsHandler))
 Handlers.add('getRandomRequestViaCallbackId', 
 Handlers.utils.hasMatchingTag('Action', 'Get-Random-Request-Via-Callback-Id'), 
 wrapHandler(getRandomRequestViaCallbackIdHandler))
-
-Handlers.add('simulateResponse', 
-Handlers.utils.hasMatchingTag('Action', 'Simulate-Response'), 
-wrapHandler(simulateResponseHandler))
 
 -- Logging
 print("RandAO Process Initialized")

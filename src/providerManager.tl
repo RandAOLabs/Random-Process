@@ -84,7 +84,6 @@ end
 
 function providerManager.pushActiveRequests(providerIds: {string}, requestId: string, challenge: boolean): boolean, string
   print("entered providerManager.pushActiveRequests")
-  
   local success: boolean = true
   local err: string = ""
   
@@ -147,8 +146,6 @@ function providerManager.pushActiveRequests(providerIds: {string}, requestId: st
 
       -- Encode the updated active_output_requests table back to JSON
       local stringified_requests = json.encode(active_output_requests)
-
-      print("LLL: " .. stringified_requests)
 
       local stmt = DB:prepare[[
         UPDATE Providers

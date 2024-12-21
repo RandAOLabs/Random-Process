@@ -24,21 +24,21 @@ tlconfig.lua
 process.lua
 ==============================================================================
   do
-* local _ENV = _ENV
-* package.preload[ "database" ] = function( ... ) local arg = _G.arg;
-* local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local pcall = _tl_compat and _tl_compat.pcall or pcall
+0 local _ENV = _ENV
+0 package.preload[ "database" ] = function( ... ) local arg = _G.arg;
+0 local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local pcall = _tl_compat and _tl_compat.pcall or pcall
 
-* require("globals")
+0 require("globals")
 
-* local sqlite3 = require("lsqlite3")
+0 local sqlite3 = require("lsqlite3")
 
-* DB = DB or sqlite3.open_memory()
-* Configured = Configured or false
+0 DB = DB or sqlite3.open_memory()
+0 Configured = Configured or false
 
-* local database = {}
+0 local database = {}
 
   local function initializeDatabaseConnection()
-*    if not DB then
+0    if not DB then
 0       local ok, err = pcall(function()
 0          return sqlite3.open_memory()
         end)
@@ -48,28 +48,28 @@ process.lua
         end
 0       DB = err
      end
-*    return true
+0    return true
   end
 
   local function executeSQL(sql)
-*    local ok, err = pcall(function()
-*       DB:exec(sql)
+0    local ok, err = pcall(function()
+0       DB:exec(sql)
      end)
-*    if not ok then
+0    if not ok then
 0       return false, "Failed to execute SQL: " .. tostring(err)
      end
-*    return true, ""
+0    return true, ""
   end
 
-* function database.initializeDatabase()
-*    print("Initializing database")
-*    if not initializeDatabaseConnection() then
+0 function database.initializeDatabase()
+0    print("Initializing database")
+0    if not initializeDatabaseConnection() then
 0       return false
      end
 
-*    if not Configured then
-*       print("Setting up database schema")
-*       local tables = {
+0    if not Configured then
+0       print("Setting up database schema")
+0       local tables = {
 
 0          [[
           CREATE TABLE IF NOT EXISTS Providers (
@@ -81,7 +81,7 @@ process.lua
             random_balance INTEGER,
             created_at INTEGER
           );
-*       ]],
+        ]],
 
 0          [[
           CREATE TABLE IF NOT EXISTS Verifiers (
@@ -89,7 +89,7 @@ process.lua
             status TEXT NOT NULL,
             current_segment TEXT
           )
-*       ]],
+        ]],
 
 0          [[
           CREATE TABLE IF NOT EXISTS VerifierSegments (
@@ -102,7 +102,7 @@ process.lua
             result TEXT,
             FOREIGN KEY(verifier_id) REFERENCES Verifiers(process_id)
           )
-*       ]],
+        ]],
 0          [[
           CREATE TABLE IF NOT EXISTS RandomRequests (
             request_id TEXT PRIMARY KEY,
@@ -114,7 +114,7 @@ process.lua
             entropy TEXT,
             created_at INTEGER
           );
-*       ]],
+        ]],
 0          [[
           CREATE TABLE IF NOT EXISTS ProviderVDFResults (
             request_id TEXT,
@@ -128,54 +128,54 @@ process.lua
             FOREIGN KEY (request_id) REFERENCES RandomRequests(request_id)
           );
         ]],
-*       }
+        }
 
-*       for _, sql in ipairs(tables) do
-*          local ok, err = executeSQL(sql)
-*          if not ok then
+0       for _, sql in ipairs(tables) do
+0          local ok, err = executeSQL(sql)
+0          if not ok then
 0             print("Database initialization failed: " .. err)
 0             return false
            end
         end
 
-*       Configured = true
+0       Configured = true
      end
 
-*    print("Database initialization complete")
-*    return true
+0    print("Database initialization complete")
+0    return true
   end
 
-* return database
+0 return database
   end
   end
 
   do
-* local _ENV = _ENV
-* package.preload[ "dbUtils" ] = function( ... ) local arg = _G.arg;
-* local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local pcall = _tl_compat and _tl_compat.pcall or pcall; local table = _tl_compat and _tl_compat.table or table; require("globals")
+0 local _ENV = _ENV
+0 package.preload[ "dbUtils" ] = function( ... ) local arg = _G.arg;
+0 local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local pcall = _tl_compat and _tl_compat.pcall or pcall; local table = _tl_compat and _tl_compat.table or table; require("globals")
 
-* local sqlite3 = require('lsqlite3')
-* local dbUtils = {}
+0 local sqlite3 = require('lsqlite3')
+0 local dbUtils = {}
 
-* function dbUtils.queryMany(stmt)
-*    local rows = {}
+0 function dbUtils.queryMany(stmt)
+0    local rows = {}
 
-*    if stmt then
-*       for row in stmt:nrows() do
-*          table.insert(rows, row)
+0    if stmt then
+0       for row in stmt:nrows() do
+0          table.insert(rows, row)
         end
-*       stmt:finalize()
+0       stmt:finalize()
      else
 0       error("Err: " .. DB:errmsg())
      end
-*    return rows
+0    return rows
   end
 
-* function dbUtils.queryOne(stmt)
-*    return dbUtils.queryMany(stmt)[1]
+0 function dbUtils.queryOne(stmt)
+0    return dbUtils.queryMany(stmt)[1]
   end
 
-* function dbUtils.rawQuery(query)
+0 function dbUtils.rawQuery(query)
 0    local stmt = DB:prepare(query)
 0    if not stmt then
 0       error("Err: " .. DB:errmsg())
@@ -183,103 +183,191 @@ process.lua
 0    return dbUtils.queryMany(stmt)
   end
 
-* function dbUtils.execute(stmt, statementHint)
+0 function dbUtils.execute(stmt, statementHint)
 
-*    statementHint = statementHint or "Unknown operation"
+0    statementHint = statementHint or "Unknown operation"
 
 
-*    if type(stmt) ~= "userdata" then
+0    if type(stmt) ~= "userdata" then
 0       return false, "Invalid statement object"
      end
 
 
-*    print("dbUtils.execute: Executing SQL statement")
+0    print("dbUtils.execute: Executing SQL statement")
 
-*    if stmt then
-*       local step_ok, step_err = pcall(function() stmt:step() end)
-*       if not step_ok then
+0    if stmt then
+0       local step_ok, step_err = pcall(function() stmt:step() end)
+0       if not step_ok then
 0          print("dbUtils.execute: SQL execution failed: " .. tostring(step_err))
 0          return false, "dbUtils.execute: Failed to execute SQL statement StatementHint being: " .. tostring(step_err)
         end
 
-*       local finalize_result = stmt:finalize()
-*       if finalize_result ~= sqlite3.OK then
+0       local finalize_result = stmt:finalize()
+0       if finalize_result ~= sqlite3.OK then
 0          print("dbUtils.execute: SQL finalization failed: " .. DB:errmsg())
 0          return false, "dbUtils.execute: Failed to finalize SQL statement StatementHint being: " .. DB:errmsg()
         end
 
-*       print("dbUtils.execute: SQL execution successful")
-*       return true, ""
+0       print("dbUtils.execute: SQL execution successful")
+0       return true, ""
      else
 0       print("dbUtils.execute: Statement preparation failed: " .. DB:errmsg())
 0       return false, "dbUtils.execute: Failed to prepare SQL statement StatementHint being:(" .. statementHint .. "): " .. DB:errmsg()
      end
   end
 
-* return dbUtils
+0 return dbUtils
   end
   end
 
   do
-* local _ENV = _ENV
-* package.preload[ "globals" ] = function( ... ) local arg = _G.arg;
-* require("lsqlite3")
+0 local _ENV = _ENV
+0 package.preload[ "globals" ] = function( ... ) local arg = _G.arg;
+0 require("lsqlite3")
 
 
 
 
 
-* Admin = "KLzn6IzhmML7M-XXFNSI29GVNd3xSHtH26zuKa1TWn8"
+0 Admin = "KLzn6IzhmML7M-XXFNSI29GVNd3xSHtH26zuKa1TWn8"
 
 
 
-* RequiredStake = 10
-* Cost = 100
+0 RequiredStake = 10
+0 Cost = 100
 
-* TokenTest = "OeX1V1xSabUzUtNykWgu9GEaXqacBZawtK12_q5gXaA"
-* WrappedAR = "xU9zFkq3X2ZQ6olwNVvr1vUWIjc3kXTWr7xKQD6dh10"
-* TokenInUse = TokenTest
+0 TokenTest = "OeX1V1xSabUzUtNykWgu9GEaXqacBZawtK12_q5gXaA"
+0 WrappedAR = "xU9zFkq3X2ZQ6olwNVvr1vUWIjc3kXTWr7xKQD6dh10"
+0 TokenInUse = TokenTest
 
-* SuccessMessage = "200: Success"
+0 SuccessMessage = "200: Success"
 
-* Status = {
-*    "COLLECTING CHALLENGES",
-*    "COLLECTING OUTPUTS",
-*    "VERIFYING OUTPUTS",
-*    "CRACKING",
-*    "FINALIZED",
+0 Status = {
+     "COLLECTING CHALLENGES",
+     "COLLECTING OUTPUTS",
+     "VERIFYING OUTPUTS",
+     "CRACKING",
+     "FINALIZED",
      "FAILED",
-* }
+  }
 
-* VerifierProcesses = {
-*    "RtkXacFBEGXhw6OTjCqECKSap_y2CJMukBsGxElCd-E",
-*    "qbCteSj7907pwb_SQ1AD2kMG_HZDuUVf2IZnnm4pJxc",
-*    "toqzmcIxYC2yUQWJJVbd-ecBbCB2w1r_7Gvoq99DOzM",
-*    "G0JLVocfhW_1qHnX64yuaVBCWdpBRhSQ3T8AkGoiIJA",
-*    "Fpb42AKYswyM8nIAb6vZYBePwPUxzZhQhu72srZr1xY",
-*    "06IG1T_JXyhVV0TZ42_EEDKZ7T0kBfmdDjATTaBr8ic",
-*    "xcLnD6OdSbbO4dY_HAwNHLWRuNEPSJXoi4gRreywwi8",
-*    "bKQiEWkOg77FqygZ4yIp7lBV5mlMDQDg3_5CS36PUqg",
-*    "SqdPCK1LrMa_6-xf4a9UKchAqL26Mbj_Pg5kLk4NWxo",
-     "tgfpewpX3j7htX03Cj5pCz_CB0nOzDFlc0WJi1sRxRI",
-* }
+0 VerifierProcesses = {
+     "9xtciDYCCN76fXIq1cKosh3XNzG_Qj1D3Z5XK1g5nOE",
+     "RG6r_xD_NZtbw7t2QcfrUXjrlZe3w3a9vK_Z4kTrZyc",
+     "aDKAxaGZSMh120sVO-XMHc2oNxpl4Zst_KaC_YB3AK0",
+     "bHNe_KSStb-pmhttS6x9B2QTZ8s_duspz-r3Fz89HmI",
+     "hE4pw01XluNHiUfZONVCPEQJvy7A83FzR5GJgylJ2jE",
+     "aIiqaop1mZ9XuIPLd_1xVDjkQ-_wEG0L3xCB1pwf6Zg",
+     "1musHHlIsIqWL-v8zuLQCclWNOH0xEtM5Bop9npHIZ0",
+     "E-hoJqDj2GB6J-oveM4B5J5c6WLFQ9f9P9MeVB7ZfRs",
+     "bQbqmx4ju8QHIUsTTWRXbA8VD_LxZqhxHm79dE0xqB8",
+     "1Rk_Nf0ohtQ8CcD31OYDYJv4pstJFJWhU5TOMdBgWNU",
+     "Ca_j7Jcx9GtCZnGnhvSHKZQZiMdOOSyYlC5g74sofAM",
+     "cjTEdlZPE2By_mVk6TYRotUIrGN5jZUom6mLsFFK7ZI",
+     "HdwaaNv84kWolAAxxFcq-fj6GxchSojnSamYBfAdOlw",
+     "m9YnpeUM7d0FMS647VFZKqwcq6yN6NDU_7388ZDIWgk",
+     "5JLl8vaqbNJK-3Z9snnOx7cDciGR43nCKcm2X1g8LQs",
+     "Lgyp9EmNChaHBvxzN2aGyQcsRQcJSoIYHiMy1UGHgVc",
+     "QrDVen99sF88EvE_vffdpHzMWRP5weVzH84gXfKct3Y",
+     "sREsSXZC8UdLfBiic5Nsbl16gsdooRssbdZqtHR47xk",
+     "LMli3AiUXlCZcr8lSacqqrqTiTQpuMQS1TFuFSYyYCc",
+     "eme9ov7v6uvLOQ9xs7TPVw31liudHbjpmoSsJrb9yKM",
+     "emiZ11GY1FLPItxbgDBtuDuZFwosSKydxdX2Y3X3syU",
+     "3-TUgiU4CYXybgL7X2TCGAdGkGlFQgmJh63w9ah54p8",
+     "6zdG4WZnHFq0iFrqt8if0VJjLD0uMTpwI3PKE2ebMuE",
+     "f8DRxguG-ebm8qkeW87TfqQPfpjDx1zFawFLqdyVqEE",
+     "-3FR3L_y41ChqUg9f3LzOOjCeEYqxZnxOPBSVJvhc4g",
+     "7MyjbWK2ui4YCZvI4pAei632cTYZpkPyRsYSMpqVSjk",
+     "o3F_-U5FD69JHSxZJcLU8CZnM6A0lJVaJEjb3tdpyHw",
+     "ocTw1Q0119A6b25W9xPNpLP2whkeTkn2AvM_1vr6dwg",
+     "5uckHZGTWwxJU7MfuBTrPwe6awdqpKxV0O-L6_kmuM0",
+     "KYonYg0dcgjIZHur58aq1l_Xd6FV2995C9M7IKx9ToY",
+     "pCO8DCinMo2iBEYSxnpzMsQsVICnM9I3iFpHvJhiquU",
+     "Zg7NsaOfedtTYZwu6HyCjpfiAMDJU2L-5zube7Pnnoc",
+     "RwPOZCTE2N9GkztErOqgVWcPOQCvbkMtv6-OxIqtb3Y",
+     "tNpWqM0aGL6-6CSpHb2Wrw4jCH3irwrsrpubpK9c_jg",
+     "liUYPzYtFcSmtZw-kixB5fYWAAIwqoeiYcy3LqI0r5g",
+     "mFSAyqgeAqph4uPNAbONTvxrYR-5-BFGpvSzbl89rEM",
+     "VZjKTKen3yCRwS3fhlzb8gy040-o6cB4nc4WuzMhO_0",
+     "jb5PbvwDOPvv2VQJhDBaRapsS7Hg0_nbgklRqy4NCRo",
+     "MdOSjRFFPXVPZ1QuFc24aS2iH6LPBMMVtz0Hfou_YTY",
+     "7lUE6vTtYzz9DX7Vel0PiVr9Gt7WXsraBfGbzsb-J0o",
+     "Ad5zPlVDcyO8A_gZuCZafRG-hloEG4GEiuM3i5q_7ew",
+     "0UHuoupRYAWi2ES727gWXxiB6NywyY5uSXv5pPQmWF4",
+     "5zkXkGJxhXiBeHj8rFV7pMexegQYYurqR7iXuK_OeTA",
+     "6NcC5lNFwyrZTyXEZ_BUpED8tlz-ml3UDVEnpsqn7NQ",
+     "-B2h9yKLQ6Gmz53K2Y0B7I-maT6n3LyuX86nxp0caak",
+     "ieFMM-zqmQpGrVmnFgsyqM865GS1-A5R37krMZ2PahI",
+     "jrZ5KxMErZL_2aet5OVdYQZH1iyFn4MYoZ3qDeRADb0",
+     "vjoC1Vu46Kz_MXcEOQJM6tuSgkpdnJZoVCjJv8_15w8",
+     "YhQ9OPQQnjQXumInOLad4jp73Rv6OEEcE6FIjLnIs_g",
+     "8n5FmNyOXz_y5WtROyaNdlKYjCmPN5Xz0nYlYu4HRKs",
+     "GlPXlvwNgnu1wmYgDdSxX9pRCAlVUU-FeHznW5pFAX4",
+     "6fzr6mfZMyY7J0gn5k2Lx-YzZpuJRDVVIIQ30eqvxIw",
+     "XMjyw1B5ovTM1vuzWFiivD9C7HvTv-fzanl2ygpanRU",
+     "1BaATgamA1HmAhAIaN6QzoXpjxNhNmSv41ZzQzVwlE4",
+     "oIhKTSdl953AAly5HqnVnjlqdIkAMj5FxaG5QCMZ5OY",
+     "8psb-hqCnQQpHPUVo7FASXA05f6GModOEryfBwR7jpc",
+     "BfC87x5k19oU0dpCyoRQWrsjXhtM-1xzqLebQdki1JA",
+     "HgY9erwSLwyUpXm3N6DhhSxbIzJ3XjFTqNJDVg9WJTY",
+     "Bs5eEY7k5tDxO57l1SxgeWUx502-oLzegJIq5-eMz0Q",
+     "3bu5EGUaF1RyR8_B28r_m2R4kpCytXWNikDQ4qDrPQM",
+     "PjSK3CiGVn6iAGO5WCLIiLsrUabTXtXl6eyDFtUDrPU",
+     "A5x89r00o1K_EEcYJhLTwfSmNHcU04KpslFE2GZUNEM",
+     "0McQMqhI_G8F2S5R1oh5g4S4sGWxkMcD2MaVa5ELUAM",
+     "iMMa2HbP-FQwiTdoK7W4GVHKD543KB221P6HAkfIKP0",
+     "8gJT4MviAqdthfUjjXWrL9WDIO1zhwKNdF1HHjlsWGw",
+     "JRt6hoW9blsADCdJbY8ThqJirDrj3SLSqM4CrUd1bh0",
+     "mVbZzo75noxadsLdqUq64GE2fMBDvS6MB29gDnK2V4c",
+     "0auksaSe4yV5Snv3MzLcJegJh7GyxXMYXP6ncjyfOfk",
+     "am7uRfcD71c9ynlSXHjQZonPj8mRyp2Hz_PmzHLQ60Y",
+     "NQcOoJM8m5-nxTXcJnuAeZW3PP1pT3vfi0FU9Vh5yTY",
+     "k5PGnF9aoVZd26mo4e2W_6uZKl_ETATFZ4dzu9-NA-w",
+     "c_0ye66-HsNRp0Dqmw4wga_XcYkK7YFIiiaPGeMY1uQ",
+     "pOM79mJ6_6_2m5oLSMqFTKMC-eWUub8NU1MBgyluHA8",
+     "ZC2FgZe2QPgKD4-C5120ISgull4zaJXSxz0wZqITLss",
+     "gwCxgBfhdGu3gxYuuUl3pk_KVQF0V3ACpWPH2W0piLE",
+     "4eVREWXvmKAMJ4RMiq9nhKbO93Sodme9a5MnMa_ObYs",
+     "WyXBXMLGYpNcRhvrHrshjhFoV4PvTi1Gjj-CJh7zqto",
+     "347w4pv7GnEI_0ZiqmXtl3lC3bXIBh-rhKwl1zuB0BM",
+     "ccZiKD1yn8_bBHo69GVp8KOygbGh_tEn8lJHs6PGOzc",
+     "0v9AAs9fhDkJyjYG7M0rViBOLlJ_DmJA-81MV7LSNnA",
+     "EPocFs8XlXJhSNtcRTAjfkAUeWLG41tkSWFwK35iNfk",
+     "EdvD-KQjeWtMzjW_atVR22jWJBCyNKv5ajolm0PYBj0",
+     "n-CRbJNzKejlnqLNnse4aDzx4lKe0nAwcx1FrvY4pnI",
+     "j2d4SznuLaSegIpN3_u85v9adVAL8NM2IrZFjjTty5k",
+     "NUs5IVOr5KjydjjqLkkA6pstAgmtcPxJWknGRfA9JeY",
+     "Dy45_39YaFd965jVbo57JiG-zbX9O6MpPqH5h6J9-ss",
+     "1aF5qXxLA9bXihNZOmi_Gr9axwYdX8ZxIqjYTZpYITQ",
+     "BEpOW5X2CPTlaKeE4NdKxzcN9Xjisic5Rmo5YebwZb8",
+     "bLEW4XGsGo5IBXvXE2G5-Ai9GjymrHl5gWKwoUXyD1c",
+     "4iYpSip0GqQ8Xekz-OdUf4n3AqFRwyyGEySeIcOapiw",
+     "xh0satyfKYauDygZXCGwYlshCcEiec2vgYAAZvlC2aA",
+     "FQ3XFhjwm7DT156S2MEi_wakF9s1n6LYPv2J8f-Ay1E",
+     "HcCyWiR5eB-qAZclP_-aB5dsujK-TUHWU___Bkx5uAk",
+     "zq_JQLzR2fVaw_PWxmA2WD0hJX7QFJgz3TF1XTJ5JQk",
+     "kN6avGRarPdvCWMUDi5R7XFEnpRXdOy2FCv1QWkZtRc",
+     "C1CElYtiNFeXaJ3YoGMNPTUv_NxJaF197F31qSHrmDI",
+     "YLzRgccaT2XrRpeSrVkSJ--DGDCaW7ngkOTtVVQcG5o",
+     "cjusi39QOnOdXinkJi3vcvWb8EDvNhs2qRL-M0Do9OA",
+     "G6bjwtb3GIksAyF4N2zIJLcpDcXpsl3Icx2McOgoxEE",
+     "H5wGgdYLz2RNtH4oAOe8ssBpABI5a5Dz2phktms6Hyk",
+  }
 
-* return {}
+0 return {}
   end
   end
 
   do
-* local _ENV = _ENV
-* package.preload[ "providerManager" ] = function( ... ) local arg = _G.arg;
-* local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local os = _tl_compat and _tl_compat.os or os; local pcall = _tl_compat and _tl_compat.pcall or pcall; local table = _tl_compat and _tl_compat.table or table; require("globals")
+0 local _ENV = _ENV
+0 package.preload[ "providerManager" ] = function( ... ) local arg = _G.arg;
+0 local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local os = _tl_compat and _tl_compat.os or os; local pcall = _tl_compat and _tl_compat.pcall or pcall; local table = _tl_compat and _tl_compat.table or table; require("globals")
 
-* local dbUtils = require("dbUtils")
-* local json = require("json")
-
-
-* Provider = {}
+0 local dbUtils = require("dbUtils")
+0 local json = require("json")
 
 
+0 Provider = {}
 
 
 
@@ -287,154 +375,153 @@ process.lua
 
 
 
-* ProviderList = {}
+
+
+0 ProviderList = {}
 
 
 
-* RequestList = {}
+0 RequestList = {}
 
 
 
-* local providerManager = {}
+0 local providerManager = {}
 
-* function providerManager.createProvider(userId)
-*    print("entered providerManager.createProvider")
+0 function providerManager.createProvider(userId)
+0    print("entered providerManager.createProvider")
 
-*    local timestamp = os.time()
+0    local timestamp = os.time()
 
-*    if not DB then
+0    if not DB then
 0       print("Database connection not initialized")
 0       return false, "Database connection is not initialized"
      end
 
-*    print("Preparing SQL statement for provider creation")
-*    local stmt = DB:prepare([[
+0    print("Preparing SQL statement for provider creation")
+0    local stmt = DB:prepare([[
       INSERT OR IGNORE INTO Providers (provider_id, created_at)
       VALUES (:provider_id, :created_at);
-*   ]])
+0   ]])
 
-*    if not stmt then
+0    if not stmt then
 0       print("Failed to prepare statement: " .. DB:errmsg())
 0       return false, "Failed to prepare statement: " .. DB:errmsg()
      end
 
-*    print("Binding parameters for provider creation")
-*    local bind_ok, bind_err = pcall(function()
-*       stmt:bind_names({ provider_id = userId, created_at = timestamp })
+0    print("Binding parameters for provider creation")
+0    local bind_ok, bind_err = pcall(function()
+0       stmt:bind_names({ provider_id = userId, created_at = timestamp })
      end)
 
-*    if not bind_ok then
+0    if not bind_ok then
 0       print("Failed to bind parameters: " .. tostring(bind_err))
 0       stmt:finalize()
 0       return false, "Failed to bind parameters: " .. tostring(bind_err)
      end
 
-*    print("Executing provider creation statement")
-*    local execute_ok, execute_err = dbUtils.execute(stmt, "Create provider")
+0    print("Executing provider creation statement")
+0    local execute_ok, execute_err = dbUtils.execute(stmt, "Create provider")
 
-*    if not execute_ok then
+0    if not execute_ok then
 0       print("Provider creation failed: " .. execute_err)
      else
-*       print("Provider created successfully")
+0       print("Provider created successfully")
      end
 
-*    return execute_ok, execute_err
+0    return execute_ok, execute_err
   end
 
-* function providerManager.getProvider(userId)
-*    print("entered providerManager.getProvider")
+0 function providerManager.getProvider(userId)
+0    print("entered providerManager.getProvider")
 
-*    local stmt = DB:prepare("SELECT * FROM Providers WHERE provider_id = :provider_id")
-*    stmt:bind_names({ provider_id = userId })
-*    local result = dbUtils.queryOne(stmt)
+0    local stmt = DB:prepare("SELECT * FROM Providers WHERE provider_id = :provider_id")
+0    stmt:bind_names({ provider_id = userId })
+0    local result = dbUtils.queryOne(stmt)
 
-*    if result then
-*       return result, ""
+0    if result then
+0       return result, ""
      else
-*       return {}, "Provider not found"
+0       return {}, "Provider not found"
      end
   end
 
-* function providerManager.pushActiveRequests(providerIds, requestId, challenge)
-*    print("entered providerManager.pushActiveRequests")
+0 function providerManager.pushActiveRequests(providerIds, requestId, challenge)
+0    print("entered providerManager.pushActiveRequests")
+0    local success = true
+0    local err = ""
 
-*    local success = true
-*    local err = ""
+0    for _, value in ipairs(providerIds) do
+0       local provider = providerManager.getProvider(value)
 
-*    for _, value in ipairs(providerIds) do
-*       local provider = providerManager.getProvider(value)
-
-*       if not provider then
+0       if not provider then
 0          print("Provider with ID " .. value .. " not found.")
 0          success = false
 0          err = err .. " " .. value
 0          return success, err
         end
 
-*       if challenge == true then
+0       if challenge == true then
            local active_challenge_requests
-*          if provider.active_challenge_requests then
+0          if provider.active_challenge_requests then
 
 0             active_challenge_requests = json.decode(provider.active_challenge_requests)
            else
 
-*             active_challenge_requests = { request_ids = {} }
+0             active_challenge_requests = { request_ids = {} }
            end
 
 
-*          table.insert(active_challenge_requests.request_ids, requestId)
+0          table.insert(active_challenge_requests.request_ids, requestId)
 
 
-*          local stringified_requests = json.encode(active_challenge_requests)
+0          local stringified_requests = json.encode(active_challenge_requests)
 
-*          local stmt = DB:prepare([[
+0          local stmt = DB:prepare([[
           UPDATE Providers
           SET active_challenge_requests = :active_challenge_requests
           WHERE provider_id = :provider_id;
-*       ]])
-*          stmt:bind_names({ provider_id = provider.provider_id, active_challenge_requests = stringified_requests })
+0       ]])
+0          stmt:bind_names({ provider_id = provider.provider_id, active_challenge_requests = stringified_requests })
 
-*          local ok = pcall(function()
-*             dbUtils.execute(stmt, "Failed to update provider active challenge requests")
+0          local ok = pcall(function()
+0             dbUtils.execute(stmt, "Failed to update provider active challenge requests")
            end)
 
-*          if not ok then
+0          if not ok then
 0             print("Failed to update provider active challenge requests for provider ID " .. provider.provider_id)
 0             success = false
 0             err = err .. " " .. provider.provider_id
 0             return success, err
            end
         else
-*          print("made here")
+0          print("made here")
            local active_output_requests
-*          if provider.active_output_requests then
+0          if provider.active_output_requests then
 
 0             active_output_requests = json.decode(provider.active_output_requests)
            else
 
-*             active_output_requests = { request_ids = {} }
+0             active_output_requests = { request_ids = {} }
            end
 
 
-*          table.insert(active_output_requests.request_ids, requestId)
+0          table.insert(active_output_requests.request_ids, requestId)
 
 
-*          local stringified_requests = json.encode(active_output_requests)
+0          local stringified_requests = json.encode(active_output_requests)
 
-*          print("LLL: " .. stringified_requests)
-
-*          local stmt = DB:prepare([[
+0          local stmt = DB:prepare([[
           UPDATE Providers
           SET active_output_requests = :active_output_requests
           WHERE provider_id = :provider_id;
-*       ]])
-*          stmt:bind_names({ provider_id = provider.provider_id, active_output_requests = stringified_requests })
+0       ]])
+0          stmt:bind_names({ provider_id = provider.provider_id, active_output_requests = stringified_requests })
 
-*          local ok = pcall(function()
-*             dbUtils.execute(stmt, "Failed to update provider active output requests")
+0          local ok = pcall(function()
+0             dbUtils.execute(stmt, "Failed to update provider active output requests")
            end)
 
-*          if not ok then
+0          if not ok then
 0             print("Failed to update provider active output requests for provider ID " .. provider.provider_id)
 0             success = false
 0             err = err .. " " .. provider.provider_id
@@ -444,134 +531,134 @@ process.lua
      end
   end
 
-* function providerManager.removeActiveRequest(provider_id, requestId, challenge)
-*    print("entered providerManager.removeActiveRequest")
+0 function providerManager.removeActiveRequest(provider_id, requestId, challenge)
+0    print("entered providerManager.removeActiveRequest")
 
 
-*    local provider = providerManager.getProvider(provider_id)
-*    if not provider then
+0    local provider = providerManager.getProvider(provider_id)
+0    if not provider then
 0       print("Provider with ID " .. provider_id .. " not found.")
 0       return false, "Provider not found"
      end
 
-*    if challenge then
+0    if challenge then
 
         local active_challenge_requests
-*       if provider.active_challenge_requests then
-*          active_challenge_requests = json.decode(provider.active_challenge_requests)
+0       if provider.active_challenge_requests then
+0          active_challenge_requests = json.decode(provider.active_challenge_requests)
         else
 0          active_challenge_requests = { request_ids = {} }
         end
 
 
-*       for i, id in ipairs(active_challenge_requests.request_ids) do
-*          if id == requestId then
-*             table.remove(active_challenge_requests.request_ids, i)
-*             break
+0       for i, id in ipairs(active_challenge_requests.request_ids) do
+0          if id == requestId then
+0             table.remove(active_challenge_requests.request_ids, i)
+              break
            end
         end
 
 
-*       local stringified_requests = json.encode(active_challenge_requests)
+0       local stringified_requests = json.encode(active_challenge_requests)
 
 
-*       local stmt = DB:prepare([[
+0       local stmt = DB:prepare([[
           UPDATE Providers
           SET active_challenge_requests = :active_challenge_requests
           WHERE provider_id = :provider_id;
-*     ]])
-*       stmt:bind_names({ provider_id = provider_id, active_challenge_requests = stringified_requests })
+0     ]])
+0       stmt:bind_names({ provider_id = provider_id, active_challenge_requests = stringified_requests })
 
-*       local ok = pcall(function()
-*          dbUtils.execute(stmt, "Failed to update provider active challenge requests")
+0       local ok = pcall(function()
+0          dbUtils.execute(stmt, "Failed to update provider active challenge requests")
         end)
 
-*       if not ok then
+0       if not ok then
 0          print("Failed to update provider active challenge requests for provider ID " .. provider_id)
 0          return false, "Failed to update provider active challenge requests"
         end
      else
 
         local active_output_requests
-*       if provider.active_output_requests then
-*          active_output_requests = json.decode(provider.active_output_requests)
+0       if provider.active_output_requests then
+0          active_output_requests = json.decode(provider.active_output_requests)
         else
 0          active_output_requests = { request_ids = {} }
         end
 
 
-*       for i, id in ipairs(active_output_requests.request_ids) do
-*          if id == requestId then
-*             table.remove(active_output_requests.request_ids, i)
-*             break
+0       for i, id in ipairs(active_output_requests.request_ids) do
+0          if id == requestId then
+0             table.remove(active_output_requests.request_ids, i)
+              break
            end
         end
 
 
-*       local stringified_requests = json.encode(active_output_requests)
+0       local stringified_requests = json.encode(active_output_requests)
 
 
-*       local stmt = DB:prepare([[
+0       local stmt = DB:prepare([[
           UPDATE Providers
           SET active_output_requests = :active_output_requests
           WHERE provider_id = :provider_id;
-*     ]])
-*       stmt:bind_names({ provider_id = provider_id, active_output_requests = stringified_requests })
+0     ]])
+0       stmt:bind_names({ provider_id = provider_id, active_output_requests = stringified_requests })
 
-*       local ok = pcall(function()
-*          dbUtils.execute(stmt, "Failed to update provider active output requests")
+0       local ok = pcall(function()
+0          dbUtils.execute(stmt, "Failed to update provider active output requests")
         end)
 
-*       if not ok then
+0       if not ok then
 0          print("Failed to update provider active output requests for provider ID " .. provider_id)
 0          return false, "Failed to update provider active output requests"
         end
      end
 
-*    return true, "Request ID removed successfully"
+0    return true, "Request ID removed successfully"
   end
 
-* function providerManager.getActiveRequests(userId, challenge)
-*    print("entered providerManager.getActiveRequests")
-*    local provider = providerManager.getProvider(userId)
-*    if challenge then
-*       if provider.active_challenge_requests then
-*          return provider.active_challenge_requests, ""
+0 function providerManager.getActiveRequests(userId, challenge)
+0    print("entered providerManager.getActiveRequests")
+0    local provider = providerManager.getProvider(userId)
+0    if challenge then
+0       if provider.active_challenge_requests then
+0          return provider.active_challenge_requests, ""
         else
-*          return "", "No active challenge requests found"
+0          return "", "No active challenge requests found"
         end
      else
-*       if provider.active_output_requests then
-*          return provider.active_output_requests, ""
+0       if provider.active_output_requests then
+0          return provider.active_output_requests, ""
         else
-*          return "", "No active output requests found"
+0          return "", "No active output requests found"
         end
      end
   end
 
-* function providerManager.hasActiveRequest(userId, requestId, challenge)
-*    print("entered providerManager.hasActiveRequest")
+0 function providerManager.hasActiveRequest(userId, requestId, challenge)
+0    print("entered providerManager.hasActiveRequest")
 
-*    local activeRequests, err = providerManager.getActiveRequests(userId, challenge)
-*    if err == "" then
-*       local requestIds = json.decode(activeRequests)
-*       for _, request_id in ipairs(requestIds.request_ids) do
-*          if request_id == requestId then
-*             return true
+0    local activeRequests, err = providerManager.getActiveRequests(userId, challenge)
+0    if err == "" then
+0       local requestIds = json.decode(activeRequests)
+0       for _, request_id in ipairs(requestIds.request_ids) do
+0          if request_id == requestId then
+0             return true
            end
         end
-*       return false
+0       return false
      else
-*       return false
+0       return false
      end
   end
 
-* function providerManager.checkStakeStubbed(_userId)
-*    print("entered providerManager.checkStakeStubbed")
-*    return true, ""
+0 function providerManager.checkStakeStubbed(_userId)
+0    print("entered providerManager.checkStakeStubbed")
+0    return true, ""
   end
 
-* function providerManager.checkStake(userId)
+0 function providerManager.checkStake(userId)
 0    print("entered providerManager.checkStake")
 
 0    local provider, _ = providerManager.getProvider(userId)
@@ -582,28 +669,28 @@ process.lua
      end
   end
 
-* function providerManager.updateProviderBalance(userId, balance)
-*    print("entered providerManager.updateProviderBalance")
+0 function providerManager.updateProviderBalance(userId, balance)
+0    print("entered providerManager.updateProviderBalance")
 
-*    local stmt = DB:prepare([[
+0    local stmt = DB:prepare([[
       UPDATE Providers
       SET random_balance = :balance
       WHERE provider_id = :provider_id;
-*   ]])
-*    stmt:bind_names({ provider_id = userId, balance = balance })
+0   ]])
+0    stmt:bind_names({ provider_id = userId, balance = balance })
 
-*    local ok = pcall(function()
-*       dbUtils.execute(stmt, "Failed to update provider balance")
+0    local ok = pcall(function()
+0       dbUtils.execute(stmt, "Failed to update provider balance")
      end)
 
-*    if ok then
-*       return true, ""
+0    if ok then
+0       return true, ""
      else
 0       return false, "Failed to update provider balance"
      end
   end
 
-* function providerManager.updateProviderStatus(userId, active)
+0 function providerManager.updateProviderStatus(userId, active)
 0    print("entered providerManager.updateProviderStatus")
 
      local stmt
@@ -628,31 +715,21 @@ process.lua
      end
   end
 
-* return providerManager
+0 return providerManager
   end
   end
 
   do
-* local _ENV = _ENV
-* package.preload[ "randomManager" ] = function( ... ) local arg = _G.arg;
-* local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local math = _tl_compat and _tl_compat.math or math; local os = _tl_compat and _tl_compat.os or os; local pcall = _tl_compat and _tl_compat.pcall or pcall; local string = _tl_compat and _tl_compat.string or string; require("globals")
-* local json = require("json")
-* local dbUtils = require("dbUtils")
-* local providerManager = require("providerManager")
-* local verifierManager = require("verifierManager")
+0 local _ENV = _ENV
+0 package.preload[ "randomManager" ] = function( ... ) local arg = _G.arg;
+0 local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local math = _tl_compat and _tl_compat.math or math; local os = _tl_compat and _tl_compat.os or os; local pcall = _tl_compat and _tl_compat.pcall or pcall; local string = _tl_compat and _tl_compat.string or string; local table = _tl_compat and _tl_compat.table or table; require("globals")
+0 local json = require("json")
+0 local dbUtils = require("dbUtils")
+0 local providerManager = require("providerManager")
+0 local verifierManager = require("verifierManager")
 
 
-* ProviderVDFResult = {}
-
-
-
-
-
-
-
-
-
-* RandomRequest = {}
+0 ProviderVDFResult = {}
 
 
 
@@ -662,226 +739,360 @@ process.lua
 
 
 
-
-* RandomStatus = {}
-
-
-
-* ProvidersValue = {}
+0 RandomRequest = {}
 
 
 
-* RequestedInputs = {}
 
 
 
-* ProviderVDFResults = {}
 
 
 
-* local randomManager = {}
 
-* function randomManager.generateUUID()
-*    print("entered randomManager.generateUUID")
+0 RandomStatus = {}
 
-*    local template = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'
-*    return (string.gsub(template, '[xy]', function(c)
-*       local v = (c == 'x') and math.random(0, 0xf) or math.random(8, 0xb)
-*       return string.format('%x', v)
+
+
+0 ProvidersValue = {}
+
+
+
+0 RequestedInputs = {}
+
+
+
+0 ProviderVDFResults = {}
+
+
+
+0 RandomResponseResponse = {}
+
+
+
+
+0 local randomManager = {}
+
+0 function randomManager.generateUUID()
+0    print("entered randomManager.generateUUID")
+
+0    local template = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'
+0    return (string.gsub(template, '[xy]', function(c)
+0       local v = (c == 'x') and math.random(0, 0xf) or math.random(8, 0xb)
+0       return string.format('%x', v)
      end))
   end
 
-* function randomManager.getRandomProviderList(requestId)
-*    print("entered randomManager.getRandomProviders")
+0 function randomManager.getRandomProviderList(requestId)
+0    print("entered randomManager.getRandomProviders")
 
-*    local stmt = DB:prepare("SELECT providers FROM RandomRequests WHERE request_id = :request_id")
-*    stmt:bind_names({ request_id = requestId })
-*    local result = dbUtils.queryOne(stmt)
+0    local stmt = DB:prepare("SELECT providers FROM RandomRequests WHERE request_id = :request_id")
+0    stmt:bind_names({ request_id = requestId })
+0    local result = dbUtils.queryOne(stmt)
 
-*    if result then
-*       return json.decode(result.providers), ""
+0    if result then
+0       return json.decode(result.providers), ""
      else
 0       return {}, "RandomRequest providers not found"
      end
   end
 
-* function randomManager.updateRandomRequestStatus(requestId, newStatus)
-*    print("Entered randomManager.updateRandomRequestStatus")
+0 function randomManager.updateRandomRequestStatus(requestId, newStatus)
+0    print("Entered randomManager.updateRandomRequestStatus")
 
 
-*    local validStatus = false
-*    for _, status in ipairs(Status) do
-*       if newStatus == status then
-*          validStatus = true
-*          break
+0    local validStatus = false
+0    for _, status in ipairs(Status) do
+0       if newStatus == status then
+0          validStatus = true
+           break
         end
      end
 
-*    if not validStatus then
+0    if not validStatus then
 0       return false, "Failure: Invalid status: " .. tostring(newStatus)
      end
 
 
-*    local stmt = DB:prepare([[
+0    local stmt = DB:prepare([[
       UPDATE RandomRequests
       SET status = :status
       WHERE request_id = :request_id;
-*   ]])
+0   ]])
 
-*    if not stmt then
+0    if not stmt then
 0       return false, "Failed to prepare statement: " .. DB:errmsg()
      end
 
 
-*    stmt:bind_names({ status = newStatus, request_id = requestId })
+0    stmt:bind_names({ status = newStatus, request_id = requestId })
 
 
-*    local execute_ok, execute_err = dbUtils.execute(stmt, "Update random request status")
+0    local execute_ok, execute_err = dbUtils.execute(stmt, "Update random request status")
 
-*    if not execute_ok then
+0    if not execute_ok then
 0       return false, "Failed to update random request status: " .. tostring(execute_err)
      end
 
-*    print("Random request status updated successfully to: " .. newStatus)
-*    return true, ""
+0    print("Random request status updated successfully to: " .. newStatus)
+0    return true, ""
   end
 
-* function randomManager.getRandomRequestedInputs(requestId)
-*    print("entered randomManager.getRandomRequestedInputs")
+0 function randomManager.getRandomRequestedInputs(requestId)
+0    print("entered randomManager.getRandomRequestedInputs")
 
-*    local stmt = DB:prepare("SELECT requested_inputs FROM RandomRequests WHERE request_id = :request_id")
-*    stmt:bind_names({ request_id = requestId })
-*    local result = dbUtils.queryOne(stmt)
-*    if result then
-*       return result.requested_inputs, ""
+0    local stmt = DB:prepare("SELECT requested_inputs FROM RandomRequests WHERE request_id = :request_id")
+0    stmt:bind_names({ request_id = requestId })
+0    local result = dbUtils.queryOne(stmt)
+0    if result then
+0       return result.requested_inputs, ""
      else
 0       return nil, "RandomRequest requested_inputs not found"
      end
   end
 
-* function randomManager.decrementRequestedInputs(requestId)
-*    print("Entered randomManager.decrementRequestedInputs")
+0 function randomManager.getRandomStatus(requestId)
+0    print("entered randomManager.getRandomStatus")
 
-*    local requested, _ = randomManager.getRandomRequestedInputs(requestId)
-
-*    if requested == 0 then
-0       return false, "Failure: can not decrement needed below 0"
-     end
-
-*    requested = requested - 1
-
-
-*    local stmt = DB:prepare([[
-      UPDATE RandomRequests
-      SET requested_inputs = :requested_inputs
-      WHERE request_id = :request_id;
-*   ]])
-
-*    if not stmt then
-0       return false, "Failed to prepare statement: " .. DB:errmsg()
-     end
-
-
-*    stmt:bind_names({ requested_inputs = requested, request_id = requestId })
-
-
-*    local execute_ok, execute_err = dbUtils.execute(stmt, "Update random request requested_inputs")
-
-*    if not execute_ok then
-0       return false, "Failed to update random request requested_inputs: " .. tostring(execute_err)
-     end
-
-*    if requested == 0 then
-*       local status = Status[2]
-*       local providerList = randomManager.getRandomProviderList(requestId)
-*       randomManager.updateRandomRequestStatus(requestId, status)
-*       providerManager.pushActiveRequests(providerList.provider_ids, requestId, false)
-     end
-
-*    print("Random request requested_inputs updated successfully to: " .. requested)
-*    return true, ""
-  end
-
-* function randomManager.getRandomStatus(requestId)
-*    print("entered randomManager.getRandomStatus")
-
-*    local stmt = DB:prepare("SELECT status FROM RandomRequests WHERE request_id = :request_id")
-*    stmt:bind_names({ request_id = requestId })
-*    local result = dbUtils.queryOne(stmt)
-*    if result then
-*       return result.status, ""
+0    local stmt = DB:prepare("SELECT status FROM RandomRequests WHERE request_id = :request_id")
+0    stmt:bind_names({ request_id = requestId })
+0    local result = dbUtils.queryOne(stmt)
+0    if result then
+0       return result.status, ""
      else
 0       return "", "RandomRequest status not found"
      end
   end
 
-* function randomManager.getRandomRequest(requestId)
-*    print("entered randomManager.getRandomRequest")
+0 function randomManager.resetRandomRequestRequestedInputs(requestId, newRequestedInputs)
+0    print("Entered randomManager.resetRandomRequestRequestedInputs")
 
-*    local stmt = DB:prepare("SELECT * FROM RandomRequests WHERE request_id = :request_id")
-*    stmt:bind_names({ request_id = requestId })
-*    local result = dbUtils.queryOne(stmt)
-*    if result then
-*       return result, ""
-     else
-*       return {}, "RandomRequest not found"
+
+0    local stmt = DB:prepare([[
+      UPDATE RandomRequests
+      SET requested_inputs = :requested_inputs
+      WHERE request_id = :request_id;
+0   ]])
+0    if not stmt then
+0       return false, "Failed to prepare statement: " .. DB:errmsg()
      end
+
+
+0    stmt:bind_names({ requested_inputs = newRequestedInputs, request_id = requestId })
+
+
+0    local execute_ok, execute_err = dbUtils.execute(stmt, "Update random request requested inputs")
+
+0    if not execute_ok then
+0       return false, "Failed to update random request requested inputs: " .. tostring(execute_err)
+     end
+
+0    print("Random request requested inputs updated successfully to: " .. newRequestedInputs)
+0    return true, ""
   end
 
-* function randomManager.getRandomRequestViaCallbackId(callbackId)
-*    print("entered randomManager.getRandomRequestViaCallbackId")
+0 function randomManager.getVDFResults(requestId)
+0    print("entered randomManager.getVDFResults")
 
-*    local stmt = DB:prepare("SELECT * FROM RandomRequests WHERE callback_id = :callback_id")
-*    stmt:bind_names({ callback_id = callbackId })
-*    local result = dbUtils.queryOne(stmt)
-*    if result then
-*       return result, ""
-     else
-*       return {}, "RandomRequest not found"
+0    local stmt = DB:prepare("SELECT * FROM ProviderVDFResults WHERE request_id = :request_id")
+0    stmt:bind_names({ request_id = requestId })
+0    local queryResult = dbUtils.queryMany(stmt)
+0    print(json.encode(queryResult))
+0    print(json.encode(queryResult[1]))
+0    local result = {
+        requestResponses = {},
+     }
+
+0    for _, response in ipairs(queryResult) do
+0       table.insert(result.requestResponses, response)
      end
-  end
 
-* function randomManager.getVDFResult(requestId, providerId)
-*    print("entered randomManager.getVDFResult")
+0    print(json.encode(result))
 
-*    local stmt = DB:prepare("SELECT * FROM ProviderVDFResults WHERE request_id = :request_id AND provider_id = :provider_id")
-*    stmt:bind_names({ request_id = requestId, provider_id = providerId })
-*    local result = dbUtils.queryOne(stmt)
-*    if result then
-*       return result, ""
+0    if result then
+0       return result, ""
      else
 0       return {}, "RandomRequest not found"
      end
   end
 
-* function randomManager.getVDFResults(requestId)
-*    print("entered randomManager.getVDFResults")
+0 function randomManager.getRandomRequest(requestId)
+0    print("entered randomManager.getRandomRequest")
 
-*    local stmt = DB:prepare("SELECT * FROM ProviderVDFResults WHERE request_id = :request_id")
-*    stmt:bind_names({ request_id = requestId })
-*    local result = dbUtils.queryMany(stmt)
-*    if result then
-*       return result, ""
+0    local stmt = DB:prepare("SELECT * FROM RandomRequests WHERE request_id = :request_id")
+0    stmt:bind_names({ request_id = requestId })
+0    local result = dbUtils.queryOne(stmt)
+0    if result then
+0       return result, ""
      else
 0       return {}, "RandomRequest not found"
      end
   end
 
-* function randomManager.createRandomRequest(userId, providers, callbackId, requestedInputs)
-*    print("entered randomManager.createRandomRequest")
 
-*    local timestamp = os.time()
-*    local requestId = randomManager.generateUUID()
+0 function randomManager.processEntropy(requestId)
+0    print("entered randomManager.processEntropy")
 
-
-*    local providerList = json.decode(providers)
-*    if not providerList or not providerList.provider_ids or #providerList.provider_ids == 0 then
-*       return false, "Invalid providers list"
+0    local results, err = randomManager.getVDFResults(requestId)
+0    if err ~= "" then
+0       print("Failed to get VDF results: " .. err)
+0       return "", err
      end
 
-*    local decodedRequestList = {}
+0    results = results
 
-*    if requestedInputs ~= "" then
+
+0    local mixed = tonumber(results.requestResponses[1].output_value)
+
+
+0    for i = 2, #results.requestResponses do
+0       local value = tonumber(results.requestResponses[i].output_value)
+0       mixed = (mixed ~ (value >> 32) ~ (value & 0xFFFFFFFF))
+
+0       mixed = (mixed * 0x5bd1e995 + value) % (2 ^ 31 - 1)
+     end
+
+0    local entropy = tostring(mixed)
+0    print("entropy: " .. entropy)
+0    return entropy, ""
+  end
+
+0 function randomManager.simulateRandomResponse(requestId)
+0    print("entered simulateRandomResponse")
+
+0    local randomRequest, err = randomManager.getRandomRequest(requestId)
+
+0    if err ~= "" then
+0       print("Failed to get random request: " .. err)
+0       return false
+     end
+
+0    local target = randomRequest.requester
+0    local callbackId = randomRequest.callback_id
+0    local entropy = randomManager.processEntropy(requestId)
+0    local action = "Random-Response"
+
+0    local data = {
+        callbackId = callbackId,
+        entropy = entropy,
+     }
+
+0    ao.send({
+        Target = target,
+0       Tags = {
+           Action = action,
+        },
+        Data = data,
+     })
+  end
+
+0 function randomManager.decrementRequestedInputs(requestId)
+0    print("Entered randomManager.decrementRequestedInputs")
+
+0    local requested, _ = randomManager.getRandomRequestedInputs(requestId)
+
+0    if requested == 0 then
+0       return false, "Failure: can not decrement needed below 0"
+     end
+
+0    print("Requested: " .. requested)
+
+0    requested = requested - 1
+
+0    local stmt = DB:prepare([[
+      UPDATE RandomRequests
+      SET requested_inputs = :requested_inputs
+      WHERE request_id = :request_id;
+0   ]])
+
+0    if not stmt then
+0       return false, "Failed to prepare statement: " .. DB:errmsg()
+     end
+
+
+0    stmt:bind_names({ requested_inputs = requested, request_id = requestId })
+
+
+0    local execute_ok, execute_err = dbUtils.execute(stmt, "Update random request requested_inputs")
+
+0    if not execute_ok then
+0       return false, "Failed to update random request requested_inputs: " .. tostring(execute_err)
+     end
+
+0    if requested == 0 then
+0       local status, err = randomManager.getRandomStatus(requestId)
+
+0       if err == "" then
+
+0          if status == Status[1] then
+0             print("Random request finished collecting inputs")
+0             local providerList = randomManager.getRandomProviderList(requestId)
+0             randomManager.resetRandomRequestRequestedInputs(requestId, #providerList.provider_ids)
+0             providerManager.pushActiveRequests(providerList.provider_ids, requestId, false)
+0             randomManager.updateRandomRequestStatus(requestId, Status[2])
+
+0          elseif status == Status[2] then
+0             print("Random request finished collecting outputs")
+0             local providerList = randomManager.getRandomProviderList(requestId)
+0             local requestedValue = #providerList.provider_ids * 11
+0             randomManager.resetRandomRequestRequestedInputs(requestId, requestedValue)
+0             randomManager.updateRandomRequestStatus(requestId, Status[3])
+
+0          elseif status == Status[3] then
+0             print("Random request finished successfully")
+0             randomManager.simulateRandomResponse(requestId)
+0             randomManager.updateRandomRequestStatus(requestId, Status[5])
+           end
+        else
+0          return false, err
+        end
+     end
+
+0    print("Random request requested_inputs updated successfully to: " .. requested)
+0    return true, ""
+  end
+
+0 function randomManager.getRandomRequestViaCallbackId(callbackId)
+0    print("entered randomManager.getRandomRequestViaCallbackId")
+
+0    local stmt = DB:prepare("SELECT * FROM RandomRequests WHERE callback_id = :callback_id")
+0    stmt:bind_names({ callback_id = callbackId })
+0    local result = dbUtils.queryOne(stmt)
+0    if result then
+0       return result, ""
+     else
+0       return {}, "RandomRequest not found"
+     end
+  end
+
+0 function randomManager.getVDFResult(requestId, providerId)
+0    print("entered randomManager.getVDFResult")
+
+0    local stmt = DB:prepare("SELECT * FROM ProviderVDFResults WHERE request_id = :request_id AND provider_id = :provider_id")
+0    stmt:bind_names({ request_id = requestId, provider_id = providerId })
+0    local result = dbUtils.queryOne(stmt)
+0    if result then
+0       return result, ""
+     else
+0       return {}, "RandomRequest not found"
+     end
+  end
+
+0 function randomManager.createRandomRequest(userId, providers, callbackId, requestedInputs)
+0    print("entered randomManager.createRandomRequest")
+
+0    local timestamp = os.time()
+0    local requestId = randomManager.generateUUID()
+
+
+0    local providerList = json.decode(providers)
+0    if not providerList or not providerList.provider_ids or #providerList.provider_ids == 0 then
+0       return false, "Invalid providers list"
+     end
+
+0    local decodedRequestList = {}
+
+0    if requestedInputs ~= "" then
 
 0       local result = json.decode(requestedInputs)
 
@@ -893,146 +1104,146 @@ process.lua
         end
      else
 
-*       decodedRequestList = {}
+0       decodedRequestList = {}
      end
 
 
-*    local requestedValue = math.min(decodedRequestList.requested_inputs or #providerList.provider_ids, #providerList.provider_ids)
+0    local requestedValue = math.min(decodedRequestList.requested_inputs or #providerList.provider_ids, #providerList.provider_ids)
 
-*    if not DB then
+0    if not DB then
 0       print("Database connection not initialized")
 0       return false, "Database connection is not initialized"
      end
 
-*    providerManager.pushActiveRequests(providerList.provider_ids, requestId, true)
+0    providerManager.pushActiveRequests(providerList.provider_ids, requestId, true)
 
-*    print("Preparing SQL statement for random request creation")
-*    local stmt = DB:prepare([[
+0    print("Preparing SQL statement for random request creation")
+0    local stmt = DB:prepare([[
       INSERT OR IGNORE INTO RandomRequests (request_id, requester, callback_id, providers, requested_inputs, status, created_at)
       VALUES (:request_id, :requester, :callback_id, :providers, :requested_inputs, :status, :created_at);
-*   ]])
+0   ]])
 
-*    if not stmt then
+0    if not stmt then
 0       print("Failed to prepare statement: " .. DB:errmsg())
 0       return false, "Failed to prepare statement: " .. DB:errmsg()
      end
 
-*    local status = Status[1]
+0    local status = Status[1]
 
-*    print("Binding parameters for random request creation")
-*    local bind_ok, bind_err = pcall(function()
-*       stmt:bind_names({ request_id = requestId, requester = userId, callback_id = callbackId, providers = providers, requested_inputs = requestedValue, status = status, created_at = timestamp })
+0    print("Binding parameters for random request creation")
+0    local bind_ok, bind_err = pcall(function()
+0       stmt:bind_names({ request_id = requestId, requester = userId, callback_id = callbackId, providers = providers, requested_inputs = requestedValue, status = status, created_at = timestamp })
      end)
 
-*    if not bind_ok then
+0    if not bind_ok then
 0       print("Failed to bind parameters: " .. tostring(bind_err))
 0       stmt:finalize()
 0       return false, "Failed to bind parameters: " .. tostring(bind_err)
      end
 
-*    print("Executing random request creation statement")
-*    local execute_ok, execute_err = dbUtils.execute(stmt, "Create random request")
+0    print("Executing random request creation statement")
+0    local execute_ok, execute_err = dbUtils.execute(stmt, "Create random request")
 
-*    if not execute_ok then
+0    if not execute_ok then
 0       print("Random Request creation failed: " .. execute_err)
      else
-*       print("Random Request created successfully")
-*       print("New RequestId: " .. requestId)
+0       print("Random Request created successfully")
+0       print("New RequestId: " .. requestId)
      end
 
-*    return execute_ok, execute_err
+0    return execute_ok, execute_err
   end
 
-* function randomManager.postVDFChallenge(userId, requestId, inputValue, modulusValue)
-*    print("entered randomManager.postVDFChallenge")
+0 function randomManager.postVDFChallenge(userId, requestId, inputValue, modulusValue)
+0    print("entered randomManager.postVDFChallenge")
 
-*    local timestamp = os.time()
+0    local timestamp = os.time()
 
-*    if not DB then
+0    if not DB then
 0       print("Database connection not initialized")
 0       return false, "Database connection is not initialized"
      end
 
-*    print("Preparing SQL statement for provider request response creation")
-*    local stmt = DB:prepare([[
+0    print("Preparing SQL statement for provider request response creation")
+0    local stmt = DB:prepare([[
       INSERT OR IGNORE INTO ProviderVDFResults (request_id, provider_id, input_value, modulus_value, created_at)
       VALUES (:request_id, :provider_id, :input_value, :modulus_value, :created_at);
-*   ]])
+0   ]])
 
-*    if not stmt then
+0    if not stmt then
 0       print("Failed to prepare statement: " .. DB:errmsg())
 0       return false, "Failed to prepare statement: " .. DB:errmsg()
      end
 
-*    print("Binding parameters for provider request response creation")
-*    local bind_ok, bind_err = pcall(function()
-*       stmt:bind_names({ request_id = requestId, provider_id = userId, input_value = inputValue, modulus_value = modulusValue, created_at = timestamp })
+0    print("Binding parameters for provider request response creation")
+0    local bind_ok, bind_err = pcall(function()
+0       stmt:bind_names({ request_id = requestId, provider_id = userId, input_value = inputValue, modulus_value = modulusValue, created_at = timestamp })
      end)
 
-*    if not bind_ok then
+0    if not bind_ok then
 0       print("Failed to bind parameters: " .. tostring(bind_err))
 0       stmt:finalize()
 0       return false, "Failed to bind parameters: " .. tostring(bind_err)
      end
 
-*    print("Executing provider request response creation statement")
-*    local execute_ok, execute_err = dbUtils.execute(stmt, "Create provider request response")
+0    print("Executing provider request response creation statement")
+0    local execute_ok, execute_err = dbUtils.execute(stmt, "Create provider request response")
 
-*    if not execute_ok then
+0    if not execute_ok then
 0       print("Provider Request Response creation failed: " .. execute_err)
      else
-*       print("Provider Request Response created successfully")
+0       print("Provider Request Response created successfully")
      end
 
-*    return execute_ok, execute_err
+0    return execute_ok, execute_err
   end
 
-* function randomManager.postVDFOutputAndProof(userId, requestId, outputValue, proof)
-*    print("entered randomManager.postVDFOutputAndProof")
+0 function randomManager.postVDFOutputAndProof(userId, requestId, outputValue, proof)
+0    print("entered randomManager.postVDFOutputAndProof")
 
-*    if not DB then
+0    if not DB then
 0       print("Database connection not initialized")
 0       return false, "Database connection is not initialized"
      end
 
-*    print("Preparing SQL statement for provider request response creation")
-*    local stmt = DB:prepare([[
+0    print("Preparing SQL statement for provider request response creation")
+0    local stmt = DB:prepare([[
       UPDATE ProviderVDFResults
       SET output_value = :output_value, proof = :proof
       WHERE request_id = :request_id AND provider_id = :provider_id;
-*   ]])
+0   ]])
 
-*    if not stmt then
+0    if not stmt then
 0       print("Failed to prepare statement: " .. DB:errmsg())
 0       return false, "Failed to prepare statement: " .. DB:errmsg()
      end
 
-*    print("Binding parameters for provider request response creation")
-*    local bind_ok, bind_err = pcall(function()
-*       stmt:bind_names({ request_id = requestId, provider_id = userId, output_value = outputValue, proof = proof })
+0    print("Binding parameters for provider request response creation")
+0    local bind_ok, bind_err = pcall(function()
+0       stmt:bind_names({ request_id = requestId, provider_id = userId, output_value = outputValue, proof = proof })
      end)
 
-*    if not bind_ok then
+0    if not bind_ok then
 0       print("Failed to bind parameters: " .. tostring(bind_err))
 0       stmt:finalize()
 0       return false, "Failed to bind parameters: " .. tostring(bind_err)
      end
 
-*    print("Executing post vdf output and proof statement")
-*    local execute_ok, execute_err = dbUtils.execute(stmt, "Post vdf output and proof")
+0    print("Executing post vdf output and proof statement")
+0    local execute_ok, execute_err = dbUtils.execute(stmt, "Post vdf output and proof")
 
-*    if not execute_ok then
+0    if not execute_ok then
 0       print("Post VDF Output and Proof failed: " .. execute_err)
      else
-*       print("VDF Output and Proof posted successfully")
+0       print("VDF Output and Proof posted successfully")
 
 
-*       local vdfRequest = randomManager.getVDFResult(requestId, userId)
-*       local input = vdfRequest.input_value
-*       local modulus = vdfRequest.modulus_value
+0       local vdfRequest = randomManager.getVDFResult(requestId, userId)
+0       local input = vdfRequest.input_value
+0       local modulus = vdfRequest.modulus_value
 
 
-*       local processResult, processError = verifierManager.processProof(requestId, input, modulus, proof, userId)
+0       local processResult, processError = verifierManager.processProof(requestId, input, modulus, proof, userId, outputValue)
 0       if not processResult then
 0          print("Processing proof failed: " .. tostring(processError))
         else
@@ -1044,68 +1255,49 @@ process.lua
 0    return execute_ok, execute_err
   end
 
-* return randomManager
+0 return randomManager
   end
   end
 
   do
-* local _ENV = _ENV
-* package.preload[ "tokenManager" ] = function( ... ) local arg = _G.arg;
-* local tokenManager = {}
+0 local _ENV = _ENV
+0 package.preload[ "tokenManager" ] = function( ... ) local arg = _G.arg;
+0 local tokenManager = {}
 
-* function tokenManager.sendTokens(token, recipient, quantity, note)
-*    ao.send({
-*       Target = token,
-*       Action = "Transfer",
-*       Recipient = recipient,
-*       Quantity = quantity,
-*       ["X-Note"] = note or "Sending tokens from Random Process",
+0 function tokenManager.sendTokens(token, recipient, quantity, note)
+0    ao.send({
+        Target = token,
+        Action = "Transfer",
+        Recipient = recipient,
+        Quantity = quantity,
+        ["X-Note"] = note or "Sending tokens from Random Process",
      })
   end
 
-* function tokenManager.returnTokens(msg, errMessage)
-*    tokenManager.sendTokens(msg.From, msg.Sender, msg.Quantity, errMessage)
+0 function tokenManager.returnTokens(msg, errMessage)
+0    tokenManager.sendTokens(msg.From, msg.Sender, msg.Quantity, errMessage)
   end
 
-* return tokenManager
+0 return tokenManager
   end
   end
 
   do
-* local _ENV = _ENV
-* package.preload[ "verifierManager" ] = function( ... ) local arg = _G.arg;
-* local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local os = _tl_compat and _tl_compat.os or os; local pcall = _tl_compat and _tl_compat.pcall or pcall; local table = _tl_compat and _tl_compat.table or table
-* require("globals")
-* local dbUtils = require("dbUtils")
-* local json = require("json")
+0 local _ENV = _ENV
+0 package.preload[ "verifierManager" ] = function( ... ) local arg = _G.arg;
+0 local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local os = _tl_compat and _tl_compat.os or os; local pcall = _tl_compat and _tl_compat.pcall or pcall; local table = _tl_compat and _tl_compat.table or table
+0 require("globals")
+0 local dbUtils = require("dbUtils")
+0 local json = require("json")
 
 
-* VerifierProcess = {}
-
-
-
-
-
-* VerifierSegment = {}
+0 VerifierProcess = {}
 
 
 
 
 
-
-
-
-
-* Proof = {}
-
-
-
-* VerifierStats = {}
-
-
-
-
-* VDFRequestData = {}
+0 VerifierSegment = {}
 
 
 
@@ -1113,86 +1305,106 @@ process.lua
 
 
 
-* VDFRequestResponse = {}
+
+
+0 Proof = {}
+
+
+
+0 VerifierStats = {}
+
+
+
+
+0 VDFRequestData = {}
 
 
 
 
 
-* local verifierManager = {}
 
 
-* function verifierManager.registerVerifier(processId)
-*    print("Registering verifier: " .. processId)
 
-*    if not DB then
+0 VDFRequestResponse = {}
+
+
+
+
+
+0 local verifierManager = {}
+
+
+0 function verifierManager.registerVerifier(processId)
+0    print("Registering verifier: " .. processId)
+
+0    if not DB then
 0       print("Database connection not initialized")
 0       return false, "Database connection is not initialized"
      end
 
-*    local stmt = DB:prepare([[
+0    local stmt = DB:prepare([[
       INSERT OR REPLACE INTO Verifiers
       (process_id, status)
       VALUES (:pid, 'available')
-*   ]])
+0   ]])
 
-*    if not stmt then
+0    if not stmt then
 0       print("Failed to prepare statement: " .. DB:errmsg())
 0       return false, "Failed to prepare statement: " .. DB:errmsg()
      end
 
-*    local ok = false
-*    ok = pcall(function()
-*       stmt:bind_names({ pid = processId })
+0    local ok = false
+0    ok = pcall(function()
+0       stmt:bind_names({ pid = processId })
      end)
 
-*    if not ok then
+0    if not ok then
 0       print("Failed to bind parameters")
 0       return false, "Failed to bind parameters"
      end
 
-*    local exec_ok, exec_err = dbUtils.execute(stmt, "Register verifier")
-*    if not exec_ok then
+0    local exec_ok, exec_err = dbUtils.execute(stmt, "Register verifier")
+0    if not exec_ok then
 0       return false, exec_err
      end
 
-*    return true, ""
+0    return true, ""
   end
 
 
-* function verifierManager.getAvailableVerifiers()
-*    if not DB then
+0 function verifierManager.getAvailableVerifiers()
+0    if not DB then
 0       print("Database connection not initialized")
 0       return {}, "Database connection is not initialized"
      end
 
-*    local stmt = DB:prepare([[
+0    local stmt = DB:prepare([[
       SELECT * FROM Verifiers
       WHERE status = 'available'
-*   ]])
+0   ]])
 
-*    if not stmt then
+0    if not stmt then
 0       print("Failed to prepare statement: " .. DB:errmsg())
 0       return {}, "Failed to prepare statement: " .. DB:errmsg()
      end
 
-*    local rows = dbUtils.queryMany(stmt)
-*    local verifiers = {}
+0    local rows = dbUtils.queryMany(stmt)
+0    local verifiers = {}
 
-*    for _, row in ipairs(rows) do
-*       local verifier = {
-*          process_id = tostring(row.process_id),
-*          status = tostring(row.status),
-*          current_segment = row.current_segment and tostring(row.current_segment) or "",
+0    for _, row in ipairs(rows) do
+0       local verifier = {
+           process_id = tostring(row.process_id),
+           status = tostring(row.status),
+           current_segment = row.current_segment and tostring(row.current_segment) or "",
         }
-*       table.insert(verifiers, verifier)
+0       table.insert(verifiers, verifier)
      end
 
-*    return verifiers, ""
+0    return verifiers, ""
   end
 
 
-* function verifierManager.getStats()
+0 function verifierManager.getStats()
 0    local stats = {
         total_available = 0,
         total_busy = 0,
@@ -1224,67 +1436,67 @@ process.lua
 0    return stats
   end
 
-* function verifierManager.requestVerification(processId, data)
-*    print("Sending verification request to process: " .. processId)
+0 function verifierManager.requestVerification(processId, data, checkpoint)
+0    print("Sending verification request to process: " .. processId)
 
-*    local verificationResponse = ao.send({
-*       Target = processId,
-*       Action = "Validate-Checkpoint",
-*       Data = json.encode(data),
-*    }).receive().Data
+0    if checkpoint then
+0       local _ = ao.send({
+           Target = processId,
+           Action = "Validate-Checkpoint",
+           Data = json.encode(data),
+        })
+0       return
+     else
+0       local _ = ao.send({
+           Target = processId,
+           Action = "Validate-Output",
+           Data = json.encode(data),
+        })
+     end
+  end
 
-0    print("Verification response: " .. verificationResponse)
 
-0    local processedResonse = json.decode(verificationResponse)
+0 function verifierManager.assignSegment(verifierId, segmentId)
+0    if not DB then
+0       print("Database connection not initialized")
+0       return false, "Database connection is not initialized"
+     end
 
-0    if processedResonse.valid == false then
-0       return false, "Verification failed"
+0    local stmt = DB:prepare([[
+      UPDATE Verifiers
+      SET status = 'busy', current_segment = :segment
+      WHERE process_id = :pid AND status = 'available'
+0   ]])
+
+0    if not stmt then
+0       print("Failed to prepare statement: " .. DB:errmsg())
+0       return false, "Failed to prepare statement: " .. DB:errmsg()
+     end
+
+0    local ok = false
+0    ok = pcall(function()
+0       stmt:bind_names({
+           pid = verifierId,
+           segment = segmentId,
+        })
+     end)
+
+0    if not ok then
+0       print("Failed to bind parameters")
+0       return false, "Failed to bind parameters"
+     end
+
+0    local exec_ok, exec_err = dbUtils.execute(stmt, "Assign segment")
+0    if not exec_ok then
+0       return false, exec_err
      end
 
 0    return true, ""
   end
 
 
-* function verifierManager.assignSegment(verifierId, segmentId)
-*    if not DB then
-0       print("Database connection not initialized")
-0       return false, "Database connection is not initialized"
-     end
-
-*    local stmt = DB:prepare([[
-      UPDATE Verifiers
-      SET status = 'busy', current_segment = :segment
-      WHERE process_id = :pid AND status = 'available'
-*   ]])
-
-*    if not stmt then
-0       print("Failed to prepare statement: " .. DB:errmsg())
-0       return false, "Failed to prepare statement: " .. DB:errmsg()
-     end
-
-*    local ok = false
-*    ok = pcall(function()
-*       stmt:bind_names({
-*          pid = verifierId,
-*          segment = segmentId,
-        })
-     end)
-
-*    if not ok then
-0       print("Failed to bind parameters")
-0       return false, "Failed to bind parameters"
-     end
-
-*    local exec_ok, exec_err = dbUtils.execute(stmt, "Assign segment")
-*    if not exec_ok then
-0       return false, exec_err
-     end
-
-*    return true, ""
-  end
-
-
-* function verifierManager.markAvailable(verifierId)
+0 function verifierManager.markAvailable(verifierId)
+0    print("Marking verifier as available: " .. verifierId)
 0    if not DB then
 0       print("Database connection not initialized")
 0       return false, "Database connection is not initialized"
@@ -1320,51 +1532,93 @@ process.lua
   end
 
 
-* function verifierManager.createSegment(proofId, segmentCount, segmentData)
-*    if not DB then
+0 function verifierManager.processVerification(verifierId, requestId, segmentId, result)
+0    print("Processing verification result for segment: " .. segmentId)
+0    if not DB then
+0       print("Database connection not initialized")
+0       return false, "Database connection is not initialized"
+     end
+
+0    local stmt = DB:prepare([[
+      UPDATE VerifierSegments
+      SET status = 'processed', result = :result
+      WHERE segment_id = :sid
+0   ]])
+
+0    if not stmt then
+0       print("Failed to prepare statement: " .. DB:errmsg())
+0       return false, "Failed to prepare statement: " .. DB:errmsg()
+     end
+
+0    local ok = false
+0    ok = pcall(function()
+0       stmt:bind_names({
+           sid = segmentId,
+           result = result,
+        })
+     end)
+
+0    if not ok then
+0       print("Failed to bind parameters")
+0       return false, "Failed to bind parameters"
+     end
+
+0    local exec_ok, exec_err = dbUtils.execute(stmt, "Process result")
+0    if not exec_ok then
+0       return false, exec_err
+     end
+
+0    verifierManager.markAvailable(verifierId)
+
+0    return true, ""
+  end
+
+
+0 function verifierManager.createSegment(proofId, segmentCount, segmentData)
+0    if not DB then
 0       print("Database connection not initialized")
 0       return "", "Database connection is not initialized"
      end
 
-*    local timestamp = os.time()
-*    local segmentId = proofId .. "_" .. segmentCount
+0    local timestamp = os.time()
+0    local segmentId = proofId .. "_" .. segmentCount
 
-*    local stmt = DB:prepare([[
+0    local stmt = DB:prepare([[
       INSERT INTO VerifierSegments
       (segment_id, proof_id, segment_data, status, timestamp)
       VALUES (:sid, :pid, :data, 'pending', :time)
-*   ]])
+0   ]])
 
-*    if not stmt then
+0    if not stmt then
 0       print("Failed to prepare statement: " .. DB:errmsg())
 0       return "", "Failed to prepare statement: " .. DB:errmsg()
      end
 
-*    local ok = false
-*    ok = pcall(function()
-*       stmt:bind_names({
-*          sid = segmentId,
-*          pid = proofId,
-*          data = segmentData,
-*          time = timestamp,
+0    local ok = false
+0    ok = pcall(function()
+0       stmt:bind_names({
+           sid = segmentId,
+           pid = proofId,
+           data = segmentData,
+           time = timestamp,
         })
      end)
 
-*    if not ok then
+0    if not ok then
 0       print("Failed to bind parameters")
 0       return "", "Failed to bind parameters"
      end
 
-*    local exec_ok, exec_err = dbUtils.execute(stmt, "Create segment")
-*    if not exec_ok then
+0    local exec_ok, exec_err = dbUtils.execute(stmt, "Create segment")
+0    if not exec_ok then
 0       return "", exec_err
      end
 
-*    return segmentId, ""
+0    return segmentId, ""
   end
 
 
-* function verifierManager.updateSegmentStatus(segmentId, status, result)
+0 function verifierManager.updateSegmentStatus(segmentId, status, result)
 0    if not DB then
 0       print("Database connection not initialized")
 0       return false, "Database connection is not initialized"
@@ -1404,7 +1658,7 @@ process.lua
   end
 
 
-* function verifierManager.getProofSegments(proofId)
+0 function verifierManager.getProofSegments(proofId, expectedOutput)
 0    if not DB then
 0       print("Database connection not initialized")
 0       return {}, "Database connection is not initialized"
@@ -1450,159 +1704,209 @@ process.lua
   end
 
 
-* function verifierManager.processProof(requestId, input, modulus, proofJson, providerId)
+0 function verifierManager.processProof(requestId, input, modulus, proofJson, providerId, modExpectedOutput)
 
-*    local proofArray = json.decode(proofJson)
-*    if not proofArray then
+0    local proofArray = json.decode(proofJson)
+0    if not proofArray then
 0       return false, "Failed to parse proof JSON"
      end
 
 
-*    local proof = { proof = proofArray }
+0    local proof = { proof = proofArray }
 
-*    local proofId = requestId .. "_" .. providerId
-*    local availableVerifiers = verifierManager.getAvailableVerifiers()
+0    local proofId = requestId .. "_" .. providerId
+0    local availableVerifiers = verifierManager.getAvailableVerifiers()
 
-*    local segmentCount = 1
-*    for _, segment in ipairs(proof.proof) do
-*       print("Processing segment: " .. segment .. " count: " .. segmentCount)
 
-*       local segmentId, createErr = verifierManager.createSegment(proofId, tostring(segmentCount), segment)
-*       segmentCount = segmentCount + 1
 
-*       if createErr ~= "" then
+
+
+0    local outputSegmentId, segmentCreateErr = verifierManager.createSegment(proofId, "output", modExpectedOutput)
+
+0    if segmentCreateErr ~= "" then
+0       return false, "Failed to create segment: " .. segmentCreateErr
+     end
+
+0    local outputVerifierId = availableVerifiers[1]
+0    table.remove(availableVerifiers, 1)
+
+0    local assigned, assignErr = verifierManager.assignSegment(outputVerifierId.process_id, outputSegmentId)
+0    if not assigned then
+0       print("Failed to assign segment: " .. assignErr)
+     else
+0       local outputSegmentInput = proofArray[10]
+0       local segmentExpectedOutput = modExpectedOutput
+
+0       local requestData = {
+           request_id = requestId,
+           segment_id = outputSegmentId,
+           input = outputSegmentInput,
+           expected_output = segmentExpectedOutput,
+        }
+
+0       verifierManager.requestVerification(outputVerifierId.process_id, requestData, false)
+     end
+
+
+
+0    local segmentCount = 1
+0    for _, segment in ipairs(proof.proof) do
+0       print("Processing segment: " .. segment .. " count: " .. segmentCount)
+
+0       local segmentId, createErr = verifierManager.createSegment(proofId, tostring(segmentCount), segment)
+0       segmentCount = segmentCount + 1
+
+0       if createErr ~= "" then
 0          return false, "Failed to create segment: " .. createErr
         end
 
-*       if #availableVerifiers > 0 then
-*          local verifierId = availableVerifiers[1]
-*          table.remove(availableVerifiers, 1)
+0       if #availableVerifiers > 0 then
+0          local verifierId = availableVerifiers[1]
+0          table.remove(availableVerifiers, 1)
 
-*          local assigned, assignErr = verifierManager.assignSegment(verifierId.process_id, segmentId)
-*          if not assigned then
+0          local assigned, assignErr = verifierManager.assignSegment(verifierId.process_id, segmentId)
+0          if not assigned then
 0             print("Failed to assign segment: " .. assignErr)
            else
-*             local requestData = {
-*                request_id = requestId,
-*                segment_id = segmentId,
-*                checkpoint_input = input,
-*                modulus = modulus,
-*                expected_output = segmentId,
+0             local segmentInput = input
+0             local segmentExpectedOutput = proofArray[segmentCount - 1]
+
+0             if segmentCount > 2 then
+0                segmentInput = proofArray[segmentCount - 2]
+              end
+
+0             local requestData = {
+                 request_id = requestId,
+                 segment_id = segmentId,
+                 checkpoint_input = segmentInput,
+                 modulus = modulus,
+                 expected_output = segmentExpectedOutput,
               }
-*             verifierManager.requestVerification(verifierId.process_id, requestData)
+
+0             verifierManager.requestVerification(verifierId.process_id, requestData, true)
            end
+        else
+0          print("No verifiers available for segment: " .. segmentId)
         end
+
      end
 
 0    return true, ""
   end
 
-* function verifierManager.initializeVerifierManager()
-*    for _, verifier in ipairs(VerifierProcesses) do
-*       verifierManager.registerVerifier(verifier)
+0 function verifierManager.initializeVerifierManager()
+0    for _, verifier in ipairs(VerifierProcesses) do
+0       verifierManager.registerVerifier(verifier)
      end
+0    print("Verifier manager and processes initialized")
   end
 
-* return verifierManager
+0 return verifierManager
   end
   end
 
-* local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local debug = _tl_compat and _tl_compat.debug or debug; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local math = _tl_compat and _tl_compat.math or math; local table = _tl_compat and _tl_compat.table or table; local xpcall = _tl_compat and _tl_compat.xpcall or xpcall
-* require("globals")
-* local json = require("json")
-* local database = require("database")
-* local providerManager = require("providerManager")
-* local randomManager = require("randomManager")
-* local tokenManager = require("tokenManager")
-* local verifierManager = require("verifierManager")
+0 local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local debug = _tl_compat and _tl_compat.debug or debug; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local math = _tl_compat and _tl_compat.math or math; local table = _tl_compat and _tl_compat.table or table; local xpcall = _tl_compat and _tl_compat.xpcall or xpcall
+0 require("globals")
+0 local json = require("json")
+0 local database = require("database")
+0 local providerManager = require("providerManager")
+0 local randomManager = require("randomManager")
+0 local tokenManager = require("tokenManager")
+0 local verifierManager = require("verifierManager")
 
 
-* ResponseData = {}
-
-
-
-
-
-* ReplyData = {}
-
-
-
-
-* UpdateProviderRandomBalanceData = {}
-
-
-
-* PostVDFChallengeData = {}
+0 ResponseData = {}
 
 
 
 
 
-* PostVDFOutputAndProofData = {}
+0 ReplyData = {}
+
+
+
+
+0 UpdateProviderRandomBalanceData = {}
+
+
+
+0 PostVDFChallengeData = {}
 
 
 
 
 
-* GetProviderRandomBalanceData = {}
-
-
-
-* GetOpenRandomRequestsData = {}
-
-
-
-* GetRandomRequestsData = {}
-
-
-
-* GetRandomRequestViaCallbackIdData = {}
-
-
-
-* CreateRandomRequestData = {}
+0 PostVDFOutputAndProofData = {}
 
 
 
 
 
-* GetProviderRandomBalanceResponse = {}
-
-
-
-
-* GetOpenRandomRequestsResponse = {}
+0 CheckpointResponseData = {}
 
 
 
 
 
-* RandomRequestResponse = {}
+0 GetProviderRandomBalanceData = {}
+
+
+
+0 GetOpenRandomRequestsData = {}
+
+
+
+0 GetRandomRequestsData = {}
+
+
+
+0 GetRandomRequestViaCallbackIdData = {}
+
+
+
+0 CreateRandomRequestData = {}
 
 
 
 
-* GetRandomRequestsResponse = {}
+
+0 GetProviderRandomBalanceResponse = {}
 
 
 
 
-* database.initializeDatabase()
+0 GetOpenRandomRequestsResponse = {}
 
 
-* verifierManager.initializeVerifierManager()
 
 
-* function sendResponse(target, action, data)
-*    return {
-*       Target = target,
-*       Action = action,
-*       Data = json.encode(data),
-*    }
+
+0 RandomRequestResponse = {}
+
+
+
+
+0 GetRandomRequestsResponse = {}
+
+
+
+
+0 database.initializeDatabase()
+
+
+0 verifierManager.initializeVerifierManager()
+
+
+0 function sendResponse(target, action, data)
+0    return {
+        Target = target,
+        Action = action,
+        Data = json.encode(data),
+     }
   end
 
 
-* function sendReply(action, data)
+0 function sendReply(action, data)
 0    return {
         Action = action,
         Data = json.encode(data),
@@ -1631,8 +1935,8 @@ process.lua
 
 
   local function createProvider(userid)
-*    local success, _ = providerManager.createProvider(userid)
-*    return success
+0    local success, _ = providerManager.createProvider(userid)
+0    return success
   end
 
 
@@ -1641,314 +1945,333 @@ process.lua
   end
 
 
-* function updateProviderBalanceHandler(msg)
-*    print("entered updateProviderBalance")
+0 function updateProviderBalanceHandler(msg)
+0    print("entered updateProviderBalance")
 
-*    local userId = msg.From
+0    local userId = msg.From
 
-*    createProvider(userId)
+0    createProvider(userId)
 
-*    local staked, _ = providerManager.checkStakeStubbed(userId)
+0    local staked, _ = providerManager.checkStakeStubbed(userId)
 
-*    if not staked then
+0    if not staked then
 0       ao.send(sendResponse(msg.From, "Error", { message = "Update failed: Provider not staked" }))
 0       return false
      end
 
-*    local data = (json.decode(msg.Data))
-*    local balance = data.availableRandomValues
-*    local success, err = providerManager.updateProviderBalance(userId, balance)
-
-*    if success then
-*       ao.send(sendResponse(msg.From, "Updated Provider Random Balance", SuccessMessage))
-*       return true
-     else
-0       ao.send(sendResponse(msg.From, "Error", { message = "Failed to update provider balance: " .. err }))
-0       return false
-     end
-  end
-
-
-* function postVDFChallengeHandler(msg)
-*    print("entered postVDFChallenge")
-
-*    local userId = msg.From
-
-*    local data = (json.decode(msg.Data))
-*    local requestId = data.requestId
-*    local modulus = data.modulus
-*    local input = data.input
-
-*    local requested = providerManager.hasActiveRequest(userId, requestId, true)
-
-*    if not requested then
-*       ao.send(sendResponse(msg.From, "Error", { message = "Failed to post VDF Input: " .. "not requested" }))
-*       return false
-     end
-
-*    local success, err = randomManager.postVDFChallenge(userId, requestId, input, modulus)
-
-*    if success then
-*       providerManager.removeActiveRequest(userId, requestId, true)
-*       randomManager.decrementRequestedInputs(requestId)
-*       ao.send(sendResponse(msg.From, "Posted VDF Input", SuccessMessage))
-*       return true
-     else
-0       ao.send(sendResponse(msg.From, "Error", { message = "Failed to post VDF Input: " .. err }))
-0       return false
-     end
-  end
-
-
-* function postVDFOutputAndProofHandler(msg)
-*    print("entered postVDFOutputAndProof")
-
-*    local userId = msg.From
-
-*    local data = (json.decode(msg.Data))
-*    local output = data.output
-*    local proof = data.proof
-
-     local function validateInputs(_output, _proof)
-*       return true
-     end
-
-*    if output == nil or proof == nil or not validateInputs(output, proof) then
-*       ao.send(sendResponse(msg.From, "Error", { message = "Failed to post VDF Output: " .. "values not provided" }))
-*       return false
-     end
-
-*    local requestId = data.requestId
-
-*    local requested = providerManager.hasActiveRequest(userId, requestId, false)
-*    if not requested then
-*       ao.send(sendResponse(msg.From, "Error", { message = "Failed to post VDF Output: " .. "not requested" }))
-*       return false
-     end
-*    providerManager.removeActiveRequest(userId, requestId, false)
-
-*    local success, err = randomManager.postVDFOutputAndProof(userId, requestId, output, proof)
+0    local data = (json.decode(msg.Data))
+0    local balance = data.availableRandomValues
+0    local success, _err = providerManager.updateProviderBalance(userId, balance)
 
 0    if success then
-0       ao.send(sendResponse(msg.From, "Posted VDF Output and Proof", SuccessMessage))
+
 0       return true
      else
 
-0       ao.send(sendResponse(msg.From, "Error", { message = "Failed to post VDF Output and Proof: " .. err }))
 0       return false
      end
   end
 
 
-* function getProviderRandomBalanceHandler(msg)
-*    print("entered getProviderRandomBalance")
+0 function postVDFChallengeHandler(msg)
+0    print("entered postVDFChallenge")
 
-*    local data = (json.decode(msg.Data))
-*    local providerId = data.providerId
-*    local providerInfo, err = providerManager.getProvider(providerId)
-*    local randomBalance = providerInfo.random_balance
-*    if err == "" then
-*       local responseData = { providerId = providerId, availibleRandomValues = randomBalance }
-*       ao.send(sendResponse(msg.From, "Get-Providers-Random-Balance-Response", responseData))
-*       return true
+0    local userId = msg.From
+
+0    local data = (json.decode(msg.Data))
+0    local requestId = data.requestId
+0    local modulus = data.modulus
+0    local input = data.input
+
+0    local requested = providerManager.hasActiveRequest(userId, requestId, true)
+
+0    if not requested then
+0       ao.send(sendResponse(msg.From, "Error", { message = "Failed to post VDF Input: " .. "not requested" }))
+0       return false
+     end
+
+0    local success, _err = randomManager.postVDFChallenge(userId, requestId, input, modulus)
+
+0    if success then
+0       providerManager.removeActiveRequest(userId, requestId, true)
+0       randomManager.decrementRequestedInputs(requestId)
+
+0       return true
      else
-*       ao.send(sendResponse(msg.From, "Error", { message = "Provider not found: " .. err }))
-*       return false
+
+0       return false
      end
   end
 
 
-* function creditNoticeHandler(msg)
-*    print("entered creditNotice")
+0 function postVDFOutputAndProofHandler(msg)
+0    print("entered postVDFOutputAndProof")
 
-*    local value = math.floor(tonumber(msg.Quantity))
-*    local callbackId = msg.Tags["X-CallbackId"] or nil
+0    local userId = msg.From
 
-*    if msg.From ~= TokenInUse then
-*       local err = "Invalid Token Sent: " .. msg.From
-*       print(err)
-*       ao.send(sendResponse(msg.Sender, "Error", { message = err }))
-*       tokenManager.returnTokens(msg, err)
-*       return false
-     end
-*    if value < Cost then
-*       local err = "Invalid Value Sent: " .. tostring(value)
-*       print(err)
-*       ao.send(sendResponse(msg.Sender, "Error", { message = err }))
-*       tokenManager.returnTokens(msg, err)
-*       return false
-     end
-*    if callbackId == nil then
-*       local err = "Failure: No Callback ID provided"
-*       print(err)
-*       ao.send(sendResponse(msg.Sender, "Error", { message = err }))
-*       tokenManager.returnTokens(msg, err)
-*       return false
+0    local data = (json.decode(msg.Data))
+0    local output = data.output
+0    local proof = data.proof
+
+     local function validateInputs(_output, _proof)
+0       return true
      end
 
-*    local userId = msg.Sender
-*    local providers = msg.Tags["X-Providers"] or nil
-*    local requestedInputs = msg.Tags["X-RequestedInputs"] or ""
+0    if output == nil or proof == nil or not validateInputs(output, proof) then
+0       ao.send(sendResponse(msg.From, "Error", { message = "Failed to post VDF Output: " .. "values not provided" }))
+0       return false
+     end
 
-*    local success, err = randomManager.createRandomRequest(userId, providers, callbackId, requestedInputs)
+0    local requestId = data.requestId
 
-*    if success then
-*       ao.send(sendResponse(userId, "Created New Random Request", SuccessMessage))
-*       return true
+0    local requested = providerManager.hasActiveRequest(userId, requestId, false)
+0    if not requested then
+0       ao.send(sendResponse(msg.From, "Error", { message = "Failed to post VDF Output: " .. "not requested" }))
+0       return false
+     end
+0    providerManager.removeActiveRequest(userId, requestId, false)
+
+0    local success, _err = randomManager.postVDFOutputAndProof(userId, requestId, output, proof)
+
+0    if success then
+0       randomManager.decrementRequestedInputs(requestId)
+
+0       return true
      else
-*       ao.send(sendResponse(userId, "Error", { message = "Failed to create new random request: " .. err }))
-*       return false
+
+
+0       return false
      end
   end
 
 
-* function getOpenRandomRequestsHandler(msg)
-*    print("entered getOpenRandomRequests")
+0 function postVerificationHandler(msg)
+0    print("entered postVerification")
 
-*    local data = (json.decode(msg.Data))
-*    local providerId = data.providerId
+0    local verifierId = msg.From
 
-*    local _, providerErr = providerManager.getProvider(providerId)
+0    local data = (json.decode(msg.Data))
 
-*    if providerErr ~= "" then
-*       ao.send(sendResponse(msg.From, "Error", { message = "Provider not found" }))
-*       return false
+0    local valid = data.valid
+0    local requestId = data.request_id
+0    local segmentId = data.segment_id
+
+     local function validateVerificationInputs(_valid, _requestId, _segmentId)
+0       return true
      end
 
-*    local responseData = { providerId = providerId, activeChallengeRequests = { request_ids = {} }, activeOutputRequests = { request_ids = {} } }
-
-*    local activeChallengeRequests, err = providerManager.getActiveRequests(providerId, true)
-*    local activeOutputRequests, outputErr = providerManager.getActiveRequests(providerId, false)
-
-*    if err == "" then
-*       local requestIds = json.decode(activeChallengeRequests)
-*       responseData.activeChallengeRequests = requestIds
+0    if valid == nil or segmentId == nil or requestId == nil or not validateVerificationInputs(valid, requestId, segmentId) then
+0       print("Failed to post Verification: " .. "values not provided or malformed")
+0       ao.send(sendResponse(msg.From, "Error", { message = "Failed to post Verification: " .. "values not provided or malformed" }))
+0       return false
      end
-*    if outputErr == "" then
+
+0    local success, _err = verifierManager.processVerification(verifierId, requestId, segmentId, valid)
+
+0    if success then
+0       randomManager.decrementRequestedInputs(requestId)
+
+0       return true
+     else
+
+
+0       return false
+     end
+  end
+
+
+0 function getProviderRandomBalanceHandler(msg)
+0    print("entered getProviderRandomBalance")
+
+0    local data = (json.decode(msg.Data))
+0    local providerId = data.providerId
+0    local providerInfo, err = providerManager.getProvider(providerId)
+0    local randomBalance = providerInfo.random_balance
+0    if err == "" then
+0       local responseData = { providerId = providerId, availibleRandomValues = randomBalance }
+0       ao.send(sendResponse(msg.From, "Get-Providers-Random-Balance-Response", responseData))
+0       return true
+     else
+0       ao.send(sendResponse(msg.From, "Error", { message = "Provider not found: " .. err }))
+0       return false
+     end
+  end
+
+
+0 function creditNoticeHandler(msg)
+0    print("entered creditNotice")
+
+0    local value = math.floor(tonumber(msg.Quantity))
+0    local callbackId = msg.Tags["X-CallbackId"] or nil
+
+0    if msg.From ~= TokenInUse then
+0       local err = "Invalid Token Sent: " .. msg.From
+0       print(err)
+0       ao.send(sendResponse(msg.Sender, "Error", { message = err }))
+0       tokenManager.returnTokens(msg, err)
+0       return false
+     end
+0    if value < Cost then
+0       local err = "Invalid Value Sent: " .. tostring(value)
+0       print(err)
+0       ao.send(sendResponse(msg.Sender, "Error", { message = err }))
+0       tokenManager.returnTokens(msg, err)
+0       return false
+     end
+0    if callbackId == nil then
+0       local err = "Failure: No Callback ID provided"
+0       print(err)
+0       ao.send(sendResponse(msg.Sender, "Error", { message = err }))
+0       tokenManager.returnTokens(msg, err)
+0       return false
+     end
+
+0    local userId = msg.Sender
+0    local providers = msg.Tags["X-Providers"] or nil
+0    local requestedInputs = msg.Tags["X-RequestedInputs"] or ""
+
+0    local success, err = randomManager.createRandomRequest(userId, providers, callbackId, requestedInputs)
+
+0    if success then
+0       ao.send(sendResponse(userId, "Created New Random Request", SuccessMessage))
+0       return true
+     else
+0       ao.send(sendResponse(userId, "Error", { message = "Failed to create new random request: " .. err }))
+0       return false
+     end
+  end
+
+
+0 function getOpenRandomRequestsHandler(msg)
+0    print("entered getOpenRandomRequests")
+
+0    local data = (json.decode(msg.Data))
+0    local providerId = data.providerId
+
+0    local _, providerErr = providerManager.getProvider(providerId)
+
+0    if providerErr ~= "" then
+0       ao.send(sendResponse(msg.From, "Error", { message = "Provider not found" }))
+0       return false
+     end
+
+0    local responseData = { providerId = providerId, activeChallengeRequests = { request_ids = {} }, activeOutputRequests = { request_ids = {} } }
+
+0    local activeChallengeRequests, err = providerManager.getActiveRequests(providerId, true)
+0    local activeOutputRequests, outputErr = providerManager.getActiveRequests(providerId, false)
+
+0    if err == "" then
+0       local requestIds = json.decode(activeChallengeRequests)
+0       responseData.activeChallengeRequests = requestIds
+     end
+0    if outputErr == "" then
 0       local requestIds = json.decode(activeOutputRequests)
 0       responseData.activeOutputRequests = requestIds
      end
 
-*    ao.send(sendResponse(msg.From, "Get-Open-Random-Requests-Response", responseData))
-*    return true
+0    ao.send(sendResponse(msg.From, "Get-Open-Random-Requests-Response", responseData))
+0    return true
   end
 
 
-* function getRandomRequestsHandler(msg)
-*    print("entered getRandomRequests")
+0 function getRandomRequestsHandler(msg)
+0    print("entered getRandomRequests")
 
-*    local data = (json.decode(msg.Data))
-*    local responseData = { randomRequestResponses = {} }
+0    local data = (json.decode(msg.Data))
+0    local responseData = { randomRequestResponses = {} }
 
-*    for _, request_id in ipairs(data.requestIds) do
-*       local requestResponse = {
-*          randomRequest = nil,
-*          providerVDFResults = nil,
+0    for _, request_id in ipairs(data.requestIds) do
+0       local requestResponse = {
+           randomRequest = nil,
+           providerVDFResults = nil,
         }
-*       local request, requestErr = randomManager.getRandomRequest(request_id)
-*       if requestErr == "" then
-*          requestResponse.randomRequest = request
-*          local providerVDFResults, resultsErr = randomManager.getVDFResults(request_id)
-*          if resultsErr == "" then
-*             requestResponse.providerVDFResults = providerVDFResults
+0       local request, requestErr = randomManager.getRandomRequest(request_id)
+0       if requestErr == "" then
+0          requestResponse.randomRequest = request
+0          local providerVDFResults, resultsErr = randomManager.getVDFResults(request_id)
+0          if resultsErr == "" then
+0             requestResponse.providerVDFResults = providerVDFResults
            end
         end
-*       table.insert(responseData.randomRequestResponses, requestResponse)
+0       table.insert(responseData.randomRequestResponses, requestResponse)
      end
 
-*    ao.send(sendResponse(msg.From, "Get-Random-Requests-Response", responseData))
-*    return true
+0    ao.send(sendResponse(msg.From, "Get-Random-Requests-Response", responseData))
+0    return true
   end
 
 
-* function getRandomRequestViaCallbackIdHandler(msg)
-*    print("entered getRandomRequestViaCallbackId")
+0 function getRandomRequestViaCallbackIdHandler(msg)
+0    print("entered getRandomRequestViaCallbackId")
 
-*    local data = (json.decode(msg.Data))
-*    local callback_id = data.callbackId
-*    local responseData = { randomRequestResponses = {} }
+0    local data = (json.decode(msg.Data))
+0    local callback_id = data.callbackId
+0    local responseData = { randomRequestResponses = {} }
 
-*    local requestResponse = {
-*       randomRequest = nil,
-*       providerVDFResults = nil,
+0    local requestResponse = {
+        randomRequest = nil,
+        providerVDFResults = nil,
      }
-*    local request, requestErr = randomManager.getRandomRequestViaCallbackId(callback_id)
-*    local request_id = request.request_id
+0    local request, requestErr = randomManager.getRandomRequestViaCallbackId(callback_id)
+0    local request_id = request.request_id
 
-*    if requestErr == "" then
-*       requestResponse.randomRequest = request
-*       local providerVDFResults, resultsErr = randomManager.getVDFResults(request_id)
-*       if resultsErr == "" then
-*          requestResponse.providerVDFResults = providerVDFResults
+0    if requestErr == "" then
+0       requestResponse.randomRequest = request
+0       local providerVDFResults, resultsErr = randomManager.getVDFResults(request_id)
+0       if resultsErr == "" then
+0          requestResponse.providerVDFResults = providerVDFResults
         end
      end
-*    table.insert(responseData.randomRequestResponses, requestResponse)
-*    msg.reply({ Data = json.encode(responseData) })
+0    table.insert(responseData.randomRequestResponses, requestResponse)
+0    msg.reply({ Data = json.encode(responseData) })
 
 
-*    return true
-  end
-
-* RandomResponseResponse = {}
-
-
-
-
-* function simulateResponseHandler()
-0    print("entered simulateResponseHandler")
-
-0    local target = "AmGZEcVGl66Wh_KB9SzY2u7SUIcRz4yUUBfvMMC5Tvc"
-0    local action = "Random-Response"
-0    local data = {
-        callbackId = "d9e4855a-3f2b-4e4f-bc52-9b7bd4bf15e7",
-        entropy = "774",
-     }
-0    ao.send(sendResponse(target, action, data))
+0    return true
   end
 
 
-* Handlers.add('info',
-* Handlers.utils.hasMatchingTag('Action', 'Info'),
-* wrapHandler(infoHandler))
+0 Handlers.add('info',
+0 Handlers.utils.hasMatchingTag('Action', 'Info'),
+0 wrapHandler(infoHandler))
 
-* Handlers.add('updateProviderBalance',
-* Handlers.utils.hasMatchingTag('Action', 'Update-Providers-Random-Balance'),
-* wrapHandler(updateProviderBalanceHandler))
+0 Handlers.add('updateProviderBalance',
+0 Handlers.utils.hasMatchingTag('Action', 'Update-Providers-Random-Balance'),
+0 wrapHandler(updateProviderBalanceHandler))
 
-* Handlers.add('postVDFChallenge',
-* Handlers.utils.hasMatchingTag('Action', 'Post-VDF-Challenge'),
-* wrapHandler(postVDFChallengeHandler))
+0 Handlers.add('postVDFChallenge',
+0 Handlers.utils.hasMatchingTag('Action', 'Post-VDF-Challenge'),
+0 wrapHandler(postVDFChallengeHandler))
 
-* Handlers.add('postVDFOutputAndProof',
-* Handlers.utils.hasMatchingTag('Action', 'Post-VDF-Output-And-Proof'),
-* wrapHandler(postVDFOutputAndProofHandler))
+0 Handlers.add('postVDFOutputAndProof',
+0 Handlers.utils.hasMatchingTag('Action', 'Post-VDF-Output-And-Proof'),
+0 wrapHandler(postVDFOutputAndProofHandler))
 
-* Handlers.add('getProviderRandomBalance',
-* Handlers.utils.hasMatchingTag('Action', 'Get-Providers-Random-Balance'),
-* wrapHandler(getProviderRandomBalanceHandler))
+0 Handlers.add('postVerification',
+0 Handlers.utils.hasMatchingTag('Action', 'Post-Verification'),
+0 wrapHandler(postVerificationHandler))
 
-* Handlers.add('creditNotice',
-* Handlers.utils.hasMatchingTag('Action', 'Credit-Notice'),
-* wrapHandler(creditNoticeHandler))
+0 Handlers.add('getProviderRandomBalance',
+0 Handlers.utils.hasMatchingTag('Action', 'Get-Providers-Random-Balance'),
+0 wrapHandler(getProviderRandomBalanceHandler))
 
-* Handlers.add('getOpenRandomRequests',
-* Handlers.utils.hasMatchingTag('Action', 'Get-Open-Random-Requests'),
-* wrapHandler(getOpenRandomRequestsHandler))
+0 Handlers.add('creditNotice',
+0 Handlers.utils.hasMatchingTag('Action', 'Credit-Notice'),
+0 wrapHandler(creditNoticeHandler))
 
-* Handlers.add('getRandomRequests',
-* Handlers.utils.hasMatchingTag('Action', 'Get-Random-Requests'),
-* wrapHandler(getRandomRequestsHandler))
+0 Handlers.add('getOpenRandomRequests',
+0 Handlers.utils.hasMatchingTag('Action', 'Get-Open-Random-Requests'),
+0 wrapHandler(getOpenRandomRequestsHandler))
 
-* Handlers.add('getRandomRequestViaCallbackId',
-* Handlers.utils.hasMatchingTag('Action', 'Get-Random-Request-Via-Callback-Id'),
-* wrapHandler(getRandomRequestViaCallbackIdHandler))
+0 Handlers.add('getRandomRequests',
+0 Handlers.utils.hasMatchingTag('Action', 'Get-Random-Requests'),
+0 wrapHandler(getRandomRequestsHandler))
 
-* Handlers.add('simulateResponse',
-* Handlers.utils.hasMatchingTag('Action', 'Simulate-Response'),
-* wrapHandler(simulateResponseHandler))
+0 Handlers.add('getRandomRequestViaCallbackId',
+0 Handlers.utils.hasMatchingTag('Action', 'Get-Random-Request-Via-Callback-Id'),
+0 wrapHandler(getRandomRequestViaCallbackIdHandler))
 
 
-* print("RandAO Process Initialized")
+0 print("RandAO Process Initialized")
 
 ==============================================================================
 scripts/copy_lua_package.lua
@@ -2294,7 +2617,6 @@ build/providerManager.lua
 
 0 function providerManager.pushActiveRequests(providerIds, requestId, challenge)
 0    print("entered providerManager.pushActiveRequests")
-
 0    local success = true
 0    local err = ""
 
@@ -2357,8 +2679,6 @@ build/providerManager.lua
 
 
 0          local stringified_requests = json.encode(active_output_requests)
-
-0          print("LLL: " .. stringified_requests)
 
 0          local stmt = DB:prepare([[
           UPDATE Providers
@@ -2607,6 +2927,12 @@ build/main.lua
 
 
 
+0 CheckpointResponseData = {}
+
+
+
+
+
 0 GetProviderRandomBalanceData = {}
 
 
@@ -2720,13 +3046,13 @@ build/main.lua
 
 0    local data = (json.decode(msg.Data))
 0    local balance = data.availableRandomValues
-0    local success, err = providerManager.updateProviderBalance(userId, balance)
+0    local success, _err = providerManager.updateProviderBalance(userId, balance)
 
 0    if success then
-0       ao.send(sendResponse(msg.From, "Updated Provider Random Balance", SuccessMessage))
+
 0       return true
      else
-0       ao.send(sendResponse(msg.From, "Error", { message = "Failed to update provider balance: " .. err }))
+
 0       return false
      end
   end
@@ -2749,15 +3075,15 @@ build/main.lua
 0       return false
      end
 
-0    local success, err = randomManager.postVDFChallenge(userId, requestId, input, modulus)
+0    local success, _err = randomManager.postVDFChallenge(userId, requestId, input, modulus)
 
 0    if success then
 0       providerManager.removeActiveRequest(userId, requestId, true)
 0       randomManager.decrementRequestedInputs(requestId)
-0       ao.send(sendResponse(msg.From, "Posted VDF Input", SuccessMessage))
+
 0       return true
      else
-0       ao.send(sendResponse(msg.From, "Error", { message = "Failed to post VDF Input: " .. err }))
+
 0       return false
      end
   end
@@ -2790,14 +3116,50 @@ build/main.lua
      end
 0    providerManager.removeActiveRequest(userId, requestId, false)
 
-0    local success, err = randomManager.postVDFOutputAndProof(userId, requestId, output, proof)
+0    local success, _err = randomManager.postVDFOutputAndProof(userId, requestId, output, proof)
 
 0    if success then
-0       ao.send(sendResponse(msg.From, "Posted VDF Output and Proof", SuccessMessage))
+0       randomManager.decrementRequestedInputs(requestId)
+
 0       return true
      else
 
-0       ao.send(sendResponse(msg.From, "Error", { message = "Failed to post VDF Output and Proof: " .. err }))
+
+0       return false
+     end
+  end
+
+
+0 function postVerificationHandler(msg)
+0    print("entered postVerification")
+
+0    local verifierId = msg.From
+
+0    local data = (json.decode(msg.Data))
+
+0    local valid = data.valid
+0    local requestId = data.request_id
+0    local segmentId = data.segment_id
+
+     local function validateVerificationInputs(_valid, _requestId, _segmentId)
+0       return true
+     end
+
+0    if valid == nil or segmentId == nil or requestId == nil or not validateVerificationInputs(valid, requestId, segmentId) then
+0       print("Failed to post Verification: " .. "values not provided or malformed")
+0       ao.send(sendResponse(msg.From, "Error", { message = "Failed to post Verification: " .. "values not provided or malformed" }))
+0       return false
+     end
+
+0    local success, _err = verifierManager.processVerification(verifierId, requestId, segmentId, valid)
+
+0    if success then
+0       randomManager.decrementRequestedInputs(requestId)
+
+0       return true
+     else
+
+
 0       return false
      end
   end
@@ -2952,23 +3314,6 @@ build/main.lua
 0    return true
   end
 
-0 RandomResponseResponse = {}
-
-
-
-
-0 function simulateResponseHandler()
-0    print("entered simulateResponseHandler")
-
-0    local target = "AmGZEcVGl66Wh_KB9SzY2u7SUIcRz4yUUBfvMMC5Tvc"
-0    local action = "Random-Response"
-0    local data = {
-        callbackId = "d9e4855a-3f2b-4e4f-bc52-9b7bd4bf15e7",
-        entropy = "774",
-     }
-0    ao.send(sendResponse(target, action, data))
-  end
-
 
 0 Handlers.add('info',
 0 Handlers.utils.hasMatchingTag('Action', 'Info'),
@@ -2985,6 +3330,10 @@ build/main.lua
 0 Handlers.add('postVDFOutputAndProof',
 0 Handlers.utils.hasMatchingTag('Action', 'Post-VDF-Output-And-Proof'),
 0 wrapHandler(postVDFOutputAndProofHandler))
+
+0 Handlers.add('postVerification',
+0 Handlers.utils.hasMatchingTag('Action', 'Post-Verification'),
+0 wrapHandler(postVerificationHandler))
 
 0 Handlers.add('getProviderRandomBalance',
 0 Handlers.utils.hasMatchingTag('Action', 'Get-Providers-Random-Balance'),
@@ -3005,10 +3354,6 @@ build/main.lua
 0 Handlers.add('getRandomRequestViaCallbackId',
 0 Handlers.utils.hasMatchingTag('Action', 'Get-Random-Request-Via-Callback-Id'),
 0 wrapHandler(getRandomRequestViaCallbackIdHandler))
-
-0 Handlers.add('simulateResponse',
-0 Handlers.utils.hasMatchingTag('Action', 'Simulate-Response'),
-0 wrapHandler(simulateResponseHandler))
 
 
 0 print("RandAO Process Initialized")
@@ -3048,6 +3393,7 @@ build/verifierManager.lua
 
 
 0 VDFRequestData = {}
+
 
 
 
@@ -3166,24 +3512,23 @@ build/verifierManager.lua
 0    return stats
   end
 
-0 function verifierManager.requestVerification(processId, data)
+0 function verifierManager.requestVerification(processId, data, checkpoint)
 0    print("Sending verification request to process: " .. processId)
 
-0    local verificationResponse = ao.send({
-        Target = processId,
-        Action = "Validate-Checkpoint",
-        Data = json.encode(data),
-0    }).receive().Data
-
-0    print("Verification response: " .. verificationResponse)
-
-0    local processedResonse = json.decode(verificationResponse)
-
-0    if processedResonse.valid == false then
-0       return false, "Verification failed"
+0    if checkpoint then
+0       local _ = ao.send({
+           Target = processId,
+           Action = "Validate-Checkpoint",
+           Data = json.encode(data),
+        })
+0       return
+     else
+0       local _ = ao.send({
+           Target = processId,
+           Action = "Validate-Output",
+           Data = json.encode(data),
+        })
      end
-
-0    return true, ""
   end
 
 
@@ -3227,6 +3572,7 @@ build/verifierManager.lua
 
 
 0 function verifierManager.markAvailable(verifierId)
+0    print("Marking verifier as available: " .. verifierId)
 0    if not DB then
 0       print("Database connection not initialized")
 0       return false, "Database connection is not initialized"
@@ -3257,6 +3603,48 @@ build/verifierManager.lua
 0    if not exec_ok then
 0       return false, exec_err
      end
+
+0    return true, ""
+  end
+
+
+0 function verifierManager.processVerification(verifierId, requestId, segmentId, result)
+0    print("Processing verification result for segment: " .. segmentId)
+0    if not DB then
+0       print("Database connection not initialized")
+0       return false, "Database connection is not initialized"
+     end
+
+0    local stmt = DB:prepare([[
+      UPDATE VerifierSegments
+      SET status = 'processed', result = :result
+      WHERE segment_id = :sid
+0   ]])
+
+0    if not stmt then
+0       print("Failed to prepare statement: " .. DB:errmsg())
+0       return false, "Failed to prepare statement: " .. DB:errmsg()
+     end
+
+0    local ok = false
+0    ok = pcall(function()
+0       stmt:bind_names({
+           sid = segmentId,
+           result = result,
+        })
+     end)
+
+0    if not ok then
+0       print("Failed to bind parameters")
+0       return false, "Failed to bind parameters"
+     end
+
+0    local exec_ok, exec_err = dbUtils.execute(stmt, "Process result")
+0    if not exec_ok then
+0       return false, exec_err
+     end
+
+0    verifierManager.markAvailable(verifierId)
 
 0    return true, ""
   end
@@ -3346,7 +3734,7 @@ build/verifierManager.lua
   end
 
 
-0 function verifierManager.getProofSegments(proofId)
+0 function verifierManager.getProofSegments(proofId, expectedOutput)
 0    if not DB then
 0       print("Database connection not initialized")
 0       return {}, "Database connection is not initialized"
@@ -3392,7 +3780,7 @@ build/verifierManager.lua
   end
 
 
-0 function verifierManager.processProof(requestId, input, modulus, proofJson, providerId)
+0 function verifierManager.processProof(requestId, input, modulus, proofJson, providerId, modExpectedOutput)
 
 0    local proofArray = json.decode(proofJson)
 0    if not proofArray then
@@ -3404,6 +3792,38 @@ build/verifierManager.lua
 
 0    local proofId = requestId .. "_" .. providerId
 0    local availableVerifiers = verifierManager.getAvailableVerifiers()
+
+
+
+
+
+0    local outputSegmentId, segmentCreateErr = verifierManager.createSegment(proofId, "output", modExpectedOutput)
+
+0    if segmentCreateErr ~= "" then
+0       return false, "Failed to create segment: " .. segmentCreateErr
+     end
+
+0    local outputVerifierId = availableVerifiers[1]
+0    table.remove(availableVerifiers, 1)
+
+0    local assigned, assignErr = verifierManager.assignSegment(outputVerifierId.process_id, outputSegmentId)
+0    if not assigned then
+0       print("Failed to assign segment: " .. assignErr)
+     else
+0       local outputSegmentInput = proofArray[10]
+0       local segmentExpectedOutput = modExpectedOutput
+
+0       local requestData = {
+           request_id = requestId,
+           segment_id = outputSegmentId,
+           input = outputSegmentInput,
+           expected_output = segmentExpectedOutput,
+        }
+
+0       verifierManager.requestVerification(outputVerifierId.process_id, requestData, false)
+     end
+
+
 
 0    local segmentCount = 1
 0    for _, segment in ipairs(proof.proof) do
@@ -3424,16 +3844,27 @@ build/verifierManager.lua
 0          if not assigned then
 0             print("Failed to assign segment: " .. assignErr)
            else
+0             local segmentInput = input
+0             local segmentExpectedOutput = proofArray[segmentCount - 1]
+
+0             if segmentCount > 2 then
+0                segmentInput = proofArray[segmentCount - 2]
+              end
+
 0             local requestData = {
                  request_id = requestId,
                  segment_id = segmentId,
-                 checkpoint_input = input,
+                 checkpoint_input = segmentInput,
                  modulus = modulus,
-                 expected_output = segmentId,
+                 expected_output = segmentExpectedOutput,
               }
-0             verifierManager.requestVerification(verifierId.process_id, requestData)
+
+0             verifierManager.requestVerification(verifierId.process_id, requestData, true)
            end
+        else
+0          print("No verifiers available for segment: " .. segmentId)
         end
+
      end
 
 0    return true, ""
@@ -3443,6 +3874,7 @@ build/verifierManager.lua
 0    for _, verifier in ipairs(VerifierProcesses) do
 0       verifierManager.registerVerifier(verifier)
      end
+0    print("Verifier manager and processes initialized")
   end
 
 0 return verifierManager
@@ -3450,7 +3882,7 @@ build/verifierManager.lua
 ==============================================================================
 build/randomManager.lua
 ==============================================================================
-0 local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local math = _tl_compat and _tl_compat.math or math; local os = _tl_compat and _tl_compat.os or os; local pcall = _tl_compat and _tl_compat.pcall or pcall; local string = _tl_compat and _tl_compat.string or string; require("globals")
+0 local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local math = _tl_compat and _tl_compat.math or math; local os = _tl_compat and _tl_compat.os or os; local pcall = _tl_compat and _tl_compat.pcall or pcall; local string = _tl_compat and _tl_compat.string or string; local table = _tl_compat and _tl_compat.table or table; require("globals")
 0 local json = require("json")
 0 local dbUtils = require("dbUtils")
 0 local providerManager = require("providerManager")
@@ -3491,6 +3923,11 @@ build/randomManager.lua
 
 
 0 ProviderVDFResults = {}
+
+
+
+0 RandomResponseResponse = {}
+
 
 
 
@@ -3574,6 +4011,141 @@ build/randomManager.lua
      end
   end
 
+0 function randomManager.getRandomStatus(requestId)
+0    print("entered randomManager.getRandomStatus")
+
+0    local stmt = DB:prepare("SELECT status FROM RandomRequests WHERE request_id = :request_id")
+0    stmt:bind_names({ request_id = requestId })
+0    local result = dbUtils.queryOne(stmt)
+0    if result then
+0       return result.status, ""
+     else
+0       return "", "RandomRequest status not found"
+     end
+  end
+
+0 function randomManager.resetRandomRequestRequestedInputs(requestId, newRequestedInputs)
+0    print("Entered randomManager.resetRandomRequestRequestedInputs")
+
+
+0    local stmt = DB:prepare([[
+      UPDATE RandomRequests
+      SET requested_inputs = :requested_inputs
+      WHERE request_id = :request_id;
+0   ]])
+0    if not stmt then
+0       return false, "Failed to prepare statement: " .. DB:errmsg()
+     end
+
+
+0    stmt:bind_names({ requested_inputs = newRequestedInputs, request_id = requestId })
+
+
+0    local execute_ok, execute_err = dbUtils.execute(stmt, "Update random request requested inputs")
+
+0    if not execute_ok then
+0       return false, "Failed to update random request requested inputs: " .. tostring(execute_err)
+     end
+
+0    print("Random request requested inputs updated successfully to: " .. newRequestedInputs)
+0    return true, ""
+  end
+
+0 function randomManager.getVDFResults(requestId)
+0    print("entered randomManager.getVDFResults")
+
+0    local stmt = DB:prepare("SELECT * FROM ProviderVDFResults WHERE request_id = :request_id")
+0    stmt:bind_names({ request_id = requestId })
+0    local queryResult = dbUtils.queryMany(stmt)
+0    print(json.encode(queryResult))
+0    print(json.encode(queryResult[1]))
+0    local result = {
+        requestResponses = {},
+     }
+
+0    for _, response in ipairs(queryResult) do
+0       table.insert(result.requestResponses, response)
+     end
+
+0    print(json.encode(result))
+
+0    if result then
+0       return result, ""
+     else
+0       return {}, "RandomRequest not found"
+     end
+  end
+
+0 function randomManager.getRandomRequest(requestId)
+0    print("entered randomManager.getRandomRequest")
+
+0    local stmt = DB:prepare("SELECT * FROM RandomRequests WHERE request_id = :request_id")
+0    stmt:bind_names({ request_id = requestId })
+0    local result = dbUtils.queryOne(stmt)
+0    if result then
+0       return result, ""
+     else
+0       return {}, "RandomRequest not found"
+     end
+  end
+
+
+0 function randomManager.processEntropy(requestId)
+0    print("entered randomManager.processEntropy")
+
+0    local results, err = randomManager.getVDFResults(requestId)
+0    if err ~= "" then
+0       print("Failed to get VDF results: " .. err)
+0       return "", err
+     end
+
+0    results = results
+
+
+0    local mixed = tonumber(results.requestResponses[1].output_value)
+
+
+0    for i = 2, #results.requestResponses do
+0       local value = tonumber(results.requestResponses[i].output_value)
+0       mixed = (mixed ~ (value >> 32) ~ (value & 0xFFFFFFFF))
+
+0       mixed = (mixed * 0x5bd1e995 + value) % (2 ^ 31 - 1)
+     end
+
+0    local entropy = tostring(mixed)
+0    print("entropy: " .. entropy)
+0    return entropy, ""
+  end
+
+0 function randomManager.simulateRandomResponse(requestId)
+0    print("entered simulateRandomResponse")
+
+0    local randomRequest, err = randomManager.getRandomRequest(requestId)
+
+0    if err ~= "" then
+0       print("Failed to get random request: " .. err)
+0       return false
+     end
+
+0    local target = randomRequest.requester
+0    local callbackId = randomRequest.callback_id
+0    local entropy = randomManager.processEntropy(requestId)
+0    local action = "Random-Response"
+
+0    local data = {
+        callbackId = callbackId,
+        entropy = entropy,
+     }
+
+0    ao.send({
+        Target = target,
+0       Tags = {
+           Action = action,
+        },
+        Data = data,
+     })
+  end
+
 0 function randomManager.decrementRequestedInputs(requestId)
 0    print("Entered randomManager.decrementRequestedInputs")
 
@@ -3583,8 +4155,9 @@ build/randomManager.lua
 0       return false, "Failure: can not decrement needed below 0"
      end
 
-0    requested = requested - 1
+0    print("Requested: " .. requested)
 
+0    requested = requested - 1
 
 0    local stmt = DB:prepare([[
       UPDATE RandomRequests
@@ -3607,40 +4180,36 @@ build/randomManager.lua
      end
 
 0    if requested == 0 then
-0       local status = Status[2]
-0       local providerList = randomManager.getRandomProviderList(requestId)
-0       randomManager.updateRandomRequestStatus(requestId, status)
-0       providerManager.pushActiveRequests(providerList.provider_ids, requestId, false)
+0       local status, err = randomManager.getRandomStatus(requestId)
+
+0       if err == "" then
+
+0          if status == Status[1] then
+0             print("Random request finished collecting inputs")
+0             local providerList = randomManager.getRandomProviderList(requestId)
+0             randomManager.resetRandomRequestRequestedInputs(requestId, #providerList.provider_ids)
+0             providerManager.pushActiveRequests(providerList.provider_ids, requestId, false)
+0             randomManager.updateRandomRequestStatus(requestId, Status[2])
+
+0          elseif status == Status[2] then
+0             print("Random request finished collecting outputs")
+0             local providerList = randomManager.getRandomProviderList(requestId)
+0             local requestedValue = #providerList.provider_ids * 11
+0             randomManager.resetRandomRequestRequestedInputs(requestId, requestedValue)
+0             randomManager.updateRandomRequestStatus(requestId, Status[3])
+
+0          elseif status == Status[3] then
+0             print("Random request finished successfully")
+0             randomManager.simulateRandomResponse(requestId)
+0             randomManager.updateRandomRequestStatus(requestId, Status[5])
+           end
+        else
+0          return false, err
+        end
      end
 
 0    print("Random request requested_inputs updated successfully to: " .. requested)
 0    return true, ""
-  end
-
-0 function randomManager.getRandomStatus(requestId)
-0    print("entered randomManager.getRandomStatus")
-
-0    local stmt = DB:prepare("SELECT status FROM RandomRequests WHERE request_id = :request_id")
-0    stmt:bind_names({ request_id = requestId })
-0    local result = dbUtils.queryOne(stmt)
-0    if result then
-0       return result.status, ""
-     else
-0       return "", "RandomRequest status not found"
-     end
-  end
-
-0 function randomManager.getRandomRequest(requestId)
-0    print("entered randomManager.getRandomRequest")
-
-0    local stmt = DB:prepare("SELECT * FROM RandomRequests WHERE request_id = :request_id")
-0    stmt:bind_names({ request_id = requestId })
-0    local result = dbUtils.queryOne(stmt)
-0    if result then
-0       return result, ""
-     else
-0       return {}, "RandomRequest not found"
-     end
   end
 
 0 function randomManager.getRandomRequestViaCallbackId(callbackId)
@@ -3662,19 +4231,6 @@ build/randomManager.lua
 0    local stmt = DB:prepare("SELECT * FROM ProviderVDFResults WHERE request_id = :request_id AND provider_id = :provider_id")
 0    stmt:bind_names({ request_id = requestId, provider_id = providerId })
 0    local result = dbUtils.queryOne(stmt)
-0    if result then
-0       return result, ""
-     else
-0       return {}, "RandomRequest not found"
-     end
-  end
-
-0 function randomManager.getVDFResults(requestId)
-0    print("entered randomManager.getVDFResults")
-
-0    local stmt = DB:prepare("SELECT * FROM ProviderVDFResults WHERE request_id = :request_id")
-0    stmt:bind_names({ request_id = requestId })
-0    local result = dbUtils.queryMany(stmt)
 0    if result then
 0       return result, ""
      else
@@ -3847,7 +4403,7 @@ build/randomManager.lua
 0       local modulus = vdfRequest.modulus_value
 
 
-0       local processResult, processError = verifierManager.processProof(requestId, input, modulus, proof, userId)
+0       local processResult, processError = verifierManager.processProof(requestId, input, modulus, proof, userId, outputValue)
 0       if not processResult then
 0          print("Processing proof failed: " .. tostring(processError))
         else
@@ -3893,16 +4449,106 @@ build/globals.lua
   }
 
 0 VerifierProcesses = {
-     "RtkXacFBEGXhw6OTjCqECKSap_y2CJMukBsGxElCd-E",
-     "qbCteSj7907pwb_SQ1AD2kMG_HZDuUVf2IZnnm4pJxc",
-     "toqzmcIxYC2yUQWJJVbd-ecBbCB2w1r_7Gvoq99DOzM",
-     "G0JLVocfhW_1qHnX64yuaVBCWdpBRhSQ3T8AkGoiIJA",
-     "Fpb42AKYswyM8nIAb6vZYBePwPUxzZhQhu72srZr1xY",
-     "06IG1T_JXyhVV0TZ42_EEDKZ7T0kBfmdDjATTaBr8ic",
-     "xcLnD6OdSbbO4dY_HAwNHLWRuNEPSJXoi4gRreywwi8",
-     "bKQiEWkOg77FqygZ4yIp7lBV5mlMDQDg3_5CS36PUqg",
-     "SqdPCK1LrMa_6-xf4a9UKchAqL26Mbj_Pg5kLk4NWxo",
-     "tgfpewpX3j7htX03Cj5pCz_CB0nOzDFlc0WJi1sRxRI",
+     "9xtciDYCCN76fXIq1cKosh3XNzG_Qj1D3Z5XK1g5nOE",
+     "RG6r_xD_NZtbw7t2QcfrUXjrlZe3w3a9vK_Z4kTrZyc",
+     "aDKAxaGZSMh120sVO-XMHc2oNxpl4Zst_KaC_YB3AK0",
+     "bHNe_KSStb-pmhttS6x9B2QTZ8s_duspz-r3Fz89HmI",
+     "hE4pw01XluNHiUfZONVCPEQJvy7A83FzR5GJgylJ2jE",
+     "aIiqaop1mZ9XuIPLd_1xVDjkQ-_wEG0L3xCB1pwf6Zg",
+     "1musHHlIsIqWL-v8zuLQCclWNOH0xEtM5Bop9npHIZ0",
+     "E-hoJqDj2GB6J-oveM4B5J5c6WLFQ9f9P9MeVB7ZfRs",
+     "bQbqmx4ju8QHIUsTTWRXbA8VD_LxZqhxHm79dE0xqB8",
+     "1Rk_Nf0ohtQ8CcD31OYDYJv4pstJFJWhU5TOMdBgWNU",
+     "Ca_j7Jcx9GtCZnGnhvSHKZQZiMdOOSyYlC5g74sofAM",
+     "cjTEdlZPE2By_mVk6TYRotUIrGN5jZUom6mLsFFK7ZI",
+     "HdwaaNv84kWolAAxxFcq-fj6GxchSojnSamYBfAdOlw",
+     "m9YnpeUM7d0FMS647VFZKqwcq6yN6NDU_7388ZDIWgk",
+     "5JLl8vaqbNJK-3Z9snnOx7cDciGR43nCKcm2X1g8LQs",
+     "Lgyp9EmNChaHBvxzN2aGyQcsRQcJSoIYHiMy1UGHgVc",
+     "QrDVen99sF88EvE_vffdpHzMWRP5weVzH84gXfKct3Y",
+     "sREsSXZC8UdLfBiic5Nsbl16gsdooRssbdZqtHR47xk",
+     "LMli3AiUXlCZcr8lSacqqrqTiTQpuMQS1TFuFSYyYCc",
+     "eme9ov7v6uvLOQ9xs7TPVw31liudHbjpmoSsJrb9yKM",
+     "emiZ11GY1FLPItxbgDBtuDuZFwosSKydxdX2Y3X3syU",
+     "3-TUgiU4CYXybgL7X2TCGAdGkGlFQgmJh63w9ah54p8",
+     "6zdG4WZnHFq0iFrqt8if0VJjLD0uMTpwI3PKE2ebMuE",
+     "f8DRxguG-ebm8qkeW87TfqQPfpjDx1zFawFLqdyVqEE",
+     "-3FR3L_y41ChqUg9f3LzOOjCeEYqxZnxOPBSVJvhc4g",
+     "7MyjbWK2ui4YCZvI4pAei632cTYZpkPyRsYSMpqVSjk",
+     "o3F_-U5FD69JHSxZJcLU8CZnM6A0lJVaJEjb3tdpyHw",
+     "ocTw1Q0119A6b25W9xPNpLP2whkeTkn2AvM_1vr6dwg",
+     "5uckHZGTWwxJU7MfuBTrPwe6awdqpKxV0O-L6_kmuM0",
+     "KYonYg0dcgjIZHur58aq1l_Xd6FV2995C9M7IKx9ToY",
+     "pCO8DCinMo2iBEYSxnpzMsQsVICnM9I3iFpHvJhiquU",
+     "Zg7NsaOfedtTYZwu6HyCjpfiAMDJU2L-5zube7Pnnoc",
+     "RwPOZCTE2N9GkztErOqgVWcPOQCvbkMtv6-OxIqtb3Y",
+     "tNpWqM0aGL6-6CSpHb2Wrw4jCH3irwrsrpubpK9c_jg",
+     "liUYPzYtFcSmtZw-kixB5fYWAAIwqoeiYcy3LqI0r5g",
+     "mFSAyqgeAqph4uPNAbONTvxrYR-5-BFGpvSzbl89rEM",
+     "VZjKTKen3yCRwS3fhlzb8gy040-o6cB4nc4WuzMhO_0",
+     "jb5PbvwDOPvv2VQJhDBaRapsS7Hg0_nbgklRqy4NCRo",
+     "MdOSjRFFPXVPZ1QuFc24aS2iH6LPBMMVtz0Hfou_YTY",
+     "7lUE6vTtYzz9DX7Vel0PiVr9Gt7WXsraBfGbzsb-J0o",
+     "Ad5zPlVDcyO8A_gZuCZafRG-hloEG4GEiuM3i5q_7ew",
+     "0UHuoupRYAWi2ES727gWXxiB6NywyY5uSXv5pPQmWF4",
+     "5zkXkGJxhXiBeHj8rFV7pMexegQYYurqR7iXuK_OeTA",
+     "6NcC5lNFwyrZTyXEZ_BUpED8tlz-ml3UDVEnpsqn7NQ",
+     "-B2h9yKLQ6Gmz53K2Y0B7I-maT6n3LyuX86nxp0caak",
+     "ieFMM-zqmQpGrVmnFgsyqM865GS1-A5R37krMZ2PahI",
+     "jrZ5KxMErZL_2aet5OVdYQZH1iyFn4MYoZ3qDeRADb0",
+     "vjoC1Vu46Kz_MXcEOQJM6tuSgkpdnJZoVCjJv8_15w8",
+     "YhQ9OPQQnjQXumInOLad4jp73Rv6OEEcE6FIjLnIs_g",
+     "8n5FmNyOXz_y5WtROyaNdlKYjCmPN5Xz0nYlYu4HRKs",
+     "GlPXlvwNgnu1wmYgDdSxX9pRCAlVUU-FeHznW5pFAX4",
+     "6fzr6mfZMyY7J0gn5k2Lx-YzZpuJRDVVIIQ30eqvxIw",
+     "XMjyw1B5ovTM1vuzWFiivD9C7HvTv-fzanl2ygpanRU",
+     "1BaATgamA1HmAhAIaN6QzoXpjxNhNmSv41ZzQzVwlE4",
+     "oIhKTSdl953AAly5HqnVnjlqdIkAMj5FxaG5QCMZ5OY",
+     "8psb-hqCnQQpHPUVo7FASXA05f6GModOEryfBwR7jpc",
+     "BfC87x5k19oU0dpCyoRQWrsjXhtM-1xzqLebQdki1JA",
+     "HgY9erwSLwyUpXm3N6DhhSxbIzJ3XjFTqNJDVg9WJTY",
+     "Bs5eEY7k5tDxO57l1SxgeWUx502-oLzegJIq5-eMz0Q",
+     "3bu5EGUaF1RyR8_B28r_m2R4kpCytXWNikDQ4qDrPQM",
+     "PjSK3CiGVn6iAGO5WCLIiLsrUabTXtXl6eyDFtUDrPU",
+     "A5x89r00o1K_EEcYJhLTwfSmNHcU04KpslFE2GZUNEM",
+     "0McQMqhI_G8F2S5R1oh5g4S4sGWxkMcD2MaVa5ELUAM",
+     "iMMa2HbP-FQwiTdoK7W4GVHKD543KB221P6HAkfIKP0",
+     "8gJT4MviAqdthfUjjXWrL9WDIO1zhwKNdF1HHjlsWGw",
+     "JRt6hoW9blsADCdJbY8ThqJirDrj3SLSqM4CrUd1bh0",
+     "mVbZzo75noxadsLdqUq64GE2fMBDvS6MB29gDnK2V4c",
+     "0auksaSe4yV5Snv3MzLcJegJh7GyxXMYXP6ncjyfOfk",
+     "am7uRfcD71c9ynlSXHjQZonPj8mRyp2Hz_PmzHLQ60Y",
+     "NQcOoJM8m5-nxTXcJnuAeZW3PP1pT3vfi0FU9Vh5yTY",
+     "k5PGnF9aoVZd26mo4e2W_6uZKl_ETATFZ4dzu9-NA-w",
+     "c_0ye66-HsNRp0Dqmw4wga_XcYkK7YFIiiaPGeMY1uQ",
+     "pOM79mJ6_6_2m5oLSMqFTKMC-eWUub8NU1MBgyluHA8",
+     "ZC2FgZe2QPgKD4-C5120ISgull4zaJXSxz0wZqITLss",
+     "gwCxgBfhdGu3gxYuuUl3pk_KVQF0V3ACpWPH2W0piLE",
+     "4eVREWXvmKAMJ4RMiq9nhKbO93Sodme9a5MnMa_ObYs",
+     "WyXBXMLGYpNcRhvrHrshjhFoV4PvTi1Gjj-CJh7zqto",
+     "347w4pv7GnEI_0ZiqmXtl3lC3bXIBh-rhKwl1zuB0BM",
+     "ccZiKD1yn8_bBHo69GVp8KOygbGh_tEn8lJHs6PGOzc",
+     "0v9AAs9fhDkJyjYG7M0rViBOLlJ_DmJA-81MV7LSNnA",
+     "EPocFs8XlXJhSNtcRTAjfkAUeWLG41tkSWFwK35iNfk",
+     "EdvD-KQjeWtMzjW_atVR22jWJBCyNKv5ajolm0PYBj0",
+     "n-CRbJNzKejlnqLNnse4aDzx4lKe0nAwcx1FrvY4pnI",
+     "j2d4SznuLaSegIpN3_u85v9adVAL8NM2IrZFjjTty5k",
+     "NUs5IVOr5KjydjjqLkkA6pstAgmtcPxJWknGRfA9JeY",
+     "Dy45_39YaFd965jVbo57JiG-zbX9O6MpPqH5h6J9-ss",
+     "1aF5qXxLA9bXihNZOmi_Gr9axwYdX8ZxIqjYTZpYITQ",
+     "BEpOW5X2CPTlaKeE4NdKxzcN9Xjisic5Rmo5YebwZb8",
+     "bLEW4XGsGo5IBXvXE2G5-Ai9GjymrHl5gWKwoUXyD1c",
+     "4iYpSip0GqQ8Xekz-OdUf4n3AqFRwyyGEySeIcOapiw",
+     "xh0satyfKYauDygZXCGwYlshCcEiec2vgYAAZvlC2aA",
+     "FQ3XFhjwm7DT156S2MEi_wakF9s1n6LYPv2J8f-Ay1E",
+     "HcCyWiR5eB-qAZclP_-aB5dsujK-TUHWU___Bkx5uAk",
+     "zq_JQLzR2fVaw_PWxmA2WD0hJX7QFJgz3TF1XTJ5JQk",
+     "kN6avGRarPdvCWMUDi5R7XFEnpRXdOy2FCv1QWkZtRc",
+     "C1CElYtiNFeXaJ3YoGMNPTUv_NxJaF197F31qSHrmDI",
+     "YLzRgccaT2XrRpeSrVkSJ--DGDCaW7ngkOTtVVQcG5o",
+     "cjusi39QOnOdXinkJi3vcvWb8EDvNhs2qRL-M0Do9OA",
+     "G6bjwtb3GIksAyF4N2zIJLcpDcXpsl3Icx2McOgoxEE",
+     "H5wGgdYLz2RNtH4oAOe8ssBpABI5a5Dz2phktms6Hyk",
   }
 
 0 return {}
@@ -3942,7 +4588,7 @@ test/setup.lua
     end
 
 *   if moduleName == "lsqlite3" then
-*     return originalRequire("lsqlite3complete")
+0     return originalRequire("lsqlite3complete")
     end
 
 *   return originalRequire(moduleName)
@@ -4024,10 +4670,10 @@ test/process_test.lua
 * }
 
 * local process = require "process" -- require so that process handlers are loaded
-* local json = require "json"
-* local database = require "database"
-* local providerManager = require "providerManager"
-* local randomManager = require "randomManager"
+0 local json = require "json"
+0 local database = require "database"
+0 local providerManager = require "providerManager"
+0 local randomManager = require "randomManager"
   -- local utils = require "utils"
   -- local bint = require ".bint" (512)
 
@@ -4039,544 +4685,544 @@ test/process_test.lua
   end
 
 
-* describe("updateProviderBalance & getProviderRandomBalance", function()
-*   setup(function()
+0 describe("updateProviderBalance & getProviderRandomBalance", function()
+0   setup(function()
     end)
 
-*   teardown(function()
+0   teardown(function()
     end)
 
-*   it("db should not be nil but stood up", function()
-*     assert.is_not_nil(_G.DB)
+0   it("db should not be nil but stood up", function()
+0     assert.is_not_nil(_G.DB)
     end)
 
-*   it("configured should be true", function()
-*     assert.are.equal(_G.Configured, true)
+0   it("configured should be true", function()
+0     assert.are.equal(_G.Configured, true)
     end)
 
-*   it("should not have a provider who has not updated balance", function()
-*     ao.send({ Target = ao.id, From = "Provider1", Action = "Get-Providers-Random-Balance", Data = json.encode({providerId = "Provider1"}) })
-*     local _, err = providerManager.getProvider(ao.id)
-*     assert.are.equal(err, "Provider not found")
+0   it("should not have a provider who has not updated balance", function()
+0     ao.send({ Target = ao.id, From = "Provider1", Action = "Get-Providers-Random-Balance", Data = json.encode({providerId = "Provider1"}) })
+0     local _, err = providerManager.getProvider(ao.id)
+0     assert.are.equal(err, "Provider not found")
     end)
 
-*   it("should have a provider after updated balance", function()
-*     local availableRandomValues = 7
-*     local message = { Target = ao.id, From = "Provider1", Action = "Update-Providers-Random-Balance", Data = json.encode({availableRandomValues = availableRandomValues}) }
-*     local success = updateProviderBalanceHandler(message)
-*     assert(success, "Failure: failed to update")
-*     local _, err = providerManager.getProvider("Provider1")
-*     assert.are_not.equal(err, "Provider not found")
+0   it("should have a provider after updated balance", function()
+0     local availableRandomValues = 7
+0     local message = { Target = ao.id, From = "Provider1", Action = "Update-Providers-Random-Balance", Data = json.encode({availableRandomValues = availableRandomValues}) }
+0     local success = updateProviderBalanceHandler(message)
+0     assert(success, "Failure: failed to update")
+0     local _, err = providerManager.getProvider("Provider1")
+0     assert.are_not.equal(err, "Provider not found")
     end)
 
 
-*   it("should have a provider after updated balance for second instantiated provider", function()
-*     local availableRandomValues = 11
-*     local message = { Target = ao.id, From = "Provider3", Action = "Update-Providers-Random-Balance", Data = json.encode({availableRandomValues = availableRandomValues}) }
-*     local success = updateProviderBalanceHandler(message)
-*     assert(success, "Failure: failed to update")
-*     local _, err = providerManager.getProvider("Provider3")
-*     assert.are_not.equal(err, "Provider not found")
+0   it("should have a provider after updated balance for second instantiated provider", function()
+0     local availableRandomValues = 11
+0     local message = { Target = ao.id, From = "Provider3", Action = "Update-Providers-Random-Balance", Data = json.encode({availableRandomValues = availableRandomValues}) }
+0     local success = updateProviderBalanceHandler(message)
+0     assert(success, "Failure: failed to update")
+0     local _, err = providerManager.getProvider("Provider3")
+0     assert.are_not.equal(err, "Provider not found")
     end)
 
-*   it("should update the provider balance after update", function()
-*     local availableRandomValues = 10
-*     local message = { Target = ao.id, From = "Provider1", Action = "Update-Providers-Random-Balance", Data = json.encode({availableRandomValues = availableRandomValues}) }
-*     local success = updateProviderBalanceHandler(message)
-*     assert(success, "Failure: failed to update")
+0   it("should update the provider balance after update", function()
+0     local availableRandomValues = 10
+0     local message = { Target = ao.id, From = "Provider1", Action = "Update-Providers-Random-Balance", Data = json.encode({availableRandomValues = availableRandomValues}) }
+0     local success = updateProviderBalanceHandler(message)
+0     assert(success, "Failure: failed to update")
       -- Retrieve the provider and check for errors
-*     local provider, _ = providerManager.getProvider("Provider1")
+0     local provider, _ = providerManager.getProvider("Provider1")
       -- Now, try to access and assert the value
-*     assert.are.equal(10, provider.random_balance)
+0     assert.are.equal(10, provider.random_balance)
     end)
 
-*   it("should not be able to retrieve unupdated balance", function()
-*     local providerId = "Provider2"
-*     local message = { Target = ao.id, From = "Provider2", Action = "Get-Providers-Random-Balance", Data = json.encode({providerId = providerId}) }
-*     local success = getProviderRandomBalanceHandler(message)
-*     assert(not success, "Failure: Able to query unset balance with handler")
+0   it("should not be able to retrieve unupdated balance", function()
+0     local providerId = "Provider2"
+0     local message = { Target = ao.id, From = "Provider2", Action = "Get-Providers-Random-Balance", Data = json.encode({providerId = providerId}) }
+0     local success = getProviderRandomBalanceHandler(message)
+0     assert(not success, "Failure: Able to query unset balance with handler")
     end)
 
-*   it("should be able to retrieve updated balance", function()
-*     local providerId = "Provider1"
-*     local message = { Target = ao.id, From = "Provider1", Action = "Get-Providers-Random-Balance", Data = json.encode({providerId = providerId}) }
-*     local success = getProviderRandomBalanceHandler(message)
-*     assert(success, "Failure: Unable to query set balance with handler")
+0   it("should be able to retrieve updated balance", function()
+0     local providerId = "Provider1"
+0     local message = { Target = ao.id, From = "Provider1", Action = "Get-Providers-Random-Balance", Data = json.encode({providerId = providerId}) }
+0     local success = getProviderRandomBalanceHandler(message)
+0     assert(success, "Failure: Unable to query set balance with handler")
     end)
   end)
 
-* describe("requestRandom", function()
-*   setup(function()
+0 describe("requestRandom", function()
+0   setup(function()
       -- to execute before this describe
     end)
 
-*   teardown(function()
+0   teardown(function()
     end)
 
-*   it("should not be able to request random from a registered provider with insufficient quantity and correct token", function()
-*     local userId = "Requester1"
-*     local providers = json.encode({provider_ids = {"Provider1"}})
-*     local callbackId = "xxxx-xxxx-4xxx-xxxx"
+0   it("should not be able to request random from a registered provider with insufficient quantity and correct token", function()
+0     local userId = "Requester1"
+0     local providers = json.encode({provider_ids = {"Provider1"}})
+0     local callbackId = "xxxx-xxxx-4xxx-xxxx"
 
-*     local message = {
-*       Target = ao.id,
-*       From = TokenInUse,
-*       Action = "Credit-Notice",
-*       Quantity = "99",
-*       Tags = {
-*         ["X-Providers"] = providers,
-*         ["X-CallbackId"] = callbackId,
-*         Sender = userId
-*       }
+0     local message = {
+        Target = ao.id,
+        From = TokenInUse,
+        Action = "Credit-Notice",
+        Quantity = "99",
+0       Tags = {
+          ["X-Providers"] = providers,
+          ["X-CallbackId"] = callbackId,
+0         Sender = userId
+        }
       }
-*     local success = creditNoticeHandler(message)
-*     assert(not success, "Failure: able to create random request with insufficient quantity")
+0     local success = creditNoticeHandler(message)
+0     assert(not success, "Failure: able to create random request with insufficient quantity")
     end)
 
-*   it("should not be able to request random from a registered provider with sufficient quantity but incorrect token", function()
-*     local userId = "Requester1"
-*     local providers = json.encode({provider_ids = {"Provider1"}})
-*     local callbackId = "xxxx-xxxx-4xxx-xxxx"
+0   it("should not be able to request random from a registered provider with sufficient quantity but incorrect token", function()
+0     local userId = "Requester1"
+0     local providers = json.encode({provider_ids = {"Provider1"}})
+0     local callbackId = "xxxx-xxxx-4xxx-xxxx"
 
-*     local message = {
-*       Target = ao.id,
-*       From = "Not the token in use",
-*       Action = "Credit-Notice",
-*       Quantity = "100",
-*       Tags = {
-*         ["X-Providers"] = providers,
-*         ["X-CallbackId"] = callbackId,
-*         Sender = userId,
-*       }
+0     local message = {
+        Target = ao.id,
+        From = "Not the token in use",
+        Action = "Credit-Notice",
+        Quantity = "100",
+0       Tags = {
+          ["X-Providers"] = providers,
+          ["X-CallbackId"] = callbackId,
+          Sender = userId,
+        }
       }
-*     local success = creditNoticeHandler(message)
-*     assert(not success, "Failure: able to create random request with incorrect token")
+0     local success = creditNoticeHandler(message)
+0     assert(not success, "Failure: able to create random request with incorrect token")
     end)
 
-*   it("should not be able to request random from a registered provider with sufficient quantity correct token but no callback id", function()
-*     local userId = "Requester1"
-*     local providers = json.encode({provider_ids = {"Provider1"}})
+0   it("should not be able to request random from a registered provider with sufficient quantity correct token but no callback id", function()
+0     local userId = "Requester1"
+0     local providers = json.encode({provider_ids = {"Provider1"}})
 
-*     local message = {
-*       Target = ao.id,
-*       From = TokenInUse,
-*       Action = "Credit-Notice",
-*       Quantity = "100",
-*       Tags = {
-*         ["X-Providers"] = providers,
-*         Sender = userId,
-*       }
+0     local message = {
+        Target = ao.id,
+        From = TokenInUse,
+        Action = "Credit-Notice",
+        Quantity = "100",
+0       Tags = {
+          ["X-Providers"] = providers,
+          Sender = userId,
+        }
       }
-*     local success = creditNoticeHandler(message)
-*     assert(not success, "Failure: able to create random request with no callback id")
+0     local success = creditNoticeHandler(message)
+0     assert(not success, "Failure: able to create random request with no callback id")
     end)
 
-*   it("should be able to request random from a registered provider with correct balance and correct requested inputs and token", function()
-*     local userId = "Requester1"
-*     local providers = json.encode({provider_ids = {"Provider1", "Provider3"}})
-*     local callbackId = "xxxx-xxxx-4xxx-xxxx"
-*     local requested_inputs = json.encode({requested_inputs = 1})
-*     local message = {
-*       Target = ao.id,
-*       From = TokenInUse,
-*       Action = "Credit-Notice",
-*       Quantity = "100",
-*       Tags = {
-*         ["X-Providers"] = providers,
-*         ["X-CallbackId"] = callbackId,
-*         ["X-RequestedInputs"] = requestedInputs,
-*         Sender = userId
-*       }
+0   it("should be able to request random from a registered provider with correct balance and correct requested inputs and token", function()
+0     local userId = "Requester1"
+0     local providers = json.encode({provider_ids = {"Provider1", "Provider3"}})
+0     local callbackId = "xxxx-xxxx-4xxx-xxxx"
+0     local requested_inputs = json.encode({requested_inputs = 1})
+0     local message = {
+        Target = ao.id,
+        From = TokenInUse,
+        Action = "Credit-Notice",
+        Quantity = "100",
+0       Tags = {
+          ["X-Providers"] = providers,
+          ["X-CallbackId"] = callbackId,
+          ["X-RequestedInputs"] = requestedInputs,
+0         Sender = userId
+        }
       }
-*     local success = creditNoticeHandler(message)
+0     local success = creditNoticeHandler(message)
 
-*     assert(success, "Failure: failed to create random request")
+0     assert(success, "Failure: failed to create random request")
     end)
 
-*   it("should not be able to request random from no providers with correct balance and token", function()
-*     local userId = "Requester1"
-*     local providers = json.encode({provider_ids = {}})
-*     local callbackId = "xxxx-xxxx-4xxx-xxxx"
+0   it("should not be able to request random from no providers with correct balance and token", function()
+0     local userId = "Requester1"
+0     local providers = json.encode({provider_ids = {}})
+0     local callbackId = "xxxx-xxxx-4xxx-xxxx"
 
-*     local message = {
-*       Target = ao.id,
-*       From = TokenInUse,
-*       Action = "Credit-Notice",
-*       Quantity = "100",
-*       Tags = {
-*         ["X-Providers"] = providers,
-*         ["X-CallbackId"] = callbackId,
-*         Sender = userId
-*       }
+0     local message = {
+        Target = ao.id,
+        From = TokenInUse,
+        Action = "Credit-Notice",
+        Quantity = "100",
+0       Tags = {
+          ["X-Providers"] = providers,
+          ["X-CallbackId"] = callbackId,
+0         Sender = userId
+        }
       }
-*     local success = creditNoticeHandler(message)
+0     local success = creditNoticeHandler(message)
 
-*     assert(not success, "Failure: able to create random request with no providers")
+0     assert(not success, "Failure: able to create random request with no providers")
     end)
 
-*   it("should be able to see random status",
+0   it("should be able to see random status",
     function ()
-*     local status, err = randomManager.getRandomStatus("d6cce35c-487a-458f-bab2-9032c2621f38")
-*     assert(err == "", "Failure: no status found")
+0     local status, err = randomManager.getRandomStatus("d6cce35c-487a-458f-bab2-9032c2621f38")
+0     assert(err == "", "Failure: no status found")
     end)
     
-*   it("should not be able to see updated active_requests for an unrequested provider",
+0   it("should not be able to see updated active_requests for an unrequested provider",
     function ()
-*     local _, err = providerManager.getActiveRequests("Provider2", true)
-*     assert(err == "No active challenge requests found", "Failure: active request found")
+0     local _, err = providerManager.getActiveRequests("Provider2", true)
+0     assert(err == "No active challenge requests found", "Failure: active request found")
     end)
 
-*   it("should be able to see updated active_requests for our requested provider",
+0   it("should be able to see updated active_requests for our requested provider",
     function ()
-*     local _, err = providerManager.getActiveRequests("Provider1", true)
-*     assert(err == "", "Failure: no active request found")
-*     local _, error = providerManager.getActiveRequests("Provider3", true)
-*     assert(error == "", "Failure: no active request found")
+0     local _, err = providerManager.getActiveRequests("Provider1", true)
+0     assert(err == "", "Failure: no active request found")
+0     local _, error = providerManager.getActiveRequests("Provider3", true)
+0     assert(error == "", "Failure: no active request found")
     end)
 
-*   it("should not be able to retrieve active_requests for an unrequested provider",
+0   it("should not be able to retrieve active_requests for an unrequested provider",
     function ()
-*     local providerId = "Provider2"
-*     local message = {
-*       Target = ao.id,
-*       From = "Provider2",
-*       Action = "Get-Open-Random-Requests",
-*       Data = json.encode({providerId = providerId})
+0     local providerId = "Provider2"
+0     local message = {
+        Target = ao.id,
+        From = "Provider2",
+        Action = "Get-Open-Random-Requests",
+0       Data = json.encode({providerId = providerId})
       }
-*     local success = getOpenRandomRequestsHandler(message)
-*     assert(not success, "Failure: able to get active requests from an unrequested provider")
-*     local _, err = providerManager.getActiveRequests("Provider2", true)
-*     assert(err == "No active challenge requests found", "Failure: active request found")
+0     local success = getOpenRandomRequestsHandler(message)
+0     assert(not success, "Failure: able to get active requests from an unrequested provider")
+0     local _, err = providerManager.getActiveRequests("Provider2", true)
+0     assert(err == "No active challenge requests found", "Failure: active request found")
     end)
 
-*   it("should be able to retrieve active_requests for our requested provider",
+0   it("should be able to retrieve active_requests for our requested provider",
     function ()
-*     local providerId = "Provider1"
-*     local message = {
-*       Target = ao.id,
-*       From = "Provider1",
-*       Action = "Get-Open-Random-Requests",
-*       Data = json.encode({providerId = providerId})
+0     local providerId = "Provider1"
+0     local message = {
+        Target = ao.id,
+        From = "Provider1",
+        Action = "Get-Open-Random-Requests",
+0       Data = json.encode({providerId = providerId})
       }
-*     local success = getOpenRandomRequestsHandler(message)
-*     assert(success, "Failure: unable to get active requests from a requested provider")
+0     local success = getOpenRandomRequestsHandler(message)
+0     assert(success, "Failure: unable to get active requests from a requested provider")
 
-*     local _, err = providerManager.getActiveRequests("Provider1", true)
-*     assert(err == "", "Failure: no active request found")
+0     local _, err = providerManager.getActiveRequests("Provider1", true)
+0     assert(err == "", "Failure: no active request found")
     end)
 
-*   it("should be able to retrieve active_requests for our second requested provider",
+0   it("should be able to retrieve active_requests for our second requested provider",
     function ()
-*     local providerId = "Provider3"
-*     local message = {
-*       Target = ao.id,
-*       From = "Provider3",
-*       Action = "Get-Open-Random-Requests",
-*       Data = json.encode({providerId = providerId})
+0     local providerId = "Provider3"
+0     local message = {
+        Target = ao.id,
+        From = "Provider3",
+        Action = "Get-Open-Random-Requests",
+0       Data = json.encode({providerId = providerId})
       }
-*     local success = getOpenRandomRequestsHandler(message)
-*     assert(success, "Failure: unable to get active requests from a requested provider")
+0     local success = getOpenRandomRequestsHandler(message)
+0     assert(success, "Failure: unable to get active requests from a requested provider")
 
-*     local _, err = providerManager.getActiveRequests("Provider3", true)
-*     assert(err == "", "Failure: no active request found")
+0     local _, err = providerManager.getActiveRequests("Provider3", true)
+0     assert(err == "", "Failure: no active request found")
     end)
   end)
 
-* describe("postVDFChallenge", function()
-*   setup(function()
+0 describe("postVDFChallenge", function()
+0   setup(function()
       -- to execute before this describe
     end)
 
-*   teardown(function()
+0   teardown(function()
     end)
 
-*   it("should not be able to post challenge from an unrequested provider for a valid request",
+0   it("should not be able to post challenge from an unrequested provider for a valid request",
     function()
-*     local input = "0x023456987678"
-*     local modulus = "0x0567892345678"
-*     local requestId = "d6cce35c-487a-458f-bab2-9032c2621f38"
+0     local input = "0x023456987678"
+0     local modulus = "0x0567892345678"
+0     local requestId = "d6cce35c-487a-458f-bab2-9032c2621f38"
 
-*     local message = {
-*       Target = ao.id,
-*       From = "Provider2",
-*       Action = "Post-VDF-Challenge",
-*       Data = json.encode({input = input, modulus = modulus, requestId = requestId})
+0     local message = {
+        Target = ao.id,
+        From = "Provider2",
+        Action = "Post-VDF-Challenge",
+0       Data = json.encode({input = input, modulus = modulus, requestId = requestId})
       }
 
-*     local success = postVDFChallengeHandler(message)
+0     local success = postVDFChallengeHandler(message)
       
-*     assert(not success, "Failure: able to post VDF Challenge from unrequested provider")
+0     assert(not success, "Failure: able to post VDF Challenge from unrequested provider")
     end)
 
-*   it("should not be able to post challenge from an unrequested provider for an invalid request",
+0   it("should not be able to post challenge from an unrequested provider for an invalid request",
     function()
-*     local input = "0x023456987678"
-*     local modulus = "0x0567892345678"
-*     local requestId = "a6cce35c-487a-458f-bab2-9032c2621f38"
+0     local input = "0x023456987678"
+0     local modulus = "0x0567892345678"
+0     local requestId = "a6cce35c-487a-458f-bab2-9032c2621f38"
 
-*     local message = {
-*       Target = ao.id,
-*       From = "Provider2",
-*       Action = "Post-VDF-Challenge",
-*       Data = json.encode({input = input, modulus = modulus, requestId = requestId})
+0     local message = {
+        Target = ao.id,
+        From = "Provider2",
+        Action = "Post-VDF-Challenge",
+0       Data = json.encode({input = input, modulus = modulus, requestId = requestId})
       }
 
-*     local success = postVDFChallengeHandler(message)
-*     assert(not success, "Failure: able to post VDF Challenge from unrequested provider")
+0     local success = postVDFChallengeHandler(message)
+0     assert(not success, "Failure: able to post VDF Challenge from unrequested provider")
     end)
 
-*   it("should be able to post challenge from a requested provider for a valid request",
+0   it("should be able to post challenge from a requested provider for a valid request",
     function()
-*     local input = "0x023456987678"
-*     local modulus = "0x0567892345678"
-*     local requestId = "d6cce35c-487a-458f-bab2-9032c2621f38"
+0     local input = "0x023456987678"
+0     local modulus = "0x0567892345678"
+0     local requestId = "d6cce35c-487a-458f-bab2-9032c2621f38"
 
-*     local message = {
-*       Target = ao.id,
-*       From = "Provider1",
-*       Action = "Post-VDF-Challenge",
-*       Data = json.encode({input = input, modulus = modulus, requestId = requestId})
+0     local message = {
+        Target = ao.id,
+        From = "Provider1",
+        Action = "Post-VDF-Challenge",
+0       Data = json.encode({input = input, modulus = modulus, requestId = requestId})
       }
 
-*     local success = postVDFChallengeHandler(message)
-*     assert(success, "Failure: unable to post VDF Challenge from requested provider")
+0     local success = postVDFChallengeHandler(message)
+0     assert(success, "Failure: unable to post VDF Challenge from requested provider")
     end)
 
-*   it("should not be able to post output and proof from a requested provider for a valid request before all challenges are posted",
+0   it("should not be able to post output and proof from a requested provider for a valid request before all challenges are posted",
     function()
-*     local output = "0x023456987678"
-*     local proof = json.encode({"0x0567892345678", "fghjkl", "0x0567892345678", "fghjkl", "0x0567892345678", "0x0567892345678", "fghjkl", "0x0567892345678", "fghjkl", "0x0567892345678" })
-*     local requestId = "d6cce35c-487a-458f-bab2-9032c2621f38"
+0     local output = "0x023456987678"
+0     local proof = json.encode({"0x0567892345678", "fghjkl", "0x0567892345678", "fghjkl", "0x0567892345678", "0x0567892345678", "fghjkl", "0x0567892345678", "fghjkl", "0x0567892345678" })
+0     local requestId = "d6cce35c-487a-458f-bab2-9032c2621f38"
 
-*     local message = {
-*       Target = ao.id,
-*       From = "Provider1",
-*       Action = "Post-VDF-Output-And-Proof",
-*       Data = json.encode({output = output, proof = proof, requestId = requestId})
+0     local message = {
+        Target = ao.id,
+        From = "Provider1",
+        Action = "Post-VDF-Output-And-Proof",
+0       Data = json.encode({output = output, proof = proof, requestId = requestId})
       }
 
-*     local success = postVDFOutputAndProofHandler(message)
-*     assert(not success, "Failure: able to post VDF output and proof from requested provider vefore all challenges are posted")
+0     local success = postVDFOutputAndProofHandler(message)
+0     assert(not success, "Failure: able to post VDF output and proof from requested provider vefore all challenges are posted")
     end)
     
-*   it("should be able to post challenge from second requested provider for a valid request",
+0   it("should be able to post challenge from second requested provider for a valid request",
     function()
-*     local input = "0x023456987678"
-*     local modulus = "0x0567892345678"
-*     local requestId = "d6cce35c-487a-458f-bab2-9032c2621f38"
+0     local input = "0x023456987678"
+0     local modulus = "0x0567892345678"
+0     local requestId = "d6cce35c-487a-458f-bab2-9032c2621f38"
 
-*     local message = {
-*       Target = ao.id,
-*       From = "Provider3",
-*       Action = "Post-VDF-Challenge",
-*       Data = json.encode({input = input, modulus = modulus, requestId = requestId})
+0     local message = {
+        Target = ao.id,
+        From = "Provider3",
+        Action = "Post-VDF-Challenge",
+0       Data = json.encode({input = input, modulus = modulus, requestId = requestId})
       }
 
-*     local success = postVDFChallengeHandler(message)
-*     assert(success, "Failure: unable to post VDF Challenge from requested provider")
+0     local success = postVDFChallengeHandler(message)
+0     assert(success, "Failure: unable to post VDF Challenge from requested provider")
     end)
 
   end)
 
-* describe("postVDFOutputAndProof", function()
-*   setup(function()
+0 describe("postVDFOutputAndProof", function()
+0   setup(function()
       -- to execute before this describe
     end)
 
-*   teardown(function()
+0   teardown(function()
     end)
 
-*   it("should not be able to post output and proof from an unrequested provider for a valid request",
+0   it("should not be able to post output and proof from an unrequested provider for a valid request",
     function()
-*     local output = "0x023456987678"
-*     local proof = json.encode({"0x0567892345678", "fghjkl", "0x0567892345678", "fghjkl", "0x0567892345678", "0x0567892345678", "fghjkl", "0x0567892345678", "fghjkl", "0x0567892345678" })
-*     local requestId = "d6cce35c-487a-458f-bab2-9032c2621f38"
+0     local output = "0x023456987678"
+0     local proof = json.encode({"0x0567892345678", "fghjkl", "0x0567892345678", "fghjkl", "0x0567892345678", "0x0567892345678", "fghjkl", "0x0567892345678", "fghjkl", "0x0567892345678" })
+0     local requestId = "d6cce35c-487a-458f-bab2-9032c2621f38"
 
-*     local message = {
-*       Target = ao.id,
-*       From = "Provider2",
-*       Action = "Post-VDF-Output-And-Proof",
-*       Data = json.encode({output = output, proof = proof, requestId = requestId})
+0     local message = {
+        Target = ao.id,
+        From = "Provider2",
+        Action = "Post-VDF-Output-And-Proof",
+0       Data = json.encode({output = output, proof = proof, requestId = requestId})
       }
 
-*     local success = postVDFChallengeHandler(message)
-*     assert(not success, "Failure: able to post VDF output and proof from unrequested provider")
+0     local success = postVDFChallengeHandler(message)
+0     assert(not success, "Failure: able to post VDF output and proof from unrequested provider")
     end)
 
-*   it("should not be able to post output and proof from an unrequested provider for an invalid request",
+0   it("should not be able to post output and proof from an unrequested provider for an invalid request",
     function()
-*     local output = "0x023456987678"
-*     local proof = json.encode({"0x0567892345678", "fghjkl", "0x0567892345678", "fghjkl", "0x0567892345678", "0x0567892345678", "fghjkl", "0x0567892345678", "fghjkl", "0x0567892345678" })
-*     local requestId = "a6cce35c-487a-458f-bab2-9032c2621f38"
+0     local output = "0x023456987678"
+0     local proof = json.encode({"0x0567892345678", "fghjkl", "0x0567892345678", "fghjkl", "0x0567892345678", "0x0567892345678", "fghjkl", "0x0567892345678", "fghjkl", "0x0567892345678" })
+0     local requestId = "a6cce35c-487a-458f-bab2-9032c2621f38"
 
-*     local message = {
-*       Target = ao.id,
-*       From = "Provider2",
-*       Action = "Post-VDF-Output-And-Proof",
-*       Data = json.encode({output = output, proof = proof, requestId = requestId})
+0     local message = {
+        Target = ao.id,
+        From = "Provider2",
+        Action = "Post-VDF-Output-And-Proof",
+0       Data = json.encode({output = output, proof = proof, requestId = requestId})
       }
 
-*     local success = postVDFOutputAndProofHandler(message)
-*     assert(not success, "Failure: able to post VDF output and proof from unrequested provider")
+0     local success = postVDFOutputAndProofHandler(message)
+0     assert(not success, "Failure: able to post VDF output and proof from unrequested provider")
     end)
 
-*   it("should not be able to post output with no proof from a requested provider for a valid request",
+0   it("should not be able to post output with no proof from a requested provider for a valid request",
     function()
-*     local output = "0x023456987678"
-*     local requestId = "d6cce35c-487a-458f-bab2-9032c2621f38"
+0     local output = "0x023456987678"
+0     local requestId = "d6cce35c-487a-458f-bab2-9032c2621f38"
 
-*     local message = {
-*       Target = ao.id,
-*       From = "Provider1",
-*       Action = "Post-VDF-Output-And-Proof",
-*       Data = json.encode({output = output, requestId = requestId})
+0     local message = {
+        Target = ao.id,
+        From = "Provider1",
+        Action = "Post-VDF-Output-And-Proof",
+0       Data = json.encode({output = output, requestId = requestId})
       }
 
-*     local success = postVDFOutputAndProofHandler(message)
-*     assert(not success, "Failure: able to post VDF no output and proof from requested provider")
+0     local success = postVDFOutputAndProofHandler(message)
+0     assert(not success, "Failure: able to post VDF no output and proof from requested provider")
     end)
 
-*   it("should not be able to post no output with proof from a requested provider for a valid request",
+0   it("should not be able to post no output with proof from a requested provider for a valid request",
     function()
-*     local proof = json.encode({"0x0567892345678", "fghjkl", "0x0567892345678", "fghjkl", "0x0567892345678", "0x0567892345678", "fghjkl", "0x0567892345678", "fghjkl", "0x0567892345678" })
-*     local requestId = "d6cce35c-487a-458f-bab2-9032c2621f38"
+0     local proof = json.encode({"0x0567892345678", "fghjkl", "0x0567892345678", "fghjkl", "0x0567892345678", "0x0567892345678", "fghjkl", "0x0567892345678", "fghjkl", "0x0567892345678" })
+0     local requestId = "d6cce35c-487a-458f-bab2-9032c2621f38"
 
-*     local message = {
-*       Target = ao.id,
-*       From = "Provider1",
-*       Action = "Post-VDF-Output-And-Proof",
-*       Data = json.encode({proof = proof, requestId = requestId})
+0     local message = {
+        Target = ao.id,
+        From = "Provider1",
+        Action = "Post-VDF-Output-And-Proof",
+0       Data = json.encode({proof = proof, requestId = requestId})
       }
 
-*     local success = postVDFOutputAndProofHandler(message)
-*     assert(not success, "Failure: able to post VDF no output and proof from requested provider")
+0     local success = postVDFOutputAndProofHandler(message)
+0     assert(not success, "Failure: able to post VDF no output and proof from requested provider")
     end)
 
-*   it("should be able to post output and proof from a requested provider for a valid request",
+0   it("should be able to post output and proof from a requested provider for a valid request",
     function()
-*     local output = "0x023456987678"
-*     local proof = json.encode({"erwsztxdyfcuj", "ztrdyxufc", "ARTSzydxujf", "RTz", "tzyhdxjf", "TSYzu", "RTYzux", "tmrngb", "kumjtnyhbtdgv", "kyumtjynjrhbhg" })
-*     local requestId = "d6cce35c-487a-458f-bab2-9032c2621f38"
+0     local output = "0x023456987678"
+0     local proof = json.encode({"erwsztxdyfcuj", "ztrdyxufc", "ARTSzydxujf", "RTz", "tzyhdxjf", "TSYzu", "RTYzux", "tmrngb", "kumjtnyhbtdgv", "kyumtjynjrhbhg" })
+0     local requestId = "d6cce35c-487a-458f-bab2-9032c2621f38"
 
-*     local message = {
-*       Target = ao.id,
-*       From = "Provider1",
-*       Action = "Post-VDF-Output-And-Proof",
-*       Data = json.encode({output = output, proof = proof, requestId = requestId})
+0     local message = {
+        Target = ao.id,
+        From = "Provider1",
+        Action = "Post-VDF-Output-And-Proof",
+0       Data = json.encode({output = output, proof = proof, requestId = requestId})
       }
 
-*     local success = postVDFOutputAndProofHandler(message)
+0     local success = postVDFOutputAndProofHandler(message)
 0     assert(success, "Failure: unable to post VDF output and proof from requested provider")
     end)
 
-*   it("should not be able to post output and proof from a requested provider for a valid request twice",
+0   it("should not be able to post output and proof from a requested provider for a valid request twice",
     function()
-*     local output = "0x023456987678"
-*     local proof = json.encode({"0x0567892345678", "fghjkl", "0x0567892345678", "fghjkl", "0x0567892345678", "0x0567892345678", "fghjkl", "0x0567892345678", "fghjkl", "0x0567892345678" })
-*     local requestId = "d6cce35c-487a-458f-bab2-9032c2621f38"
+0     local output = "0x023456987678"
+0     local proof = json.encode({"0x0567892345678", "fghjkl", "0x0567892345678", "fghjkl", "0x0567892345678", "0x0567892345678", "fghjkl", "0x0567892345678", "fghjkl", "0x0567892345678" })
+0     local requestId = "d6cce35c-487a-458f-bab2-9032c2621f38"
 
-*     local message = {
-*       Target = ao.id,
-*       From = "Provider1",
-*       Action = "Post-VDF-Output-And-Proof",
-*       Data = json.encode({output = output, proof = proof, requestId = requestId})
+0     local message = {
+        Target = ao.id,
+        From = "Provider1",
+        Action = "Post-VDF-Output-And-Proof",
+0       Data = json.encode({output = output, proof = proof, requestId = requestId})
       }
 
-*     local success = postVDFOutputAndProofHandler(message)
-*     assert(not success, "Failure: able to post VDF output and proof from requested provider twice")
+0     local success = postVDFOutputAndProofHandler(message)
+0     assert(not success, "Failure: able to post VDF output and proof from requested provider twice")
     end)
 
-*   it("should be able to post output and proof from the second requested provider for a valid request",
+0   it("should be able to post output and proof from the second requested provider for a valid request",
     function()
-*     local output = "0x023456987678"
-*     local proof = json.encode({"srtxdyfu", "dfgfh", "sztgdh", "aeyduxficgk", "yucfi", "xuctyurvi", "wrstedf", "warstdxyfcjg", "ARSztgdxhfcj", "rztswyxduf" })
-*     local requestId = "d6cce35c-487a-458f-bab2-9032c2621f38"
+0     local output = "0x023456987678"
+0     local proof = json.encode({"srtxdyfu", "dfgfh", "sztgdh", "aeyduxficgk", "yucfi", "xuctyurvi", "wrstedf", "warstdxyfcjg", "ARSztgdxhfcj", "rztswyxduf" })
+0     local requestId = "d6cce35c-487a-458f-bab2-9032c2621f38"
 
-*     local message = {
-*       Target = ao.id,
-*       From = "Provider3",
-*       Action = "Post-VDF-Output-And-Proof",
-*       Data = json.encode({output = output, proof = proof, requestId = requestId})
+0     local message = {
+        Target = ao.id,
+        From = "Provider3",
+        Action = "Post-VDF-Output-And-Proof",
+0       Data = json.encode({output = output, proof = proof, requestId = requestId})
       }
 
-*     local success = postVDFOutputAndProofHandler(message)
+0     local success = postVDFOutputAndProofHandler(message)
 0     assert(success, "Failure: unable to post VDF output and proof from the second requested provider")
     end)
   end)
 
-* describe("getRandomRequests & getRandomRequestViaCallbackId", function()
-*   setup(function()
+0 describe("getRandomRequests & getRandomRequestViaCallbackId", function()
+0   setup(function()
       -- to execute before this describe
     end)
 
-*   teardown(function()
+0   teardown(function()
     end)
 
-*   it("should not error on valid requestIds",
+0   it("should not error on valid requestIds",
     function()
-*     local requestIds = {"d6cce35c-487a-458f-bab2-9032c2621f38"}
+0     local requestIds = {"d6cce35c-487a-458f-bab2-9032c2621f38"}
 
-*     local message = {
-*       Target = ao.id,
-*       From = "Provider1",
-*       Action = "Get-Random-Requests",
-*       Data = json.encode({requestIds = requestIds})
+0     local message = {
+        Target = ao.id,
+        From = "Provider1",
+        Action = "Get-Random-Requests",
+0       Data = json.encode({requestIds = requestIds})
       }
 
-*     local success = getRandomRequestsHandler(message)
-*     assert(success, "Failure: errors out on valid requestIds")
+0     local success = getRandomRequestsHandler(message)
+0     assert(success, "Failure: errors out on valid requestIds")
     end)
 
-*   it("should not error on invalid requestIds",
+0   it("should not error on invalid requestIds",
     function()
-*     local requestIds = {"d6cce35c-487a-458f-bab2-9032c2621f38", "A6cce35c-487a-458f-bab2-9032c2621f38"}
+0     local requestIds = {"d6cce35c-487a-458f-bab2-9032c2621f38", "A6cce35c-487a-458f-bab2-9032c2621f38"}
 
-*     local message = {
-*       Target = ao.id,
-*       From = "Provider1",
-*       Action = "Get-Random-Requests",
-*       Data = json.encode({requestIds = requestIds})
+0     local message = {
+        Target = ao.id,
+        From = "Provider1",
+        Action = "Get-Random-Requests",
+0       Data = json.encode({requestIds = requestIds})
       }
 
-*     local success = getRandomRequestsHandler(message)
-*     assert(success, "Failure: errors out on invalid requestIds")
+0     local success = getRandomRequestsHandler(message)
+0     assert(success, "Failure: errors out on invalid requestIds")
     end)
 
-*   it("should not error on valid callbackId",
+0   it("should not error on valid callbackId",
     function()
-*     local callbackId = "xxxx-xxxx-4xxx-xxxx"
+0     local callbackId = "xxxx-xxxx-4xxx-xxxx"
 
-*     local message = {
-*       Target = ao.id,
-*       From = "Provider1",
-*       Action = "Get-Random-Request-Via-Callback-Id",
-*       Data = json.encode({callbackId = callbackId}),
+0     local message = {
+        Target = ao.id,
+        From = "Provider1",
+        Action = "Get-Random-Request-Via-Callback-Id",
+        Data = json.encode({callbackId = callbackId}),
         reply = function (msg)
           -- print("replied: " .. json.encode(msg))
         end
       }
 
-*     local success = getRandomRequestViaCallbackIdHandler(message)
-*     assert(success, "Failure: errors out on valid callbackId")
+0     local success = getRandomRequestViaCallbackIdHandler(message)
+0     assert(success, "Failure: errors out on valid callbackId")
     end)
 
 
-*   it("should not error on invalid callbackId",
+0   it("should not error on invalid callbackId",
     function()
-*     local callbackId = "xxxx-xxxx-4xxx-xxx"
+0     local callbackId = "xxxx-xxxx-4xxx-xxx"
 
-*     local message = {
-*       Target = ao.id,
-*       From = "Provider1",
-*       Action = "Get-Random-Request-Via-Callback-Id",
-*       Data = json.encode({callbackId = callbackId}),
+0     local message = {
+        Target = ao.id,
+        From = "Provider1",
+        Action = "Get-Random-Request-Via-Callback-Id",
+        Data = json.encode({callbackId = callbackId}),
         reply = function (msg)
           -- print("replied: " .. json.encode(msg))
         end
       }
 
-*     local success = getRandomRequestViaCallbackIdHandler(message)
-*     assert(success, "Failure: errors out on invalid callbackId")
+0     local success = getRandomRequestViaCallbackIdHandler(message)
+0     assert(success, "Failure: errors out on invalid callbackId")
     end)
   end)
 
@@ -6639,7 +7285,7 @@ test/mocked-env/lib/json.lua
 
 
   local function escape_char(c)
-*   return "\\" .. (escape_char_map[c] or string.format("u%04x", c:byte()))
+0   return "\\" .. (escape_char_map[c] or string.format("u%04x", c:byte()))
   end
 
 
@@ -6649,57 +7295,57 @@ test/mocked-env/lib/json.lua
 
 
   local function encode_table(val, stack)
-*   local res = {}
-*   stack = stack or {}
+0   local res = {}
+0   stack = stack or {}
 
     -- Circular reference?
-*   if stack[val] then error("circular reference") end
+0   if stack[val] then error("circular reference") end
 
-*   stack[val] = true
+0   stack[val] = true
 
-*   if rawget(val, 1) ~= nil or next(val) == nil then
+0   if rawget(val, 1) ~= nil or next(val) == nil then
       -- Treat as array -- check keys are valid and it is not sparse
-*     local n = 0
-*     for k in pairs(val) do
-*       if type(k) ~= "number" then
+0     local n = 0
+0     for k in pairs(val) do
+0       if type(k) ~= "number" then
 0         error("invalid table: mixed or invalid key types")
         end
-*       n = n + 1
+0       n = n + 1
       end
-*     if n ~= #val then
+0     if n ~= #val then
 0       error("invalid table: sparse array")
       end
       -- Encode
-*     for i, v in ipairs(val) do
-*       table.insert(res, encode(v, stack))
+0     for i, v in ipairs(val) do
+0       table.insert(res, encode(v, stack))
       end
-*     stack[val] = nil
-*     return "[" .. table.concat(res, ",") .. "]"
+0     stack[val] = nil
+0     return "[" .. table.concat(res, ",") .. "]"
     else
       -- Treat as an object
-*     for k, v in pairs(val) do
-*       if type(k) ~= "string" then
+0     for k, v in pairs(val) do
+0       if type(k) ~= "string" then
 0         error("invalid table: mixed or invalid key types")
         end
-*       table.insert(res, encode(k, stack) .. ":" .. encode(v, stack))
+0       table.insert(res, encode(k, stack) .. ":" .. encode(v, stack))
       end
-*     stack[val] = nil
-*     return "{" .. table.concat(res, ",") .. "}"
+0     stack[val] = nil
+0     return "{" .. table.concat(res, ",") .. "}"
     end
   end
 
 
   local function encode_string(val)
-*   return '"' .. val:gsub('[%z\1-\31\\"]', escape_char) .. '"'
+0   return '"' .. val:gsub('[%z\1-\31\\"]', escape_char) .. '"'
   end
 
 
   local function encode_number(val)
     -- Check for NaN, -inf and inf
-*   if val ~= val or val <= -math.huge or val >= math.huge then
+0   if val ~= val or val <= -math.huge or val >= math.huge then
 0     error("unexpected number value '" .. tostring(val) .. "'")
     end
-*   return string.format("%.14g", val)
+0   return string.format("%.14g", val)
   end
 
 
@@ -6713,17 +7359,17 @@ test/mocked-env/lib/json.lua
 
 
   encode = function(val, stack)
-*   local t = type(val)
-*   local f = type_func_map[t]
-*   if f then
-*     return f(val, stack)
+0   local t = type(val)
+0   local f = type_func_map[t]
+0   if f then
+0     return f(val, stack)
     end
 0   error("unexpected type '" .. t .. "'")
   end
 
 
 * function json.encode(val)
-*   return (encode(val))
+0   return (encode(val))
   end
 
   -------------------------------------------------------------------------------
@@ -6753,12 +7399,12 @@ test/mocked-env/lib/json.lua
 
 
   local function next_char(str, idx, set, negate)
-*   for i = idx, #str do
-*     if set[str:sub(i, i)] ~= negate then
-*       return i
+0   for i = idx, #str do
+0     if set[str:sub(i, i)] ~= negate then
+0       return i
       end
     end
-*   return #str + 1
+0   return #str + 1
   end
 
 
@@ -6806,38 +7452,38 @@ test/mocked-env/lib/json.lua
 
 
   local function parse_string(str, i)
-*   local res = ""
-*   local j = i + 1
-*   local k = j
+0   local res = ""
+0   local j = i + 1
+0   local k = j
 
-*   while j <= #str do
-*     local x = str:byte(j)
+0   while j <= #str do
+0     local x = str:byte(j)
 
-*     if x < 32 then
+0     if x < 32 then
 0       decode_error(str, j, "control character in string")
-*     elseif x == 92 then -- `\`: Escape
-*       res = res .. str:sub(k, j - 1)
-*       j = j + 1
-*       local c = str:sub(j, j)
-*       if c == "u" then
+0     elseif x == 92 then -- `\`: Escape
+0       res = res .. str:sub(k, j - 1)
+0       j = j + 1
+0       local c = str:sub(j, j)
+0       if c == "u" then
 0         local hex = str:match("^[dD][89aAbB]%x%x\\u%x%x%x%x", j + 1)
 0             or str:match("^%x%x%x%x", j + 1)
 0             or decode_error(str, j - 1, "invalid unicode escape in string")
 0         res = res .. parse_unicode_escape(hex)
 0         j = j + #hex
         else
-*         if not escape_chars[c] then
+0         if not escape_chars[c] then
 0           decode_error(str, j - 1, "invalid escape char '" .. c .. "' in string")
           end
-*         res = res .. escape_char_map_inv[c]
+0         res = res .. escape_char_map_inv[c]
         end
-*       k = j + 1
-*     elseif x == 34 then -- `"`: End of string
-*       res = res .. str:sub(k, j - 1)
-*       return res, j + 1
+0       k = j + 1
+0     elseif x == 34 then -- `"`: End of string
+0       res = res .. str:sub(k, j - 1)
+0       return res, j + 1
       end
 
-*     j = j + 1
+0     j = j + 1
     end
 
 0   decode_error(str, i, "expected closing quote for string")
@@ -6845,13 +7491,13 @@ test/mocked-env/lib/json.lua
 
 
   local function parse_number(str, i)
-*   local x = next_char(str, i, delim_chars)
-*   local s = str:sub(i, x - 1)
-*   local n = tonumber(s)
-*   if not n then
+0   local x = next_char(str, i, delim_chars)
+0   local s = str:sub(i, x - 1)
+0   local n = tonumber(s)
+0   if not n then
 0     decode_error(str, i, "invalid number '" .. s .. "'")
     end
-*   return n, x
+0   return n, x
   end
 
 
@@ -6866,66 +7512,66 @@ test/mocked-env/lib/json.lua
 
 
   local function parse_array(str, i)
-*   local res = {}
-*   local n = 1
-*   i = i + 1
+0   local res = {}
+0   local n = 1
+0   i = i + 1
 0   while 1 do
       local x
-*     i = next_char(str, i, space_chars, true)
+0     i = next_char(str, i, space_chars, true)
       -- Empty / end of array?
-*     if str:sub(i, i) == "]" then
-*       i = i + 1
-*       break
+0     if str:sub(i, i) == "]" then
+0       i = i + 1
+        break
       end
       -- Read token
-*     x, i = parse(str, i)
-*     res[n] = x
-*     n = n + 1
+0     x, i = parse(str, i)
+0     res[n] = x
+0     n = n + 1
       -- Next token
-*     i = next_char(str, i, space_chars, true)
-*     local chr = str:sub(i, i)
-*     i = i + 1
-*     if chr == "]" then break end
-*     if chr ~= "," then decode_error(str, i, "expected ']' or ','") end
+0     i = next_char(str, i, space_chars, true)
+0     local chr = str:sub(i, i)
+0     i = i + 1
+0     if chr == "]" then break end
+0     if chr ~= "," then decode_error(str, i, "expected ']' or ','") end
     end
-*   return res, i
+0   return res, i
   end
 
 
   local function parse_object(str, i)
-*   local res = {}
-*   i = i + 1
+0   local res = {}
+0   i = i + 1
 0   while 1 do
       local key, val
-*     i = next_char(str, i, space_chars, true)
+0     i = next_char(str, i, space_chars, true)
       -- Empty / end of object?
-*     if str:sub(i, i) == "}" then
+0     if str:sub(i, i) == "}" then
 0       i = i + 1
         break
       end
       -- Read key
-*     if str:sub(i, i) ~= '"' then
+0     if str:sub(i, i) ~= '"' then
 0       decode_error(str, i, "expected string for key")
       end
-*     key, i = parse(str, i)
+0     key, i = parse(str, i)
       -- Read ':' delimiter
-*     i = next_char(str, i, space_chars, true)
-*     if str:sub(i, i) ~= ":" then
+0     i = next_char(str, i, space_chars, true)
+0     if str:sub(i, i) ~= ":" then
 0       decode_error(str, i, "expected ':' after key")
       end
-*     i = next_char(str, i + 1, space_chars, true)
+0     i = next_char(str, i + 1, space_chars, true)
       -- Read value
-*     val, i = parse(str, i)
+0     val, i = parse(str, i)
       -- Set
-*     res[key] = val
+0     res[key] = val
       -- Next token
-*     i = next_char(str, i, space_chars, true)
-*     local chr = str:sub(i, i)
-*     i = i + 1
-*     if chr == "}" then break end
-*     if chr ~= "," then decode_error(str, i, "expected '}' or ','") end
+0     i = next_char(str, i, space_chars, true)
+0     local chr = str:sub(i, i)
+0     i = i + 1
+0     if chr == "}" then break end
+0     if chr ~= "," then decode_error(str, i, "expected '}' or ','") end
     end
-*   return res, i
+0   return res, i
   end
 
 
@@ -6951,25 +7597,25 @@ test/mocked-env/lib/json.lua
 
 
   parse = function(str, idx)
-*   local chr = str:sub(idx, idx)
-*   local f = char_func_map[chr]
-*   if f then
-*     return f(str, idx)
+0   local chr = str:sub(idx, idx)
+0   local f = char_func_map[chr]
+0   if f then
+0     return f(str, idx)
     end
 0   decode_error(str, idx, "unexpected character '" .. chr .. "'")
   end
 
 
 * function json.decode(str)
-*   if type(str) ~= "string" then
+0   if type(str) ~= "string" then
 0     error("expected argument of type string, got " .. type(str))
     end
-*   local res, idx = parse(str, next_char(str, 1, space_chars, true))
-*   idx = next_char(str, idx, space_chars, true)
-*   if idx <= #str then
+0   local res, idx = parse(str, next_char(str, 1, space_chars, true))
+0   idx = next_char(str, idx, space_chars, true)
+0   if idx <= #str then
 0     decode_error(str, idx, "trailing garbage")
     end
-*   return res
+0   return res
   end
 
 * return json
@@ -6983,31 +7629,31 @@ test/mocked-env/ao/handlers.lua
 * handlers.list = {}
 
   local function findIndexByProp(array, prop, value)
-*   for index, object in ipairs(array) do
-*     if object[prop] == value then
+0   for index, object in ipairs(array) do
+0     if object[prop] == value then
 0       return index
       end
     end
-*   return nil
+0   return nil
   end
 
 * function handlers.add(name, pattern, handle)
-*   assert(type(name) == 'string' and type(pattern) == 'function' and type(handle) == 'function',
-*     'invalid arguments: handler.add(name : string, pattern : function(msg: Message) : {-1 = break, 0 = skip, 1 = continue}, handle(msg : Message) : void)')
-*   assert(type(name) == 'string', 'name MUST be string')
-*   assert(type(pattern) == 'function', 'pattern MUST be function')
-*   assert(type(handle) == 'function', 'handle MUST be function')
+0   assert(type(name) == 'string' and type(pattern) == 'function' and type(handle) == 'function',
+0     'invalid arguments: handler.add(name : string, pattern : function(msg: Message) : {-1 = break, 0 = skip, 1 = continue}, handle(msg : Message) : void)')
+0   assert(type(name) == 'string', 'name MUST be string')
+0   assert(type(pattern) == 'function', 'pattern MUST be function')
+0   assert(type(handle) == 'function', 'handle MUST be function')
 
 
     -- update existing handler by name
-*   local idx = findIndexByProp(handlers.list, "name", name)
-*   if idx ~= nil and idx > 0 then
+0   local idx = findIndexByProp(handlers.list, "name", name)
+0   if idx ~= nil and idx > 0 then
       -- found update
 0     handlers.list[idx].pattern = pattern
 0     handlers.list[idx].handle = handle
     else
       -- not found then add
-*     table.insert(handlers.list, { pattern = pattern, handle = handle, name = name })
+0     table.insert(handlers.list, { pattern = pattern, handle = handle, name = name })
     end
   end
 
@@ -7188,7 +7834,7 @@ test/mocked-env/ao/ao.lua
       }
     ]]
 *   function ao.send(rawMsg)
-*     if _G.IsInUnitTest then return end
+0     if _G.IsInUnitTest then return end
 
 0     local msg = _my.formatMsg(rawMsg)
 
@@ -7299,7 +7945,7 @@ test/mocked-env/ao/handlers-utils.lua
 * local json = require "json"
 
 * function _utils.hasMatchingTag(name, value)
-*   assert(type(name) == 'string' and type(value) == 'string', 'invalid arguments: (name : string, value : string)')
+0   assert(type(name) == 'string' and type(value) == 'string', 'invalid arguments: (name : string, value : string)')
 
     return function(msg)
 0     return msg.Tags[name] == value
@@ -7366,19 +8012,19 @@ build/globals.lua                      0    11     0.00%
 scripts/copy_lua_package.lua           0    24     0.00%
 build/dbUtils.lua                      0    37     0.00%
 build/database.lua                     0    40     0.00%
-build/providerManager.lua              0    173    0.00%
-build/verifierManager.lua              0    196    0.00%
-build/randomManager.lua                0    211    0.00%
-build/main.lua                         0    226    0.00%
+build/providerManager.lua              0    172    0.00%
+build/main.lua                         0    232    0.00%
+build/verifierManager.lua              0    233    0.00%
+build/randomManager.lua                0    274    0.00%
 test/mocked-env/lib/bint.lua           0    833    0.00%
-test/mocked-env/ao/handlers.lua        22   84     20.75%
+process.lua                            0    1019   0.00%
+test/mocked-env/ao/handlers.lua        11   95     10.38%
+test/process_test.lua                  39   258    13.13%
 test/mocked-env/lib/utils.lua          23   74     23.71%
-test/mocked-env/ao/handlers-utils.lua  11   19     36.67%
+test/mocked-env/lib/json.lua           51   148    25.63%
+test/mocked-env/ao/handlers-utils.lua  10   20     33.33%
 test/mocked-env/processes/verifier.lua 7    6      53.85%
-test/mocked-env/ao/ao.lua              36   22     62.07%
-test/mocked-env/lib/json.lua           148  52     74.00%
-process.lua                            720  248    74.38%
-test/setup.lua                         16   3      84.21%
-test/process_test.lua                  385  8      97.96%
+test/mocked-env/ao/ao.lua              35   23     60.34%
+test/setup.lua                         15   4      78.95%
 -----------------------------------------------------------
-Total                                  1368 2284   37.46%
+Total                                  191  3520   5.15%
