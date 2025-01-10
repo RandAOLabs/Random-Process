@@ -223,12 +223,17 @@ function randomManager.processEntropy(requestId)
 
    for i = 2, #results.requestResponses do
       local value = tonumber(results.requestResponses[i].output_value)
+      if not value then
+         print("Invalid output_value at index " .. i .. ": " .. tostring(results.requestResponses[i].output_value))
+         return "", "Invalid output_value in requestResponses"
+      end
+
       mixed = (mixed ~ (value >> 32) ~ (value & 0xFFFFFFFF))
 
       mixed = (mixed * 0x5bd1e995 + value) % (2 ^ 31 - 1)
    end
 
-   local entropy = tostring(mixed)
+   local entropy = tostring(math.floor(mixed))
    print("entropy: " .. entropy)
    return entropy, ""
 end

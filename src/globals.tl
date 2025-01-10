@@ -42,7 +42,6 @@ global VerifierProcesses = {
     "HdwaaNv84kWolAAxxFcq-fj6GxchSojnSamYBfAdOlw",
     "m9YnpeUM7d0FMS647VFZKqwcq6yN6NDU_7388ZDIWgk",
     "5JLl8vaqbNJK-3Z9snnOx7cDciGR43nCKcm2X1g8LQs",
-    "Lgyp9EmNChaHBvxzN2aGyQcsRQcJSoIYHiMy1UGHgVc",
     "QrDVen99sF88EvE_vffdpHzMWRP5weVzH84gXfKct3Y",
     "sREsSXZC8UdLfBiic5Nsbl16gsdooRssbdZqtHR47xk",
     "LMli3AiUXlCZcr8lSacqqrqTiTQpuMQS1TFuFSYyYCc",

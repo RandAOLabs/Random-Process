@@ -7,7 +7,7 @@ const availableRandomValues = 44
 const providerId    = "ld4ncW8yLSkckjia3cw6qO7silUdEe1nsdiEvMoLg-0"
 const providerId2   = "N90q65iT59dCo01-gtZRUlLMX0w6_ylFHv2uHaSUFNk"
 const processId     = "vgH7EXVs6-vxxilja6lkBruHlgOkyqddFVg-BVp3eJc"
-const randomTesting = "AmGZEcVGl66Wh_KB9SzY2u7SUIcRz4yUUBfvMMC5Tvc"
+const randomTesting = "u30Uoc4FFiUbj01khnGCgjooT6buGJnTsQJrafKe0ns"
 const tokenId       = "OeX1V1xSabUzUtNykWgu9GEaXqacBZawtK12_q5gXaA"
 let providers = {
     provider_ids: ["XUo8jZtUDBFLtp5okR12oLrqIZ4ewNlTpqnqmriihJE", "N90q65iT59dCo01-gtZRUlLMX0w6_ylFHv2uHaSUFNk"]
@@ -327,7 +327,7 @@ async function postVDFOutputAndProof() {
 
 async function requestRandomTester() {
     let tags = [
-        { name: "Action", value: "run" },
+        { name: "Action", value: "High-or-Low" },
     ]
 
     let id = await message({
@@ -433,6 +433,7 @@ async function highLow() {
         */
 
     })
+    console.log(id)
 
     return id;
 }

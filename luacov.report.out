@@ -267,7 +267,6 @@ process.lua
      "HdwaaNv84kWolAAxxFcq-fj6GxchSojnSamYBfAdOlw",
      "m9YnpeUM7d0FMS647VFZKqwcq6yN6NDU_7388ZDIWgk",
      "5JLl8vaqbNJK-3Z9snnOx7cDciGR43nCKcm2X1g8LQs",
-     "Lgyp9EmNChaHBvxzN2aGyQcsRQcJSoIYHiMy1UGHgVc",
      "QrDVen99sF88EvE_vffdpHzMWRP5weVzH84gXfKct3Y",
      "sREsSXZC8UdLfBiic5Nsbl16gsdooRssbdZqtHR47xk",
      "LMli3AiUXlCZcr8lSacqqrqTiTQpuMQS1TFuFSYyYCc",
@@ -947,12 +946,17 @@ process.lua
 
 0    for i = 2, #results.requestResponses do
 0       local value = tonumber(results.requestResponses[i].output_value)
+0       if not value then
+0          print("Invalid output_value at index " .. i .. ": " .. tostring(results.requestResponses[i].output_value))
+0          return "", "Invalid output_value in requestResponses"
+        end
+
 0       mixed = (mixed ~ (value >> 32) ~ (value & 0xFFFFFFFF))
 
 0       mixed = (mixed * 0x5bd1e995 + value) % (2 ^ 31 - 1)
      end
 
-0    local entropy = tostring(mixed)
+0    local entropy = tostring(math.floor(mixed))
 0    print("entropy: " .. entropy)
 0    return entropy, ""
   end
@@ -1789,6 +1793,43 @@ process.lua
 0          print("No verifiers available for segment: " .. segmentId)
         end
 
+     end
+
+0    return true, ""
+  end
+
+
+0 function verifierManager.removeVerifier(processId)
+0    print("Removing verifier: " .. processId)
+
+0    if not DB then
+0       print("Database connection not initialized")
+0       return false, "Database connection is not initialized"
+     end
+
+0    local stmt = DB:prepare([[
+      DELETE FROM Verifiers
+      WHERE process_id = :pid
+0   ]])
+
+0    if not stmt then
+0       print("Failed to prepare statement: " .. DB:errmsg())
+0       return false, "Failed to prepare statement: " .. DB:errmsg()
+     end
+
+0    local ok = false
+0    ok = pcall(function()
+0       stmt:bind_names({ pid = processId })
+     end)
+
+0    if not ok then
+0       print("Failed to bind parameters")
+0       return false, "Failed to bind parameters"
+     end
+
+0    local exec_ok, exec_err = dbUtils.execute(stmt, "Remove verifier")
+0    if not exec_ok then
+0       return false, exec_err
      end
 
 0    return true, ""
@@ -3870,6 +3911,43 @@ build/verifierManager.lua
 0    return true, ""
   end
 
+
+0 function verifierManager.removeVerifier(processId)
+0    print("Removing verifier: " .. processId)
+
+0    if not DB then
+0       print("Database connection not initialized")
+0       return false, "Database connection is not initialized"
+     end
+
+0    local stmt = DB:prepare([[
+      DELETE FROM Verifiers
+      WHERE process_id = :pid
+0   ]])
+
+0    if not stmt then
+0       print("Failed to prepare statement: " .. DB:errmsg())
+0       return false, "Failed to prepare statement: " .. DB:errmsg()
+     end
+
+0    local ok = false
+0    ok = pcall(function()
+0       stmt:bind_names({ pid = processId })
+     end)
+
+0    if not ok then
+0       print("Failed to bind parameters")
+0       return false, "Failed to bind parameters"
+     end
+
+0    local exec_ok, exec_err = dbUtils.execute(stmt, "Remove verifier")
+0    if not exec_ok then
+0       return false, exec_err
+     end
+
+0    return true, ""
+  end
+
 0 function verifierManager.initializeVerifierManager()
 0    for _, verifier in ipairs(VerifierProcesses) do
 0       verifierManager.registerVerifier(verifier)
@@ -4107,12 +4185,17 @@ build/randomManager.lua
 
 0    for i = 2, #results.requestResponses do
 0       local value = tonumber(results.requestResponses[i].output_value)
+0       if not value then
+0          print("Invalid output_value at index " .. i .. ": " .. tostring(results.requestResponses[i].output_value))
+0          return "", "Invalid output_value in requestResponses"
+        end
+
 0       mixed = (mixed ~ (value >> 32) ~ (value & 0xFFFFFFFF))
 
 0       mixed = (mixed * 0x5bd1e995 + value) % (2 ^ 31 - 1)
      end
 
-0    local entropy = tostring(mixed)
+0    local entropy = tostring(math.floor(mixed))
 0    print("entropy: " .. entropy)
 0    return entropy, ""
   end
@@ -4464,7 +4547,6 @@ build/globals.lua
      "HdwaaNv84kWolAAxxFcq-fj6GxchSojnSamYBfAdOlw",
      "m9YnpeUM7d0FMS647VFZKqwcq6yN6NDU_7388ZDIWgk",
      "5JLl8vaqbNJK-3Z9snnOx7cDciGR43nCKcm2X1g8LQs",
-     "Lgyp9EmNChaHBvxzN2aGyQcsRQcJSoIYHiMy1UGHgVc",
      "QrDVen99sF88EvE_vffdpHzMWRP5weVzH84gXfKct3Y",
      "sREsSXZC8UdLfBiic5Nsbl16gsdooRssbdZqtHR47xk",
      "LMli3AiUXlCZcr8lSacqqrqTiTQpuMQS1TFuFSYyYCc",
@@ -8014,10 +8096,10 @@ build/dbUtils.lua                      0    37     0.00%
 build/database.lua                     0    40     0.00%
 build/providerManager.lua              0    172    0.00%
 build/main.lua                         0    232    0.00%
-build/verifierManager.lua              0    233    0.00%
-build/randomManager.lua                0    274    0.00%
+build/verifierManager.lua              0    253    0.00%
+build/randomManager.lua                0    277    0.00%
 test/mocked-env/lib/bint.lua           0    833    0.00%
-process.lua                            0    1019   0.00%
+process.lua                            0    1042   0.00%
 test/mocked-env/ao/handlers.lua        11   95     10.38%
 test/process_test.lua                  39   258    13.13%
 test/mocked-env/lib/utils.lua          23   74     23.71%
@@ -8027,4 +8109,4 @@ test/mocked-env/processes/verifier.lua 7    6      53.85%
 test/mocked-env/ao/ao.lua              35   23     60.34%
 test/setup.lua                         15   4      78.95%
 -----------------------------------------------------------
-Total                                  191  3520   5.15%
+Total                                  191  3566   5.08%

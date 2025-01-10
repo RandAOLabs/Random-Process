@@ -242,7 +242,6 @@ VerifierProcesses = {
    "HdwaaNv84kWolAAxxFcq-fj6GxchSojnSamYBfAdOlw",
    "m9YnpeUM7d0FMS647VFZKqwcq6yN6NDU_7388ZDIWgk",
    "5JLl8vaqbNJK-3Z9snnOx7cDciGR43nCKcm2X1g8LQs",
-   "Lgyp9EmNChaHBvxzN2aGyQcsRQcJSoIYHiMy1UGHgVc",
    "QrDVen99sF88EvE_vffdpHzMWRP5weVzH84gXfKct3Y",
    "sREsSXZC8UdLfBiic5Nsbl16gsdooRssbdZqtHR47xk",
    "LMli3AiUXlCZcr8lSacqqrqTiTQpuMQS1TFuFSYyYCc",
@@ -922,12 +921,17 @@ function randomManager.processEntropy(requestId)
 
    for i = 2, #results.requestResponses do
       local value = tonumber(results.requestResponses[i].output_value)
+      if not value then
+         print("Invalid output_value at index " .. i .. ": " .. tostring(results.requestResponses[i].output_value))
+         return "", "Invalid output_value in requestResponses"
+      end
+
       mixed = (mixed ~ (value >> 32) ~ (value & 0xFFFFFFFF))
 
       mixed = (mixed * 0x5bd1e995 + value) % (2 ^ 31 - 1)
    end
 
-   local entropy = tostring(mixed)
+   local entropy = tostring(math.floor(mixed))
    print("entropy: " .. entropy)
    return entropy, ""
 end
@@ -1764,6 +1768,43 @@ function verifierManager.processProof(requestId, input, modulus, proofJson, prov
          print("No verifiers available for segment: " .. segmentId)
       end
 
+   end
+
+   return true, ""
+end
+
+
+function verifierManager.removeVerifier(processId)
+   print("Removing verifier: " .. processId)
+
+   if not DB then
+      print("Database connection not initialized")
+      return false, "Database connection is not initialized"
+   end
+
+   local stmt = DB:prepare([[
+    DELETE FROM Verifiers
+    WHERE process_id = :pid
+  ]])
+
+   if not stmt then
+      print("Failed to prepare statement: " .. DB:errmsg())
+      return false, "Failed to prepare statement: " .. DB:errmsg()
+   end
+
+   local ok = false
+   ok = pcall(function()
+      stmt:bind_names({ pid = processId })
+   end)
+
+   if not ok then
+      print("Failed to bind parameters")
+      return false, "Failed to bind parameters"
+   end
+
+   local exec_ok, exec_err = dbUtils.execute(stmt, "Remove verifier")
+   if not exec_ok then
+      return false, exec_err
    end
 
    return true, ""
