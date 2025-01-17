@@ -234,12 +234,33 @@ function randomManager.processEntropy(requestId: string): string, string
   end
 
   local entropy = tostring(math.floor(mixed)) -- Convert to string representation of the mixed value
-  print("entropy: " .. entropy)
+  print("Request " .. requestId .. " entropy: " .. entropy)
+  
+  -- Update request with entropy
+  -- Prepare the SQL statement to update the entropy
+  local stmt = DB:prepare([[
+    UPDATE RandomRequests
+    SET entropy = :entropy
+    WHERE request_id = :request_id;
+  ]])
+
+  -- Bind the parameters
+  stmt:bind_names({entropy = entropy, request_id = requestId})
+
+  -- Execute the statement
+  local execute_ok, execute_err = dbUtils.execute(stmt, "Update random request entropy")
+
+  if not execute_ok then
+    print("Failed to update random request entropy: " .. tostring(execute_err))
+  end
+
+  print("Random request entropy updated successfully to: " .. entropy)
+  
   return entropy, ""
 end
 
-function randomManager.simulateRandomResponse(requestId: string): boolean
-  print("entered simulateRandomResponse")
+function randomManager.deliverRandomResponse(requestId: string): boolean
+  print("entered deliverRandomResponse")
 
   local randomRequest, err = randomManager.getRandomRequest(requestId)
 
@@ -251,6 +272,7 @@ function randomManager.simulateRandomResponse(requestId: string): boolean
   local target                            = randomRequest.requester
   local callbackId                        = randomRequest.callback_id
   local entropy                           = randomManager.processEntropy(requestId)
+
   local action                            = "Random-Response"
   
   local data: RandomResponseResponse      = {
@@ -321,7 +343,7 @@ function randomManager.decrementRequestedInputs(requestId: string): boolean, str
       -- Finished verifying send random response
       elseif status == Status[3] then
         print("Random request finished successfully")
-        randomManager.simulateRandomResponse(requestId)
+        randomManager.deliverRandomResponse(requestId)
         randomManager.updateRandomRequestStatus(requestId, Status[5])
       end
     else
@@ -527,6 +549,7 @@ function randomManager.postVDFOutputAndProof(userId: string, requestId: string, 
     local processResult, processError = verifierManager.processProof(requestId, input, modulus, proof, userId, outputValue)
     if not processResult then
       print("Processing proof failed: " .. tostring(processError))
+      return false, "Processing proof failed: " .. tostring(processError)
     else
       print("Proof processed successfully")
     end

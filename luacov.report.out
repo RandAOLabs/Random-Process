@@ -24,8 +24,8 @@ tlconfig.lua
 process.lua
 ==============================================================================
   do
-0 local _ENV = _ENV
-0 package.preload[ "database" ] = function( ... ) local arg = _G.arg;
+* local _ENV = _ENV
+* package.preload[ "database" ] = function( ... ) local arg = _G.arg;
 0 local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local pcall = _tl_compat and _tl_compat.pcall or pcall
 
 0 require("globals")
@@ -74,7 +74,7 @@ process.lua
 0          [[
           CREATE TABLE IF NOT EXISTS Providers (
             provider_id TEXT PRIMARY KEY,
-            stake INTEGER,
+            stake string,
             active INTEGER,
             active_challenge_requests TEXT,
             active_output_requests TEXT,
@@ -150,8 +150,8 @@ process.lua
   end
 
   do
-0 local _ENV = _ENV
-0 package.preload[ "dbUtils" ] = function( ... ) local arg = _G.arg;
+* local _ENV = _ENV
+* package.preload[ "dbUtils" ] = function( ... ) local arg = _G.arg;
 0 local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local pcall = _tl_compat and _tl_compat.pcall or pcall; local table = _tl_compat and _tl_compat.table or table; require("globals")
 
 0 local sqlite3 = require('lsqlite3')
@@ -221,9 +221,9 @@ process.lua
   end
 
   do
-0 local _ENV = _ENV
-0 package.preload[ "globals" ] = function( ... ) local arg = _G.arg;
-0 require("lsqlite3")
+* local _ENV = _ENV
+* package.preload[ "globals" ] = function( ... ) local arg = _G.arg;
+* require("lsqlite3")
 
 
 
@@ -233,12 +233,27 @@ process.lua
 
 
 
-0 RequiredStake = 10
 0 Cost = 100
 
-0 TokenTest = "OeX1V1xSabUzUtNykWgu9GEaXqacBZawtK12_q5gXaA"
+0 TokenTest = "W3jdK85h1bFzZ7K_IXd0zLxq4RbpxPi0hvqUW6hAdUY"
 0 WrappedAR = "xU9zFkq3X2ZQ6olwNVvr1vUWIjc3kXTWr7xKQD6dh10"
+0 WrappedETH = ""
 0 TokenInUse = TokenTest
+
+0 Decimals = 18
+
+0 StakeTokens = {
+0    [TokenTest] = {
+        amount = 100 * 10 ^ Decimals,
+     },
+0    [WrappedAR] = {
+        amount = 100 * 10 ^ Decimals,
+     },
+0    [WrappedETH] = {
+        amount = 100 * 10 ^ Decimals,
+     },
+  }
+
 
 0 SuccessMessage = "200: Success"
 
@@ -251,106 +266,515 @@ process.lua
      "FAILED",
   }
 
+0 TestNetProviders = {
+     "ld4ncW8yLSkckjia3cw6qO7silUdEe1nsdiEvMoLg-0",
+     "XUo8jZtUDBFLtp5okR12oLrqIZ4ewNlTpqnqmriihJE",
+     "N90q65iT59dCo01-gtZRUlLMX0w6_ylFHv2uHaSUFNk",
+     "c8Iq4yunDnsJWGSz_wYwQU--O9qeODKHiRdUkQkW2p8",
+     "Sr3HVH0Nh6iZzbORLpoQFOEvmsuKjXsHswSWH760KAk",
+  }
+
 0 VerifierProcesses = {
-     "9xtciDYCCN76fXIq1cKosh3XNzG_Qj1D3Z5XK1g5nOE",
-     "RG6r_xD_NZtbw7t2QcfrUXjrlZe3w3a9vK_Z4kTrZyc",
-     "aDKAxaGZSMh120sVO-XMHc2oNxpl4Zst_KaC_YB3AK0",
-     "bHNe_KSStb-pmhttS6x9B2QTZ8s_duspz-r3Fz89HmI",
-     "hE4pw01XluNHiUfZONVCPEQJvy7A83FzR5GJgylJ2jE",
-     "aIiqaop1mZ9XuIPLd_1xVDjkQ-_wEG0L3xCB1pwf6Zg",
-     "1musHHlIsIqWL-v8zuLQCclWNOH0xEtM5Bop9npHIZ0",
-     "E-hoJqDj2GB6J-oveM4B5J5c6WLFQ9f9P9MeVB7ZfRs",
-     "bQbqmx4ju8QHIUsTTWRXbA8VD_LxZqhxHm79dE0xqB8",
-     "1Rk_Nf0ohtQ8CcD31OYDYJv4pstJFJWhU5TOMdBgWNU",
-     "Ca_j7Jcx9GtCZnGnhvSHKZQZiMdOOSyYlC5g74sofAM",
-     "cjTEdlZPE2By_mVk6TYRotUIrGN5jZUom6mLsFFK7ZI",
-     "HdwaaNv84kWolAAxxFcq-fj6GxchSojnSamYBfAdOlw",
-     "m9YnpeUM7d0FMS647VFZKqwcq6yN6NDU_7388ZDIWgk",
-     "5JLl8vaqbNJK-3Z9snnOx7cDciGR43nCKcm2X1g8LQs",
-     "QrDVen99sF88EvE_vffdpHzMWRP5weVzH84gXfKct3Y",
-     "sREsSXZC8UdLfBiic5Nsbl16gsdooRssbdZqtHR47xk",
-     "LMli3AiUXlCZcr8lSacqqrqTiTQpuMQS1TFuFSYyYCc",
-     "eme9ov7v6uvLOQ9xs7TPVw31liudHbjpmoSsJrb9yKM",
-     "emiZ11GY1FLPItxbgDBtuDuZFwosSKydxdX2Y3X3syU",
-     "3-TUgiU4CYXybgL7X2TCGAdGkGlFQgmJh63w9ah54p8",
-     "6zdG4WZnHFq0iFrqt8if0VJjLD0uMTpwI3PKE2ebMuE",
-     "f8DRxguG-ebm8qkeW87TfqQPfpjDx1zFawFLqdyVqEE",
-     "-3FR3L_y41ChqUg9f3LzOOjCeEYqxZnxOPBSVJvhc4g",
-     "7MyjbWK2ui4YCZvI4pAei632cTYZpkPyRsYSMpqVSjk",
-     "o3F_-U5FD69JHSxZJcLU8CZnM6A0lJVaJEjb3tdpyHw",
-     "ocTw1Q0119A6b25W9xPNpLP2whkeTkn2AvM_1vr6dwg",
-     "5uckHZGTWwxJU7MfuBTrPwe6awdqpKxV0O-L6_kmuM0",
-     "KYonYg0dcgjIZHur58aq1l_Xd6FV2995C9M7IKx9ToY",
-     "pCO8DCinMo2iBEYSxnpzMsQsVICnM9I3iFpHvJhiquU",
-     "Zg7NsaOfedtTYZwu6HyCjpfiAMDJU2L-5zube7Pnnoc",
-     "RwPOZCTE2N9GkztErOqgVWcPOQCvbkMtv6-OxIqtb3Y",
-     "tNpWqM0aGL6-6CSpHb2Wrw4jCH3irwrsrpubpK9c_jg",
-     "liUYPzYtFcSmtZw-kixB5fYWAAIwqoeiYcy3LqI0r5g",
-     "mFSAyqgeAqph4uPNAbONTvxrYR-5-BFGpvSzbl89rEM",
-     "VZjKTKen3yCRwS3fhlzb8gy040-o6cB4nc4WuzMhO_0",
-     "jb5PbvwDOPvv2VQJhDBaRapsS7Hg0_nbgklRqy4NCRo",
-     "MdOSjRFFPXVPZ1QuFc24aS2iH6LPBMMVtz0Hfou_YTY",
-     "7lUE6vTtYzz9DX7Vel0PiVr9Gt7WXsraBfGbzsb-J0o",
-     "Ad5zPlVDcyO8A_gZuCZafRG-hloEG4GEiuM3i5q_7ew",
-     "0UHuoupRYAWi2ES727gWXxiB6NywyY5uSXv5pPQmWF4",
-     "5zkXkGJxhXiBeHj8rFV7pMexegQYYurqR7iXuK_OeTA",
-     "6NcC5lNFwyrZTyXEZ_BUpED8tlz-ml3UDVEnpsqn7NQ",
-     "-B2h9yKLQ6Gmz53K2Y0B7I-maT6n3LyuX86nxp0caak",
-     "ieFMM-zqmQpGrVmnFgsyqM865GS1-A5R37krMZ2PahI",
-     "jrZ5KxMErZL_2aet5OVdYQZH1iyFn4MYoZ3qDeRADb0",
-     "vjoC1Vu46Kz_MXcEOQJM6tuSgkpdnJZoVCjJv8_15w8",
-     "YhQ9OPQQnjQXumInOLad4jp73Rv6OEEcE6FIjLnIs_g",
-     "8n5FmNyOXz_y5WtROyaNdlKYjCmPN5Xz0nYlYu4HRKs",
-     "GlPXlvwNgnu1wmYgDdSxX9pRCAlVUU-FeHznW5pFAX4",
-     "6fzr6mfZMyY7J0gn5k2Lx-YzZpuJRDVVIIQ30eqvxIw",
-     "XMjyw1B5ovTM1vuzWFiivD9C7HvTv-fzanl2ygpanRU",
-     "1BaATgamA1HmAhAIaN6QzoXpjxNhNmSv41ZzQzVwlE4",
-     "oIhKTSdl953AAly5HqnVnjlqdIkAMj5FxaG5QCMZ5OY",
-     "8psb-hqCnQQpHPUVo7FASXA05f6GModOEryfBwR7jpc",
-     "BfC87x5k19oU0dpCyoRQWrsjXhtM-1xzqLebQdki1JA",
-     "HgY9erwSLwyUpXm3N6DhhSxbIzJ3XjFTqNJDVg9WJTY",
-     "Bs5eEY7k5tDxO57l1SxgeWUx502-oLzegJIq5-eMz0Q",
-     "3bu5EGUaF1RyR8_B28r_m2R4kpCytXWNikDQ4qDrPQM",
-     "PjSK3CiGVn6iAGO5WCLIiLsrUabTXtXl6eyDFtUDrPU",
-     "A5x89r00o1K_EEcYJhLTwfSmNHcU04KpslFE2GZUNEM",
-     "0McQMqhI_G8F2S5R1oh5g4S4sGWxkMcD2MaVa5ELUAM",
-     "iMMa2HbP-FQwiTdoK7W4GVHKD543KB221P6HAkfIKP0",
-     "8gJT4MviAqdthfUjjXWrL9WDIO1zhwKNdF1HHjlsWGw",
-     "JRt6hoW9blsADCdJbY8ThqJirDrj3SLSqM4CrUd1bh0",
-     "mVbZzo75noxadsLdqUq64GE2fMBDvS6MB29gDnK2V4c",
-     "0auksaSe4yV5Snv3MzLcJegJh7GyxXMYXP6ncjyfOfk",
-     "am7uRfcD71c9ynlSXHjQZonPj8mRyp2Hz_PmzHLQ60Y",
-     "NQcOoJM8m5-nxTXcJnuAeZW3PP1pT3vfi0FU9Vh5yTY",
-     "k5PGnF9aoVZd26mo4e2W_6uZKl_ETATFZ4dzu9-NA-w",
-     "c_0ye66-HsNRp0Dqmw4wga_XcYkK7YFIiiaPGeMY1uQ",
-     "pOM79mJ6_6_2m5oLSMqFTKMC-eWUub8NU1MBgyluHA8",
-     "ZC2FgZe2QPgKD4-C5120ISgull4zaJXSxz0wZqITLss",
-     "gwCxgBfhdGu3gxYuuUl3pk_KVQF0V3ACpWPH2W0piLE",
-     "4eVREWXvmKAMJ4RMiq9nhKbO93Sodme9a5MnMa_ObYs",
-     "WyXBXMLGYpNcRhvrHrshjhFoV4PvTi1Gjj-CJh7zqto",
-     "347w4pv7GnEI_0ZiqmXtl3lC3bXIBh-rhKwl1zuB0BM",
-     "ccZiKD1yn8_bBHo69GVp8KOygbGh_tEn8lJHs6PGOzc",
-     "0v9AAs9fhDkJyjYG7M0rViBOLlJ_DmJA-81MV7LSNnA",
-     "EPocFs8XlXJhSNtcRTAjfkAUeWLG41tkSWFwK35iNfk",
-     "EdvD-KQjeWtMzjW_atVR22jWJBCyNKv5ajolm0PYBj0",
-     "n-CRbJNzKejlnqLNnse4aDzx4lKe0nAwcx1FrvY4pnI",
-     "j2d4SznuLaSegIpN3_u85v9adVAL8NM2IrZFjjTty5k",
-     "NUs5IVOr5KjydjjqLkkA6pstAgmtcPxJWknGRfA9JeY",
-     "Dy45_39YaFd965jVbo57JiG-zbX9O6MpPqH5h6J9-ss",
-     "1aF5qXxLA9bXihNZOmi_Gr9axwYdX8ZxIqjYTZpYITQ",
-     "BEpOW5X2CPTlaKeE4NdKxzcN9Xjisic5Rmo5YebwZb8",
-     "bLEW4XGsGo5IBXvXE2G5-Ai9GjymrHl5gWKwoUXyD1c",
-     "4iYpSip0GqQ8Xekz-OdUf4n3AqFRwyyGEySeIcOapiw",
-     "xh0satyfKYauDygZXCGwYlshCcEiec2vgYAAZvlC2aA",
-     "FQ3XFhjwm7DT156S2MEi_wakF9s1n6LYPv2J8f-Ay1E",
-     "HcCyWiR5eB-qAZclP_-aB5dsujK-TUHWU___Bkx5uAk",
-     "zq_JQLzR2fVaw_PWxmA2WD0hJX7QFJgz3TF1XTJ5JQk",
-     "kN6avGRarPdvCWMUDi5R7XFEnpRXdOy2FCv1QWkZtRc",
-     "C1CElYtiNFeXaJ3YoGMNPTUv_NxJaF197F31qSHrmDI",
-     "YLzRgccaT2XrRpeSrVkSJ--DGDCaW7ngkOTtVVQcG5o",
-     "cjusi39QOnOdXinkJi3vcvWb8EDvNhs2qRL-M0Do9OA",
-     "G6bjwtb3GIksAyF4N2zIJLcpDcXpsl3Icx2McOgoxEE",
-     "H5wGgdYLz2RNtH4oAOe8ssBpABI5a5Dz2phktms6Hyk",
+     "T7-RF4bGln3KjgRFMFn8SlxqQncskEGTZpT-5b56khs",
+     "9_fImQ5tP0g9PwTZ--TemdcuV2IRgvk28ihzyHqL6io",
+     "I-7A2T7cwg5-PROdTtk-3gnnrp90YIoX32bY9T4KXBU",
+     "dJRrEV7Mbh8lzHO7o2tPmATsJGZVRMV041o1LG1Q6x0",
+     "_6f95AKhuL0NKpd4bWt94sDWQJetCfg-PF4SLYeMzp0",
+     "Rp7KYmBIpJ60H6d0penGLnrJnSWwJXzQjX24Xnt1yyY",
+     "5mm3sCiEpF9w_6e6zfmkRhpIkCINZ3pM3pK7myRYi_o",
+     "OlYDi0NvX3aIxxz81GHVufCfnJH-38OoKrQ1GqrbwhA",
+     "d3m1ogJq3FjXi-Xa2L4phgobwhsyWRGcXs_Rtn2BYtI",
+     "KphFRkOhJGPWAPudv3TglkoGL6qyy7YsRKqlwOo3DMc",
+     "4nlUSbhZsjaR0uHGaZVv-tMpekeFGYc8BaGVMOkfHOg",
+     "gSe6Q_hhmdYDQ8zxWwW0rnKSdtYIiv3rtiyxBHZwt-k",
+     "lkogrilJN7asjkL08OuXnAWYkvccq51xidhdUorOBSg",
+     "TBjYxvVbhKDmo-api2MBza_rqbiahvKDO59mVjuT_6s",
+     "YsU8Iw3NJg_CuITkuU7oPoEJBh6hvKL3zZi3oMm9Gvs",
+     "3qcJlnZTVmLSs_jYQTyK3zasZXc9_1Q7qiBheKbM8Fs",
+     "EF1yrI71GipyZ5KCj1zUAcKRBeyl9Se9ik7sFB6XMkU",
+     "-k0NI2ICFeuq2j4gf_iMw9XGhMIDxcRADC-l39IKY3o",
+     "ZhuhahHuRZWmnCs2JkG3E65u7ntnd-ZCmc16IV-4qd0",
+     "PchgzsvnpFSH8hWDObEdCi4BrIfKlp7ASmCkCBhH4q4",
+     "DvwpiwlpbAbCD8HZBnSXRLK0PLAd90GVeJ9IFsXxz6s",
+     "HWDCnAnhHF3gtNTHz1xliuH2RrF8kLut6p809-7yQyg",
+     "hErkYJ_6yuNweEEGMSUXEPVowW1xheoOQoJwgSiq9cA",
+     "9GQ_l50bA6e5G_YMJ6skxjyxfzSI7E_jTIT7x11v3Wk",
+     "eRDrAB1KpNwRBY_SuclWPo5dL9CDX7iBiFE_KXak6n8",
+     "I2CYplPSUnjRT4WX69OceFUPf9mAJg1QydicAla5xJ8",
+     "e4_4TQ3inHnkqWfEdTa9tn6cz1jNYdJhkwnTct-5xxA",
+     "vOjDRIUZ4vMHfkG5ykNpU211k2ARKgNHsk_E_nu5gDs",
+     "xrCfWX6v0ea6l-n7kOpxTTpbB5hizG2uuNObytjk6yk",
+     "m5aRVEhJ-S78EqkY7d9lDv26U-40qJWw3hi6-vjbobM",
+     "wkqRtJxUXUpXeysRqyxqMBpMUdbgvp_FG_d0Xbk72TE",
+     "JE8Gi_F4FwkMBJMgN1eHp5nL03mwPyZVUInVHJovqDU",
+     "7n53UWZuXoZfVoZstYNRoFqHJKadCq34tM6f03zX2jM",
+     "mrItAVhU42ReUkXTVulC2ZHGjCC5fXxOupqe12--enk",
+     "heNqgOeeHNqXR9aOaGFuZjXXtVi0hjyFuMXSPPKA-gU",
+     "22cckByiKveeP7heowSrop7G1pi8dpeMHQKB4YXmj4w",
+     "NqsKlAzYy7TW8Y1zyKoxZlWl-Ece5Epiw8jchwkPzL4",
+     "fx8L7zukNT0uooGMzCCvHBG0lS_7kzN4mfe_s7suix8",
+     "0FnstvFesQU4LNfyCjYCcYZl4_j8eEnRUEjJ4Uf5H_Q",
+     "64a4hvYa_zqxoZUL7t9_4yUD_sKJIJogedZ6ASHK9b4",
+     "c5nDMnbEIKdurdGhxaQkzHfTfIEmCn5FoSvg7jXdphM",
+     "d8OMNCcjpmsr5DPZnkbP0OE1dWYSPgKqhYfzLgpRQgI",
+     "CudErj1-BtuUChvt4sLsr8oWfC0qMWItYkSX0pC58cQ",
+     "oEddhna_2nS2Wu4aCzM-B973XxhDy1qQ0Z4G0XEG8T8",
+     "ZkovGH8fr1cGt57W1mJF8iUEfrOLrZdYHlHXFhnjf1o",
+     "zABzCZ2VyM3G6GI-_LMzNt1NrM330a9vPRYn734WeBs",
+     "PWE50be2hR9lT94GuKv4hLVh0bLY_V8w0UeBOsyWjQ4",
+     "ABEvF9-n9-jkOLQs5SybhT5HKDycuvxWJrkVmsmIV0Q",
+     "_9UNtZ89gDCwOLMV5-l6X6JWtx8r_wHotg2gsNLD5qE",
+     "xQOtYiS8Xsfow5aI41-Xqb70i79aEmKIn0SlcWDqimA",
+     "U8B_RiJy6A8qcccZUN5qjdG8HAjvLSsLgmhZD01tCuc",
+     "m6JZjIQE1-yUVEoDDpV5YHi3buDS8kflGm80bB2AANw",
+     "xeROa8mPnjBwqYqzUHhhIwLmIYlI_MYO62AnhvZFhUQ",
+     "lLjdLjXrZ0ezWccNDrIB7RUIB7jl_BdyVvYawPcZUS0",
+     "TC9qgf9ugiPizJw4jRhrtAz5bQ0FIxPl823369-8v3g",
+     "fFkpr7Ci9sFHT63Fg-9-guwp_xx0abr_pEn8aai30Ss",
+     "LZBZ8CuX1otlSu4dSJs1ebR0fnmWY53QIgz74WMwgCA",
+     "WxKVF2aoyv-7OuH3B-a8tKGbCiYaIf_RtiIcYpQhMYw",
+     "nh7o9Pswdy-HSqr8JTuTIEWu1vV9TRF2vTc9sdgEmtk",
+     "7w_Lp19omCt6zlMwwWJcT0G4SWq9k0jx2erRHATVvVk",
+     "PMwC5yuYnf7acJLZD4i-pPgyAZsAX5F8Ae778mzgw8o",
+     "rWtxrl6HGlJF7hdk__FdbN5QKNVCT64yhDwtZGauh6w",
+     "Pz22lGZ-WCCJT4omf3Xi2p1R24KgbvVMMqLMG4Mrrbk",
+     "gMJEcmxsf7utyxfsdaWusMK7f0ID7cOT2aDVxisetgY",
+     "KBXuUCR5m5pxvVGQ9KXirvt7s9h3jpGcEzU9PhJF9Gc",
+     "JKdt7FOQKD8nx_VYVYRS46Ozo7FFqEVT1EVI_kL9FKI",
+     "3JcqelDsAseVOIDEbZX-7rIgz6fzHNT4Eeq1BRwNkvY",
+     "XkKfsS-z9tRM23Ga99UgyzcXnH8rwOC-2D6Ro-9lFs8",
+     "gEBY6tna7TBEzk8mR_KBLhIbgzkNXd9Qot7mGdYxh70",
+     "zvE4L9feA-d6YbP0ipihm_NXvfwy2dNPk_J7Uw2-33A",
+     "ob1do698eNKOc1cVYzg2YxQ3yE9nPyay9YDd4jzPg74",
+     "PwlEfi7Jgaiw3fQeTzZDA0d953fndxJCmCSGAQPsLTI",
+     "tXVtgKiNanwN1VGIcBtue5FGjCs3jTXCRje1O_Nme3M",
+     "nPpXojc1ZfjInVujHM5IImgw_wNFKz4K9et6cpbFNrU",
+     "6q2_TLAjMERFYOq4vTZAOabCkUJGtlWInnk1tl7j6Og",
+     "Mc74QFO3h3bo3M5p2-6uFlS_cHY8LQn3x1_4uHXzV4M",
+     "8v3WZlPMDsSYTLb4U694ugsWMD93WtDXhv0NDcMrPeE",
+     "DKfdCglnueB0EiK5gsNDbT9FoG4Wy_YS-RXOpv-xIHA",
+     "mh1TOlTzOx3Duc-XXNPOQ0OE1YF5iSqYvPGK8nlSAT4",
+     "kJSnWrowwp9TDcFXM5Z_kA0DIua7EkUNdl52aTT3j6k",
+     "l7Ksh61CFRkI9PVkgL8xc9b3MrWDTa5BRoJIg6Yq2bw",
+     "k_Hr2Bbe46Ds4WHYHoi6f1Lp4-yo9Sh5OV58WDGV_hQ",
+     "oR6EN8k0gaszW77Ouk_BPFeSTGPhSF9dz5gsGipuvOI",
+     "R25bP-0MdYosI7FaRttiU9pXxK4mqbQN6aeuce0KJ2A",
+     "e7sihuxK68wlX0q58FmVRMXpF0f1J8p1jYK4uHkBeg4",
+     "gkmsDp9XHDdFEcDyBFFdKaBJYXwXE6eo2fjAXCgU0JA",
+     "pYwdU2N4TD0U7RHo8Bu7Byf8U_EGWN793cUWWhrpfas",
+     "HdVK01TNSFRsygba4stVu-TlVv7O3jVHybj34zKxDs0",
+     "TLN9udqmAn6awqa_8wQwz9EM-kznJWzNAQT_abE7giA",
+     "b1ZCoOTSZXMtcn_bhq5zY1ukcr2EAZoWTTAd7Rm4JE0",
+     "BwdmEHUHD2gb78MT1mtleQQqeE_TAfzj7Pl7Uc8JaEQ",
+     "d5sz-NDAv-yZEgxO6rhh01UkOs1C6BKrO1ZUgT4cGQQ",
+     "M5RgzbJBZ1GmiSLwTVBOopXk1zHv_Y-EKC6bS53zkG8",
+     "1eCEtCronrREvHB8F2YYJ4kP5XB8nAMGOteqrQzCqG4",
+     "VxWtNWUC2oGGXevl1v_VwCElqbYIw3WcqAPWRmC48Rc",
+     "1g4KVg0cuZtM8YL48QikWl-0fV7I-beaCl28zbL_z54",
+     "OjZgT0Kw0G82YRtSYEaswJitLAlk7vmQPWvhVY9w05M",
+     "rqKpIf7qw-GEp40xQv-qD7fFKj-o_WVwWr0J2ievUgc",
+     "X064fFs1sXeDFWIlXU_rYxNASxY6rwV3lsKNgjAARx0",
+     "ySnZDqHT1FhI-7D6SzRmxGXp6EvxRJjmFJcOHIp4ClE",
+     "5GxvFf60iWg6juzNiUu522DEKpl8ufomfKKCfW0BcuM",
+     "McBjuahxGl_AiFlXuxSpS9DiFv6IfMO-T2RJh7AaZj8",
+     "bFT1c0ssxcE46WHTzt92EPaqpm-oHCh9OtV8AGXOTCg",
+     "8yghOgcUrtkiT75K1tzigpEkqAtkf-uYBD5z8cIO2JM",
+     "1-9fh9pn2126yoZMv3A4kYEdAmruttJriXfeUc3NU60",
+     "3dJ2hR_EF7rzhEZl2I_fKwwy005bO9TFPNyvN8TcfDc",
+     "Rj5zktSRM3Jy6JjbfxEuXST2PaCDPhlswfLT78eH_sc",
+     "1jgJMrD6qNdyP9Qb2UEVZyOhX5w74eAtXpWreBFtDbw",
+     "r85ZkCYrhfFp690h9WxbB_CzUG6dtGjIQS8WuKkJ34s",
+     "o91bb7EYUDum1waPg3ZG5_hPpZBs5SX8GhCRrYU_NgI",
+     "gztRP6Bo8iUdaXs9LRknNlTM5vcJe5VwM7XI1UhAgus",
+     "3fjipQK7dIt3or008g2-xsQ9ba1Ru0T8ddfHCDkUGsg",
+     "YigxeQ0FXMaTqXXnrlSCpqMi4XUjo4X9vmKKGdFiDQk",
+     "kOVh8HfWmdztlO4NMhxLAPCzfrOFnUyt9rS4W89X4-Q",
+     "ibolcJLEDi4ufY-Ke6DjbyhvoPbKiipaXAIk5UxbCOk",
+     "Ycuxgce_kJEzdOhnAOPLUs6ghCvEJONYkb91h0Q_Ujw",
+     "sNlK2sjG7OXGj5Z3HCpJ7v09j159GspFSuC0izvwBYU",
+     "G5zToZIHxQmk-YMeYDtyLuC59VZm3xH1KCnNnT9MSYY",
+     "FCTpPb94103vsdjYrpd0FfV2-pWbea9GY1cILHokj8M",
+     "CJ5E2o0QGKEfWk4tOOJQkmDORA2ATIxFHQ1YDePT4_E",
+     "qhk_pI7N77UG5V5EwHn_I5hllPIuTJXXJlEoMZywdAM",
+     "m2b9GDdKDhy-4r11VLHhSAo0YkEasMVOzg1aSg4ptUE",
+     "53KwZzocE8Yy7-dxC52LEHTsYyJVd_fKFhR0dA9l5Aw",
+     "vH_VKVNRb5STRQndaeAVx3PcWyUkcKVJ7xu49VUelyc",
+     "rsl2Ep9FVUkyBKVT0qNSbTUEbWGzcsJGdaM79t78YHI",
+     "Y99GsZ2UuPENcrxue7zRtb1uXmFiiUJO9xkZU3PaP6g",
+     "JGTNnbx0vbIVSyJmC1k4cbRMw1G1Xd1dxQBpoVe6IHA",
+     "cBrBgH9LwewE3vADGGgUdqg1J762zx1LhsZI6e7VPXU",
+     "kMtSNlxlf1ltGlzJCNKGHnK4g5pM-ud7ZMALMf8FoPE",
+     "YMN20qnC4uGNaCfm5VV9omk05zNyGSbokKqH40NYOiE",
+     "iZmv-TnhFOGEJYVJXxXt8tYd7aYnlc4yBJHwXI1a8Pc",
+     "0RrLMoOITopGNKtX6BGGDwhyClhWwa6YFaGZdcLFJTg",
+     "fPLu9NVc2oCR_VRxiHWgunC4gSy-MM18pFub6kc1Aps",
+     "a2Qep6NRtTUxQKiwvabg4dH4a85iY-McAb79pzsAnCc",
+     "8CsvMwTlR2edhvbHchLAkh4m4O6CPDXTZQsr8d9rfu0",
+     "IRBPXdiMSvNDKs-tzkMId46ZcXoKRA5ExUuKIUfxJeQ",
+     "Qh54rMmcrOsWGANDGqqXvpCSygt46PvMzinVF3VTO-o",
+     "sRJ5rg7dStNipkCJ7iISKA8DaEfdEIBoEVir0pxr__Q",
+     "zrDGJc5BvtY0psyG_Td9FhCZ8ynhMaAfT-aICH_pyFo",
+     "qzeZFbx8Zp3wld-zMSFUQ7XvINQNvGybXumB9iklKxU",
+     "c4TPuNzLXgjZEUGZo_truOvQ2Jcs4nXkn44cnhCNc2I",
+     "o5E-ai2E-15iZfYlbt2TQdB-chhop4GGsrr6HT120NU",
+     "UhnZzRUbx-vDftVyY5db4DQbWc1dI1TX4CuqyusyTOg",
+     "eNCi2IamarlADFinS0t4Dj1XV-OSQ8Ie6e0Qp9hvHBs",
+     "5mLNcIAwYgTHJbRcOy_twucLV2-1leSTomW7u4NRrJg",
+     "LIhv5i9fNfNlHOtwji_JVD7Tmmp0weaScspN_vnSTFo",
+     "2MXZCA7mWg4wDN7IoAyIwKMCcn1u_ely7ewZJbfEsXo",
+     "TLRNHm1LoakE1adrNLZT4MihdX68Hi1_k3NRKs89xrw",
+     "VnE7XXhM_QT3Y-aBBOZXgRMluFfW_jSZPUGWMNj3Xzc",
+     "HxlJCduHRW1Ss0ES3canFYRxlFktjDG9_UJRMfM92mg",
+     "vzzI8rhlpsu9bxR7HRm3gJkAyhPCMGCfGIJSDg_19k0",
+     "0y__I0SL-5i-2-JfWmA2Gj7OMiLNiyElw95pVdpXa40",
+     "tb7chB735l8-_sFb6Zk8elA8z8JFtsqhE2h9qY97vmk",
+     "KzPOWYHioDRuSzGC5h29svQ5AK14VOhE0n00NzcsTEI",
+     "minqxUi-zAQgumSTxb56icohr8p2cLSZqv6-X2_mtaA",
+     "9wPOfTKlOlFzXg4REcvfKXZTnlwTz5qQhaFIHGyO_j0",
+     "m-ZydC-SewUUTZZGZ0fZu6RYkxoAUmA_fNmdHqNHFgc",
+     "NJppTfQIROF_4B3SforEk9rSRoYv9WazILGd1Rx9aT8",
+     "hToKvU_WoV2-GcpfRcP8Ec0k5-hp7ATqGNkIQ9WQs3k",
+     "CPAoxaMelSdcPNO9MXYkUab7BYc2FjxFyza8IKyQRvM",
+     "FhO10hV0XfhAp2INACjyAXKcN4HvnyZrZehRqXeMWDs",
+     "UFxTcOMi-iRXmKHBIaFm2MYBqjnnHjYT3NPEOqia8Ac",
+     "1oo1Okpwu9V6cX3q2p54Tth25RpX06smiJq_cgyj8S8",
+     "_z-WUcAvE7fJra3ajYAYbPvSX_h6sdP87lvIt9Rx9SQ",
+     "CNakG4MD-WL8VdEP5Km6qbZKyBg9Dak9499Y40qJu1g",
+     "oL1-v0fcVxeKBJJkQ7hcKYatEOwtnNHHxeUjDCbuG8A",
+     "9dxPu22ZPfzvuSFCAJYH7iPezLBcH_QS8RgQpoLD6MA",
+     "2rLZo2Mmeqqe8ZYilC0ifgwSTXm4ADetiqRJtGsjQxg",
+     "KyLfafBY1ai6_in4YtQJ1aKbvxrYI8K2JMkx7YUhv2A",
+     "Fjp29x0zBpQIlBlwWiNuIVWUGjbbUH5IL3AqBnMyNpg",
+     "-y9vnVdIkAh7xQLAweb9JogQ62v-hsgKENiuJ-042Og",
+     "BXmKCQdZvg0hd5-7WmVs3az3OicsucMplcxjt7xTXh4",
+     "FEzBlAFB6iYx3JY1OOQGcRZovGT7hWyX9HX9XKvCHog",
+     "NJmyg0WJamny0U2mEiquR0GgWWFsO-nb0Wq7mNBGxOw",
+     "lLmALSBgv-i9jbl-r2Ebi19znShi_ZBtkYiLOHxSH1w",
+     "WIsetBJJMwJJ2e65q4Yz_FJE6v03tWxfHAHUQKP16sc",
+     "Z2MjMPhDPkeX3WG0v4iqT5h_oZl6hVQST0OblLzBLEA",
+     "K-FL62L62StjYE8y4GSR17Uq09fn-WNPWsOa4IHCrK0",
+     "mk843Od5KdQD0cVDJkAkTDJqC51AKNDtFqw7EtG-CVs",
+     "0gA1Dfx1b3UEtO6FzPWKMDzNpnCTGWy05kDIbfbcMBs",
+     "ZZV9QeQzeb9LUKPV9k4fzEB_lvUCwdmtb3sGvuG06iw",
+     "bSbHK-HeRjLxWTdMIAS7xqQ9XLlPrNU9SxeNhWc1FzI",
+     "UXYm15ncoW2RLCLkdGVAXwB0SG8JJnEIV2Zwi4vs3Dw",
+     "eZSxrk1qYbh-MgX3O9S2i_FSUXv81BRivy8nqfMNzjM",
+     "0Px8L2Mv9zUU0idIa92UEYhfBqxEqu4DjdGM3oL5jqY",
+     "Z8mfXCgP5SOWsfufAussXPeV-7FvlkdFHuyJ6_dFREI",
+     "3xKq1jpTzteJ534QEm51N2qRs1uot86YLYaC16uRPUc",
+     "O1VMKsrjSYQZk7NMbi7p_6x-TgMP6kIvzUBzygauN9U",
+     "G87VOjCfAkjV8DJ2vM7qHApwm4LV_ZY45FKjxnMc5TU",
+     "Ky9LNupo196hge3VnRmoIKfj92279Ss-AR4AeTrjE7w",
+     "4wWck8D4jDDaUVACuyao-vcRJ72VulcDGMmqY34_tik",
+     "jMeLhPyVQPuUmjDMugLFvjl9Emg1Wc2GRmBi6OPzqQU",
+     "oOxhr3F03PAgvkHbHWMQt-uw0ZzU88re2Rptk12Tg3w",
+     "e97165QZPs2fmPN7YRUk1izi4Y-Z5TLZ2zv0rF1KnH8",
+     "cemB3H4Lkpk1MS44p1NRh8JIWFn6XVRIvBVPABVuVwA",
+     "_KOIpnYvBCKiAlDdV9bhIqQO8GBcJM5BRTNujgS8U4s",
+     "FQCy2_TmJvyyRIJvNlim3QJbyHJlAR29SuIpjf6VIC0",
+     "l7TchAvovkpHY6s-Fj3ui4Z8xPZkti-tnjY6rM5pRTY",
+     "bxbdr80XhYW_GzvD7lu-bZSSQWvEJjKx7oY_FFARrvU",
+     "Ao2mAt0FnT6LyG_d55tvovuKC47RYCqo278HG8bQ_dE",
+     "hGkXD4h9TxZjGP60AZz9OSBZrZr-0SF-nNz1bxSgBe8",
+     "Swg_oL9EYGzhcZotKLbe11eFi_trxBrv68W6FE6_ltY",
+     "a2n3xIbRk4OBLcJS3UJPuZe2Uu6ZTfoYtr8Mux7zX8Q",
+     "BE_8bDhi3yjjg3Qfaw87JDj7oMXSE9O6hKYCjf5p4Eo",
+     "Qjo2fAaQRwUsimVr_SVxsa3gigraRSLi3VmsVpADjN4",
+     "B_zZr4p4_HiIOOmx3yITuv840DTeMEkis7TBKgb-ja4",
+     "7t8_yMXfA03s05F8KM6R-_arsiKMzItGuJzO0rTRDDQ",
+     "SrizI743LcUDNK5chor7YZCtwEVhlm5xNbMkCYBegXw",
+     "icHrnh8V6SZd4R7P6HcdgrCXyiB0CvdYXp11aPkMiPI",
+     "O5yWhWk7Tj6nYJixXlittlLJ73qJ7aqpADBhVqI3CDI",
+     "L_cvvT_2DukZ-kOg6cpYQJckQx-feWjqCyncDV28dZg",
+     "F4Qjh8HKTsHvpxqgqC25R8jtrS0gxZV_TZtL_ZtgmM0",
+     "MTPC6VWElnjq-hl8ghjEHvYShymshsRd1dMBitaLocA",
+     "6S4FemwfuM7U_SXUJWEK03jtvbSi6ymOn507NP9q3Eo",
+     "slZQpNOmkOVzkf65kw12PbGTuyXEsgvptiVLWAJEEKE",
+     "iE_ge6YfEaJ0VQCio9cEO3UaibN0qL_7H1eZJoadJf0",
+     "WY9CHNmIuNUu-zCPF6Eu_MH3sLxCUgRJaZyP4Ru8FxM",
+     "IwWTZySuUIII7MKtoxQUkvjJ4QEi8OgXS2t9tGaZ8ac",
+     "YLLZTegwpCaRTpSmCazh34ZI8k5Cc9tFrpWEF-92LuU",
+     "2SgB2DiUytnalbEb9MsJdtupcf25Dj66Z-XVSpnDJMQ",
+     "lMBKepjWnGVlY9U_qk2nKf1xXQ4nVajSf8DAu9zjU-M",
+     "Qmmu87y4NH4O2d1lcz_JVF3i_sKXn2zYBD53Uivd_jY",
+     "9ip-SdnduZiaiDfDBvrKw_qsrh1wEK5LJRq1MaiIKm8",
+     "NOCh-bxix3tV21vW4wANpaei_890KlmAaqnf4VOxBKk",
+     "YBXtjqyMgeAirx_o77CY6kh8bASp9WuBXKiNbiiHfp8",
+     "eEwNSN3Z_-kJgC3hfyFZ0iKCTezZyYzDG-pMUK4dzDc",
+     "psviDDYgbgClpxsA3FR7A80mlKseVE9TnAcbahvokWo",
+     "TnN6Fj2kM6a_R1qnXqTFsUa2YTMzK2iMn9fW9ho364s",
+     "lmFmioHWna68TbbAdzaE-BumdNk4MPLEcrzTNBzvBoY",
+     "dcDt9EaRs8DhMn9EnKpg5bYD9gK0JNHqJPwJ8NUqC9I",
+     "NT9L6SgTeKNgaX8nhstBWezLnSMx80xwpLqUfB3UV-w",
+     "EmMpgG229bMyRjAMsb2D4_vFpHU3B3Xm0JB1ghvvTtE",
+     "rN0pfRFP7BugJwmY9NRmJtDf_34aI3y6u0ZBXrmxCyI",
+     "yfcEmW2yf8jKwQDUzIBy9og7NO2aYkv94u8Iy8b6AY4",
+     "ro4Mqwbj0VUX5yzZbGAihPeZxtLk6qhS44cnRRKnb0g",
+     "ciWhhajLe-xQIn2R91FHhdSvSNvHVM8wpwSUwAOGEhY",
+     "r8PDdn2UkGR0HwAdSFbqHV_HnUmUKe74B4lQQ9zNwHQ",
+     "b0sMWLHAqcNMFwJ4zBELjIziBRMOSUvf6E16PixROis",
+     "D2-W-zseQ9Xei5UySr7drAaxm_UpygXfM6N_3Wa2LL4",
+     "c5pJOazTgZMFpwZu25HSftQ5cbJZj0IyTFjI94CXKrM",
+     "rfiZFcCCBYUnr8tx8feL2o9QMQcV4KzHeVxlni9cick",
+     "mzsMiBkGKg_nSItLu-PApUhalkFDZ1paYXa4GShO4vA",
+     "w7FDt__gOqeP4HMSYxr8zNSCqOvDlHSxf-BjTxlyzbY",
+     "Y2Ar3oHl2pp7LcvGGKeT4JThd8CfLzAYdMX6bs_YlMA",
+     "fkx420nlkkuBUNiahedzZi3ZJsWr8lLyu3LNevboxpk",
+     "YiZ3Ceb5phAGkECFJ07mG7MjNfrde3OR5U4k-Cx9d8w",
+     "I7FJm11mryihA5NOppdY4UofH2t5x6faHvQou2TTtck",
+     "GLNjX8unFp4EfXPuCaRPYtJ7bURpRQtAgCMNQZAqj_o",
+     "l9aMRJoTa6oXQDMEQAFUvOEVmKPvBf44Tkegu_Ggp9o",
+     "gGhqNDkfbczd0kZ7cDjmiSXMheHHGZiaKSosvHNNyXs",
+     "SQfEt7lntfLRlGgo7-POlEVmDaqAoEr8o6JhVVE4O1k",
+     "85a2vJgG15xLUhPfrsiPiNELxs64ggMsi3CLUGa4lbg",
+     "EHaO9zN-2A7mgBXlXdo_hT85dGnw9Ujfd_pjvUtCSSw",
+     "P2dLyK-eRPZWH7iE_lqluN0gU_O5VV7wF5LZ_Xv8BbE",
+     "QplVzI4irGCWg_kFqn_WMh39Gv_ganxzqJU5sFgqlNo",
+     "6o-vToJqBHenxbA7LlJiz37-BsO8LsfEZOOdsig0_MY",
+     "6rfS_fNikEfy5NjAJ6GC20A-rJizdbi0-m1noLpb9bw",
+     "v0dX-tMc3mNwqJIljjmrUDIVu05hU5W6CsW-x9vDmsc",
+     "nPjPBopkMKjIqJTWGJkFH35jnbbdOpjQnEA9dFHNt2w",
+     "mvMxsEQ4hCine8QFUVsyygUMo5nyTvn8_EBNT8lqVcI",
+     "yXevYFUI9ZF03gWaLa6ef5ad6Gpfwcvu_tnIyhgweho",
+     "eaIy49Hlr1YHL2xWTmxBZcFmoQ7iFCWmmyOnQUoz4NI",
+     "St84YHcD8cndKPPiPoirBQV4G18iIq4NgdJV5GygvNE",
+     "XTataOipP2QdwgP8YaK9N3fmA42bV9fUEN7TtcE9T-w",
+     "CQLS53JsNc_Q_tK8qeQPZN5f1gSTNn4CUjOjMEDZEk4",
+     "biSjM9z-5yGIweylV-MwqH8r9NL4pKWBIQ-1usrhiJo",
+     "zXxukOFwxmf8Vy9P47poMo3RwdD2oXcJTKX9lBJ7dyI",
+     "7IUA_jlxmU9uxZNs8T9ACKITentJfGAuW-98g_L1H8s",
+     "dGppVFYISiaaiN3x8RoAvIO7pUS-sAs4v7U45qZJsCc",
+     "WKm0hF8O15doQCZ4xJHzzK32AtM7oN8EPmlCyS1y5Bs",
+     "-ZMQ-wl7215kR3yaRLCU5hEGJbb0BomhDsh1joY-4TA",
+     "siiS9amm5g4kQDp72iz_zumzuSfXqOpbjvQoj4rR1DA",
+     "xjH0-SOXxl4Iu1uwbnm5FGWoQKnBzFXy4XLG51dJDtg",
+     "JXORZQdKkKM2YjFGmZ7V_D2eIiGhGcO9xl3z1BBKbbg",
+     "Y9V0Jz6Uc2HQQ5-0DEUJFNe1XbzUcjeFDPEPgeRhJ7c",
+     "742gQcjYSsCZoCAHc1oERDCRzQUiXYBB4DZo-yVBhtI",
+     "kgArSG3aiVtRw-bToNWb0N_z_TPKtD0Wxdwkak_mnJw",
+     "czRof2cMoVqnKH6rnCVGdxZ0vhuDNNkYuAwYYwyQ1tw",
+     "iIUNm7pIiZuY9t23emUEo7grMuMItXkcoFJvW_ft1oI",
+     "kTzMGmljWis7vuemkUwVEX-wj5p6q7sdAhq_9OQDiYU",
+     "OmYHMxhpjfaB_P0YYafe6w_OjlGpNk10ZihdexG2Sz4",
+     "pZcJmkRvS7IbuYRl-lDsYdsNVMYyV-Z2hs9EoDAi1R8",
+     "_uzeBoZB5z59MZnvGtQebMkinRpsbn4bMgALNpIAQf0",
+     "Iho41lRHshFa-IJVm319VFZgPIPYMG6-Xxuy_lpozaw",
+     "CqTitrxI-MrK5nCONLQ9mv5_r-_7BhTgPViaw1oPlsA",
+     "5yGsYGZtqffZ7L0BtuSTrJ931AfX-qSkg37dNWm_SMw",
+     "kf2Y8jz_3xl02X1HGiCBsSdDclxYYzdKuVETNxQd8_E",
+     "f6jCaD-YavPmPlPOeOHiyubfrmbmIltxHBjbE8e0HO4",
+     "OzV0jx_RbLrM7AgLp5PqYO2J6xmKraC6vtQnLDb3e0k",
+     "ujs6P2dmJMmsuyhBJt9MYRV5yU50mkp-evYMMf1d_DI",
+     "nc1ph_PpMTl7-csfSR6f4A264R68MxVrBfpbx7AxucM",
+     "am6sQup6Qc1tEf8VhLUC2GUPt7-6lq9gfZo2JdF6H7g",
+     "7VboDG9TWJw9hyvb2K3sgr2adj1qnG1pm97RsHV-CWo",
+     "LwyI3FIqrAHis92h_x5jknVmIGIb7RRU51syTyurWPQ",
+     "AmlxnECiYUtjFIWt2UWQPVSFsN6pdQahHnQina_a3H8",
+     "tOIq_i6mt5T8liicMvqVwPoylSYoDM0tgtq2AmeI2TQ",
+     "1JygGkrKiM51zFd_d37LX_axfxNxsNlPJMB5ahsksrw",
+     "Wfgt2bEc4O_JqgrFVS8ujjYC5RyVDvj1ki8LvC7AUjM",
+     "-zQieNEDDnZ3uF9rRaUzQfvM7i5At8hJqbfyzR7mXoo",
+     "o0TsJMzaiusMXm6r3qYiERq4_-tkJtFnksyOZLv64hg",
+     "w1kncbdAXgzIV_7ZcKP2hAtynJnxysMSBQrR54r76Rg",
+     "jQdRhtUkS2XDj9mdr4ht0kdX_5K5uKShTd2fa0fC_dM",
+     "8WXUZcAn9_MgcxTtCFnopFsnm2-yYVjjDrAdHD6vjkE",
+     "TZVe58-hYyqquXxGDpvgQhSq3Pgm9d1uJjIvymEEamc",
+     "4oWeNJsgZ8JWnGPlN_gwLV2NSQeOyyCvCF0bmUPBViA",
+     "qB8ONXjopC2walggu2LsL0BpCYd27UfQmF5eAN2Zcv0",
+     "xaiM0KFqhxlYy_IvD2jQQnVyrS_c8Q6NdXgog-zLsoE",
+     "jt1gKXtwRjQhOBpS1a9sbkzXUY_T9YMimFCs06FXX8U",
+     "yaiUNW5af1vAXIK2erHsqURd9Sq1_Rh9oybsAbhZECQ",
+     "rOOBxP8H0QOp1-Wdng38a_AGpp9eNUjlec8wl_jZGrQ",
+     "P2fGIFGLhGerav2pjeneDIFaaSAAyj3_QyvPiibYiXE",
+     "9xSwCQRHuAqp9fTUKzncVZW5BEgn55ET-JrCYkhnXL0",
+     "PgIyebLT2Zm-22T7VwmpySl3z23LV2CRoYYWZwFEdJs",
+     "my6BmDrLz97Wb-8ZN4KnEvBH2AVMBOL2muee2CBiN1E",
+     "Sr9QOTlBw70gkyYd58PWR9dmih9_MJqNk8BAo0YRUNM",
+     "iBYDvWRmr88D8KkfoxuxNtu0-3cgn5RoJXG7yD8Hbx0",
+     "Ik4jWHF957UC3Oa_jFPrfCYqiK97aBu2O9h924bo29E",
+     "SBvCRpyucRVW1GQSoG4fcpEgvqT1vvq4JqlKOjv1efw",
+     "YFdQ6uMOes-AKLBhux3gtERW9LB7XPN1DrF-6YR9ff8",
+     "HciwRvS8zM7TjLLacTdr7KEeOgyp1Tgcc-W4K8tAzP4",
+     "U9C_-Dz40JneU8cIvQuTNrm8SVfvReeknAligaTQORE",
+     "Udee19UfOgsyF8xePhOHBBu6f6wtQpUfOtQP3IN_8aA",
+     "MW6DspZMIevhHUo_X9dxtq4UCnzC_tJGEodDa42udw4",
+     "R8exgQNwWrWuKeHRlzfcFX9pXzYttcUu5pvKtqX8zIA",
+     "gsySIxbWrPA60HoDWu7hqTXMBHICwnxpB6NzNwj3lMw",
+     "DBiP_Sx0WRRpNo-JJvsyc0zmQK1XxjyL7hAAFsI9w-A",
+     "5c-vB9cLpcmGkusKr1Tx94xSFKL8T_5142FgXytELIc",
+     "IgGqdOafCIZVU1r_Kz740BUSpINQWUiCQnaPhbrWqR4",
+     "EA8qebyA7n8qnoxukSxTS8vJiktYHtF3JTn0a10W434",
+     "yqTs1bfk1ZC9UijwBKiwFvNpR9EBg7irR15G9zgzEK0",
+     "QIOxplHqBcbdoNTW52j8DylfYcr5Lz3UIODI-o5lwdM",
+     "Fjfs97LzTlcNgE4Evj3SueO3AHrdPd_ps9xovQ0Hcgc",
+     "EhUwUXfofsaAz3wIfbfNBZ91OTSdtFY01ovo0RRmlMw",
+     "0nD4IooeMXoPI12G8Of70eslb5sjndJgscht3ueuz2U",
+     "QvrAA5R8KlJEuCGnhBeI6cGBc288ajT1WzXx-fdRgRs",
+     "M8j6TGLlmxLPqv1kmMtKLI47sH2X-MQ-R2VsY93Ill0",
+     "-EadO0rstv3hHuvDSz4q6wzo6b40RbG-bys_vFCMtVA",
+     "SFj5XXac6D94uwqksGlSk5b_0u04VP9GYUVm4ieQydw",
+     "8VhMOxhn7WKq4FmqZhecf98Lu3GBpoOPXbcg64iIfOw",
+     "mbPNPJ_vpohkjftvIUwI-sRT4cz_gEDQh6QIFQxZdyQ",
+     "lj44XiD_VpZbtDPRIiZHCGT6LvznXTcx3ME4J3qY1s0",
+     "foMjod4hfb4XebazIp6pG2ZGt-8PheGyPAdugmaoBEM",
+     "eS6vD8scka6LeFavrbTW5pfX88svO23_YZCfpBijPCk",
+     "JGLUkBI24zwEAKyDezOge3s8tIk47K6H2WnJeibChYk",
+     "wJFft_w89ng0mRqvh3FxKrKHXbrWAoovQcGfrL2c8vA",
+     "Pub_w_Q7E1HnifobZ3T3thVypjAO90ZBugXbMLn3StI",
+     "0qKkVoTReAR1TuJwgEDhpuZeKyi5iby7ekv48Ej_DkA",
+     "xo7gOnW9h6lYLdS7-n1bLKZZ3NtbyDVuSwBOPQ_gegg",
+     "CNlbe_03kQy8hPD6FnWnW5yTvL0E5DMwA0oMqcpVueE",
+     "5HLfKQdvabQ8rAKzMzfKaUjfdEITL5EVlUt_DSu9lg4",
+     "qmKhnDhEDx6BfAfHIcDTRzhVcf579lI-TQHZO2w1zvc",
+     "eA5IxHfRBMnayOD5OpMHwVvCCBaitMTYOXZuAkICLCo",
+     "U8aRyW3nXcmEJqeGm4PZX99KxrP799zungB6TfxNKGQ",
+     "ogioMX52mQvqjfigqZTps295igxaU5J-OJCeH02m0E0",
+     "GBThrmng9jj9YfV0Qwj0gWMLxtAqtPEEVKcUmmE0BFg",
+     "VGFqr-vwYm487xpnC3MBHoQVELKeRcFkudf29IQHnLk",
+     "1MSNlNjM7t6xADh3Azg7OP5IIoWf3zBSrzaO3S-mpyY",
+     "3fr_xM8lb5QUUgXj8DyKfa0Tx8o94GDgrxZ2Jp6sDE0",
+     "0GaAX0wOdc8X0wgLogNnpvX1NhD4FDb_QFaYxwiE47s",
+     "EjtxlBrrie7RTqrMi4SwmXr7N7Y19Lfu-6HfwRKkRwA",
+     "XIBB8QoDpvKbOb7y4Oz57p7hS4sDLKR7X1S-sR2-uCw",
+     "7yyL3Ys7peFa0NP7Wdm4agjE_1TLSNVJw9uzX-zuNe4",
+     "5QI8zCG3hjVDLz0IuMbDjEvqc6pRtLOLFNRSEWCg-p0",
+     "eOZuWsxEJWmBwPdADm9PPFOx7HwqkSlBMuTxFf54p8c",
+     "0Le3wG3qC9Cs-Zv3e8xgP2qi21aHCFkVC9nm6QklmrU",
+     "yQp_INGyF8wGfddUTT-gdElsMeMDURRXs7NiKg-8nvI",
+     "vBC0RoHogwHW5pXnmhoXLsNo2L0OnCRu0J-N5GWU2oA",
+     "8sH7lsatn32RCCVcTfcuvHCmedtLe7fIQEKifDdeL2Q",
+     "Z2w65JJ6ES7S-7ckXXYgRxBqIPShjF70Bd6xG2GI9gU",
+     "FwVc9ng7nzhjKqWGipin3sWkMPCuqO54TDj4G74BTUU",
+     "5LdZnOg6dU8rp7dx9siJndrCj0NrIfCYp2kdQYL0kqw",
+     "3EQL06atf5EPvab_oQogXbXTNNrxYCcoNmfa7jg5RLA",
+     "7fzmkTXS79NzU2mfNYarMe3GqHgsjmoaCh-j82pYmOk",
+     "kslmwOJAneC0X9sLHiJxWC-RACcCJYMrFKVT0rmZOb8",
+     "XFzO-fWVDjLIjxw_jpB9JdrxT6OnvmJ6Q0DW_fAry_0",
+     "eILJbm3MNapbo7IRBbQJHSmLvPOCGZp9-up3Rt6xM3M",
+     "PriL5mFyuqCAZhNj0P4etEEaGHUNnjPQVGnVDNAjnQk",
+     "EJ8yFGrCQIuf2LhRkzbws7u9dMW-BbUWiOqPcJ14DKw",
+     "pG-2OWewluAwyKxphAOdEgeVtdD6rYfWjdVnpWNKFME",
+     "_rQrM0f1ZkDQYOKQOry20lfJ2X5CcoQWfluSROWJOKU",
+     "CcH-wZwaz5QRcxFDXII01qCCv5t_82d6JJxlrslk1rM",
+     "Y-TGbp5ZljhnOaya0WzXoLw08CpiU6kVvL9Rgi6prAQ",
+     "ulnpCeSTeJSWpfLxAAxawaj8ud3LpFjLZ8ge14wntLs",
+     "hIdT_J29CPkc_BluO7djOjVCyJLfhiXAN_Wj_DtTLK8",
+     "snXqx99x59A9Jfy_ro5diB5gLfXeY5InOEsj9FGJwfA",
+     "WoF5ItXwnpI1hCwwMW3knpbdswCNH1rZyYoJlDoShts",
+     "1kHHjDHG96pVz4lAMIKcdVbKvwzP2sMK2nUh1s5lIrk",
+     "CGLMDFAwAfpq5Qz_Fcv6hR0Eqy5HO9eJ3TVMOrcS8gk",
+     "2jX69B48sY-7GwLueCZgy874h87ISAgg7oylYxOC7TE",
+     "cR78g4qIH9i-lEp8_hSRF-8oQ_9xDruK3DVgVg6Nre0",
+     "Ec_P5VQqon1DV6Uk-g7kwD0nno9Rt3SCIneSVQE7Qdw",
+     "W9S7Q8YbVeOVgfeANzyTvE2ocv46nyn2rN0bTE5ESXI",
+     "iMl__V-iZ38HRy1ddxUfseUmkkMXqoiNS5kmkvdUlMQ",
+     "dhhNZHSeVRlYS_aXaeTvimtoRAwR7MRXtJsnoiATb6M",
+     "PoBZJr9aNtCGUqK_FKTj8UuucRkulR5eSrGcmoPYQHE",
+     "lX4iAMRIRfL7Rn0RBrSnPCARHuzL055dmcatkp8wmaA",
+     "BwNvbE9aCNT1pI0TuBcM5X2wKSzTu73xuaY0W7oxno0",
+     "me4a8VtrqFcsw3Sf2nkL7oL9jVAVfVBdoUN8hYyPQzI",
+     "ko2tiTxwy1AL-eIo0GoIsgPsHsYhUr-qpoIdFchqwkk",
+     "ygSpPnuJoxK1uL9fsCH5qBxuIgU7FKyF4zBBT7i74Gg",
+     "djD3KzhHndXT9un61nsxL0w9kb9X4At2QSM6kCXSadw",
+     "l0L1RwTxuU0OC85hsF3D0CzdM_VmqO27-NjTDRjNoRI",
+     "e3TaK5VYs53aJr0L1es7Dg04ahOQlRyA3u26UvmrBYo",
+     "3iFf0buJV9Jt96ybD8MoxoXKqFjSYKtghXtarXOEf_8",
+     "1u9S_CblyTKVgNRSKDGfgAQLlzIQWulH1jiOeqd_TFo",
+     "5OVj_h76w5x1gMjE3iayVghPk9BEtHGZStjAgpiubms",
+     "hZLvUgeAprvTEmDlAnS9h7VG4wyxEhj_RtD6mVvq2fQ",
+     "NvZSnf5Ckdvi7zq50mw9HJWNhDigW_ks2E4Wh5MUVnM",
+     "ynpCISgiZki3qSz8tjab48x9f7JQ3Z6OlowWfMXBjlU",
+     "61OQ5L67qNYM34Q9xRRAnvSOLiegNP90XRbHkmBmeVQ",
+     "LKgrMjO4YK3yDeFPyKzOzWQWxoLL10u1dRHdLD8pZYA",
+     "UfpKN2Yp_uMflI6MLPV-P5mMqzjfj2K7rbaO9GEPTv0",
+     "CY6yFJ8imFkH2aPyfoBhsqaM7fHXXEwu5AT4Bn9wqhM",
+     "3NTWXz--uu2tk2t3lDr_cye0LjRjILGg9oCwrAAgWKk",
+     "jubZcebkpDdsXOS_s7ri14nPSxv2hBO_jCsXO9dRCyM",
+     "PfmR-uMqB_V1tUkn9Xjrb28OqkoF3YJ5PeRcHdUCrWw",
+     "i3OIMrWhAiIoM__wuoJcQDJHixhaeqw90-klrzaH0QA",
+     "0lVLILq3TgdIVcy6chw_zaiChlTD2oHYV6McDvveEls",
+     "GIvPfgAS5gVjJpmsn2Z7OX6GX_1MmkL5SZnh6WFqGmY",
+     "ZMaaAj2dEw0fcTZ5fsc6dsz2mjThZZICNGlbSrKBPHg",
+     "MyQC-tLX76-1Eurg0yL-eIQ4EOvWneFLNLzRcBAPj2s",
+     "_1of_1RPDBqfL78g5WdjzdLqq_gNHAGoMAnr4kU0S_U",
+     "5HTnfxrJwF5pTtF_ZmDioi9WbpKuJrxsKijcUXG8zUM",
+     "QvBtXk0VB35DXO_qQoMOjCCIpSRsEluB2kDwOQoYUJU",
+     "H_pj6zFcXfmCJIz7-KDhmgECdw69GCWSSFgpowJk4lI",
+     "3pjL15Xq822Eut8rl-_f-H6hhhzzXGW3crFRzLMyJoc",
+     "f6ZnvN77SkaOjcCNNGBydrk_m3LBR-icK4UEMtJK0vA",
+     "aX6DVdYv6bK9GSUydTdykuqkCno61hdRnFj_MODsEV0",
+     "ouVKg0I3Hprt57QGJ3lP1FDwsYf8u1hDamnObbx-Xvw",
+     "piB5kZk0W4wtW09-RJrZ3CxMvJjanYAFPuFrHulTgv8",
+     "apor_ywM3dmWX9555pINvTYVWe53Jp_nMMeAJRPvdXk",
+     "dnMNYaoYP2gcj_rX8hTqijqJhgcNH6HUYMHhRKK2xUY",
+     "SHf_ajWNx4zYTiCOWAyJxTIA2EUUqr21dofVXMFbZAk",
+     "4WGx4U-dI74VnbbAogGs_dWvWCmXbb8AqQshNy30Jb8",
+     "UPtOYpp1gsipUqnm6qC9c8l5ZNdF4RZhJfWONs4moNU",
+     "zcotEzcFXZQI-k4IXu91GJIQmoCLTrWLLt95Q1xojYo",
+     "Kjjg2NPRnUB2tT5MErmcypR8q7kEJ13L1oRjFliOPhI",
+     "a6wCdveJXQxvXWKDpXe3uZHWgqnqBShGB4PQPDvULlU",
+     "pZvdRj8EqSQqmJdZh4fvmjotC5MAPPQ9w4UcR5df2zs",
+     "bvE-9WNRqzYeq7QyJ5pi-2jq3N3QdwbsjM_FwCeIpX0",
+     "Owhl8v5aJFR3vEzw8nZZ-FMkJxl-fl9n7kIiw8hzqTg",
+     "DE2rullqYehdpxk86MKX5lH7ngnI_ET7TH5TBT2iwMo",
+     "gtsNXGd7DT5L44QCl2qA2xMfftrnWqEP5tXA8S_P_mc",
+     "roOeItVe5D_TtbYy7iPkNotb9tycppg1K72_0G5IBS4",
+     "Iyus13fHTnBcXpMFcU_F_5c-RH-vAtUDbl7o3zgIObo",
+     "gfcAYPn3C77uv87c5dzAzNS4MlqxMYwsfqJ5PwzH72I",
+     "ui97_LbvOrOe3OGDPMLL54I3ggwSY6t198NWbvs3Nlo",
+     "0X8Hsw2VahUWw7nPlvowf0zGrk_F2LZtQsorH4__Ji0",
+     "MVogxC4OeFCX5nXc9syIR5TWf48QZEdVfqAljWn6Sfw",
+     "JyBW1Pi-dRyr_0Nv8bZQLRpxI90mczRrAAUaz2vnAy8",
+     "lxRWOWwevqSDOkNudqA1DQLCcak6cJE-YqS0sIyN5Ew",
+     "nE8NVF9Y-cwa78knuVuJt-HNvVfNnuh8w1DsCc7ZNoI",
+     "LpMqGuhkudrkU0xk9TQo9kqW2YGhfoEUqUfTQ3wqLZw",
+     "qBaGjSxeFzAuUbHWpoe8Q_jzJMrxKE3OG7O5oAi_hdM",
+     "e937hS9i4wxZQJk9bkBpv2re-qotr72EdMgOmuoCywA",
+     "Tqm3qo36oPr7upQGIYmKUdFFqAUwvhTEtK6Q_z0YHnk",
+     "S1GQf5ytCe5O1t4lqdHUvvl80tMKQjQP52jB5dAN4ek",
+     "SF88UAJho1SUQldTs_vMCy6TSEmje-RhkGJk4MdZsj8",
+     "Xifygnfan9EYICFgZ61tHTAeytU5KjeR4o_YJ9SKA88",
+     "_hb3hJFiCqhyK2KnSDsrvwllp5uNdrMXn6dXxA2rT5Y",
+     "th1vjjRIITLxe2RaqvVCivOYgpwMX9Rg5HtMNq7iA1I",
+     "yu5Uevg89waG64yUk3iplwp2QPKWXP9rhu5W_Rz9670",
+     "z7ryNVv1adwEbnsofu4vNZphj3s7FgU71kCUqih1JhQ",
+     "hHR38tgj0xlNWQ_DbwFh7oyIQLNHxXEScyI0VLx4PFU",
+     "BNushabDi57tFZU1kubXpxBMxUvgMuloIrAOHe-MANY",
+     "QJxJWNp9Ig4tikaMvqANUbLdPJzWJe9pmAVicLGlt9c",
+     "bawehvZZgK44aVQk0roXL1mii8cXSCMTFt7iCKLFpvs",
+     "yyuDK4yzKSkjbzfJWHOjUQ40cdR2DI8YdYNV24kilrI",
+     "tNLL6c7BqoSxU-vY0Zml8Yp2PAWo2aq-uOhn4ewGNuw",
+     "FmRSSorHWWlF4QyAzIlS1w_LNs1oc3UyqyEjcx7o7qQ",
+     "uOXERamo1ydpJ5SMgl8JFCROlMwpuA8RMNPsB6PN5Ac",
+     "zPMWistIkMOocPMCjrrMp8bBdw044G7tgrQHk5Hk7aQ",
+     "iWZMpPexc4F8vZF7mvhqn8gDXUTxMJsIEB_3tg293m0",
+     "0AxqewvNzPlkyfkSmX1q0WqMCmARI966IarHYOeblfY",
+     "0jFytUGZAPQ5lLbnZZ-steINX-txrNWAzOMfaGngYeo",
+     "4NnctSKm553GfC2mTjEeG9Lfg6NNvIyrBsSJp8WS680",
+     "KLMBzXSIK5C1tyCx2QkxUNztJib3SRb3Gzl7rZjMUiQ",
+     "m-5RvZbLjNABLpzdVtRJxam23RGYDkV5umYfUvmNm10",
+     "JWm65nCWYGRYGD6retpU3VK54brpLgqatYOGuN-Lixc",
+     "j3JPATO9ITRM_Yxed_930gmIiHTpWSDH8ebyzlkIekM",
+     "L6vr5BKwrb6KoZ0057KOzzFGHX3PMWoUsQEYX4eTS-Q",
+     "R3Cou2EVZEsRSfcd4TfuPNZooRj2FZ8dh97p3t1iIdo",
+     "UEIW-jshPIx9hjdgab-6mPqpENFKHw9_sAU0hI5mvBE",
+     "yBOreW7nYPL9b8gA2jKgZr6akp-f0FCp_uOU6YM-2P0",
+     "wV3T3HsHDPfNiOBVNuGcyNoUTNkS30rW0FDrCrFUASM",
+     "DkRvjSmfImYtdKbpzFEo9L8uu3jYB1qNMVNFKE2ZLaA",
+     "SQ-7biH0QMvXLNY6IioDhV2RVcqhlpFoiNnuNMc5zSY",
+     "uUdkb2NKyYMvk21ASNlwOGjTtnYhxmsG8cVUcmJkWvk",
+     "aexVt3sGSYsxSJNDKRgkI9BvvcfhqXZQUY-TT5aWdUw",
+     "0dxaqkWiABI1hJIG9LARKUdHQM3FpGQUe5VqmuiSLh8",
+     "6nE-VJt54MT7pqg1xsS316Jnu4xHnThjuGx-uLWtUe0",
+     "L8E4zWXIzBA1_7ZqEWkBZAhQhcbwnXAhPlIn2bdZtD4",
+     "ZirkrVOSCAAK3wrGOyupJxgkuXIJpIJyojp_zMCdysU",
+     "GkBTLDbLh4IHoOfaWs-FY539XSvqEmwfG-VlksR8ILU",
+     "Gr5G5PBHdPMl9Iv7MOunnL0ZttuXyXLZw0cT-5Qit3A",
+     "AnrGQOQK_iDJ1Rl7sNaSOo9sK7_La6-h1TleKWyEfDM",
+     "WWaIwCLIywNUaQ5usBFOJU6yqfmOB_23XXHBQRtF9J4",
+     "cg2GO0i7wdV_HY9oflCQbRHmUCQqXcC8HuwJ_LDFDsI",
+     "EdTrXFlggzJZpxjoJrDE4xiJ1cWdaXx3-cITBRsJrgw",
+     "hBGTxWR5StljFEJyo2bQSsqGx2EfgBvIqaduqvuorcc",
   }
 
 0 return {}
@@ -358,8 +782,8 @@ process.lua
   end
 
   do
-0 local _ENV = _ENV
-0 package.preload[ "providerManager" ] = function( ... ) local arg = _G.arg;
+* local _ENV = _ENV
+* package.preload[ "providerManager" ] = function( ... ) local arg = _G.arg;
 0 local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local os = _tl_compat and _tl_compat.os or os; local pcall = _tl_compat and _tl_compat.pcall or pcall; local table = _tl_compat and _tl_compat.table or table; require("globals")
 
 0 local dbUtils = require("dbUtils")
@@ -440,7 +864,7 @@ process.lua
 0    if result then
 0       return result, ""
      else
-0       return {}, "Provider not found"
+0       return {}, "Unable to create provider"
      end
   end
 
@@ -657,17 +1081,6 @@ process.lua
 0    return true, ""
   end
 
-0 function providerManager.checkStake(userId)
-0    print("entered providerManager.checkStake")
-
-0    local provider, _ = providerManager.getProvider(userId)
-0    if provider.stake < RequiredStake then
-0       return false, "Stake is less than required"
-     else
-0       return true, ""
-     end
-  end
-
 0 function providerManager.updateProviderBalance(userId, balance)
 0    print("entered providerManager.updateProviderBalance")
 
@@ -719,8 +1132,8 @@ process.lua
   end
 
   do
-0 local _ENV = _ENV
-0 package.preload[ "randomManager" ] = function( ... ) local arg = _G.arg;
+* local _ENV = _ENV
+* package.preload[ "randomManager" ] = function( ... ) local arg = _G.arg;
 0 local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local math = _tl_compat and _tl_compat.math or math; local os = _tl_compat and _tl_compat.os or os; local pcall = _tl_compat and _tl_compat.pcall or pcall; local string = _tl_compat and _tl_compat.string or string; local table = _tl_compat and _tl_compat.table or table; require("globals")
 0 local json = require("json")
 0 local dbUtils = require("dbUtils")
@@ -957,12 +1370,33 @@ process.lua
      end
 
 0    local entropy = tostring(math.floor(mixed))
-0    print("entropy: " .. entropy)
+0    print("Request " .. requestId .. " entropy: " .. entropy)
+
+
+
+0    local stmt = DB:prepare([[
+      UPDATE RandomRequests
+      SET entropy = :entropy
+      WHERE request_id = :request_id;
+0   ]])
+
+
+0    stmt:bind_names({ entropy = entropy, request_id = requestId })
+
+
+0    local execute_ok, execute_err = dbUtils.execute(stmt, "Update random request entropy")
+
+0    if not execute_ok then
+0       print("Failed to update random request entropy: " .. tostring(execute_err))
+     end
+
+0    print("Random request entropy updated successfully to: " .. entropy)
+
 0    return entropy, ""
   end
 
-0 function randomManager.simulateRandomResponse(requestId)
-0    print("entered simulateRandomResponse")
+0 function randomManager.deliverRandomResponse(requestId)
+0    print("entered deliverRandomResponse")
 
 0    local randomRequest, err = randomManager.getRandomRequest(requestId)
 
@@ -974,6 +1408,7 @@ process.lua
 0    local target = randomRequest.requester
 0    local callbackId = randomRequest.callback_id
 0    local entropy = randomManager.processEntropy(requestId)
+
 0    local action = "Random-Response"
 
 0    local data = {
@@ -1044,7 +1479,7 @@ process.lua
 
 0          elseif status == Status[3] then
 0             print("Random request finished successfully")
-0             randomManager.simulateRandomResponse(requestId)
+0             randomManager.deliverRandomResponse(requestId)
 0             randomManager.updateRandomRequestStatus(requestId, Status[5])
            end
         else
@@ -1250,6 +1685,7 @@ process.lua
 0       local processResult, processError = verifierManager.processProof(requestId, input, modulus, proof, userId, outputValue)
 0       if not processResult then
 0          print("Processing proof failed: " .. tostring(processError))
+0          return false, "Processing proof failed: " .. tostring(processError)
         else
 0          print("Proof processed successfully")
         end
@@ -1264,8 +1700,8 @@ process.lua
   end
 
   do
-0 local _ENV = _ENV
-0 package.preload[ "tokenManager" ] = function( ... ) local arg = _G.arg;
+* local _ENV = _ENV
+* package.preload[ "tokenManager" ] = function( ... ) local arg = _G.arg;
 0 local tokenManager = {}
 
 0 function tokenManager.sendTokens(token, recipient, quantity, note)
@@ -1287,8 +1723,8 @@ process.lua
   end
 
   do
-0 local _ENV = _ENV
-0 package.preload[ "verifierManager" ] = function( ... ) local arg = _G.arg;
+* local _ENV = _ENV
+* package.preload[ "verifierManager" ] = function( ... ) local arg = _G.arg;
 0 local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local os = _tl_compat and _tl_compat.os or os; local pcall = _tl_compat and _tl_compat.pcall or pcall; local table = _tl_compat and _tl_compat.table or table
 0 require("globals")
 0 local dbUtils = require("dbUtils")
@@ -1405,6 +1841,13 @@ process.lua
      end
 
 0    return verifiers, ""
+  end
+
+
+0 function verifierManager.printAvailableVerifiers()
+0    print("entered available Verifiers")
+0    local availableVerifiers, _ = verifierManager.getAvailableVerifiers()
+0    return availableVerifiers
   end
 
 
@@ -1721,7 +2164,9 @@ process.lua
 0    local proofId = requestId .. "_" .. providerId
 0    local availableVerifiers = verifierManager.getAvailableVerifiers()
 
-
+0    if #availableVerifiers < 11 then
+0       return false, "No verifiers available"
+     end
 
 
 
@@ -1798,43 +2243,6 @@ process.lua
 0    return true, ""
   end
 
-
-0 function verifierManager.removeVerifier(processId)
-0    print("Removing verifier: " .. processId)
-
-0    if not DB then
-0       print("Database connection not initialized")
-0       return false, "Database connection is not initialized"
-     end
-
-0    local stmt = DB:prepare([[
-      DELETE FROM Verifiers
-      WHERE process_id = :pid
-0   ]])
-
-0    if not stmt then
-0       print("Failed to prepare statement: " .. DB:errmsg())
-0       return false, "Failed to prepare statement: " .. DB:errmsg()
-     end
-
-0    local ok = false
-0    ok = pcall(function()
-0       stmt:bind_names({ pid = processId })
-     end)
-
-0    if not ok then
-0       print("Failed to bind parameters")
-0       return false, "Failed to bind parameters"
-     end
-
-0    local exec_ok, exec_err = dbUtils.execute(stmt, "Remove verifier")
-0    if not exec_ok then
-0       return false, exec_err
-     end
-
-0    return true, ""
-  end
-
 0 function verifierManager.initializeVerifierManager()
 0    for _, verifier in ipairs(VerifierProcesses) do
 0       verifierManager.registerVerifier(verifier)
@@ -1846,10 +2254,11 @@ process.lua
   end
   end
 
-0 local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local debug = _tl_compat and _tl_compat.debug or debug; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local math = _tl_compat and _tl_compat.math or math; local table = _tl_compat and _tl_compat.table or table; local xpcall = _tl_compat and _tl_compat.xpcall or xpcall
-0 require("globals")
+* local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local assert = _tl_compat and _tl_compat.assert or assert; local debug = _tl_compat and _tl_compat.debug or debug; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local math = _tl_compat and _tl_compat.math or math; local pcall = _tl_compat and _tl_compat.pcall or pcall; local table = _tl_compat and _tl_compat.table or table; local xpcall = _tl_compat and _tl_compat.xpcall or xpcall
+* require("globals")
 0 local json = require("json")
 0 local database = require("database")
+0 local dbUtils = require("dbUtils")
 0 local providerManager = require("providerManager")
 0 local randomManager = require("randomManager")
 0 local tokenManager = require("tokenManager")
@@ -1982,7 +2391,26 @@ process.lua
 
 
   local function infoHandler(msg)
-0    ao.send(sendResponse(msg.From, "Info", {}))
+0    local verifiers = verifierManager.printAvailableVerifiers()
+0    print("Verifiers: " .. json.encode(verifiers))
+0    ao.send(sendResponse(msg.From, "Info", { json.encode(verifiers) }))
+
+  end
+
+  local function isWhitelisted(userId)
+0    local isValid = false
+0    for _, user in ipairs(TestNetProviders) do
+0       if userId == user then
+0          print("Success: User whitelisted: " .. tostring(userId))
+0          isValid = true
+0          return true
+        end
+     end
+
+0    if not isValid then
+0       print("Failure: User not whitelisted: " .. tostring(userId))
+0       return false
+     end
   end
 
 
@@ -1990,6 +2418,9 @@ process.lua
 0    print("entered updateProviderBalance")
 
 0    local userId = msg.From
+0    print("Asserting whitelisted user: " .. userId)
+0    assert(isWhitelisted(userId), "User not whitelisted")
+
 
 0    createProvider(userId)
 
@@ -2072,15 +2503,14 @@ process.lua
      end
 0    providerManager.removeActiveRequest(userId, requestId, false)
 
-0    local success, _err = randomManager.postVDFOutputAndProof(userId, requestId, output, proof)
+0    local success, err = randomManager.postVDFOutputAndProof(userId, requestId, output, proof)
 
 0    if success then
 0       randomManager.decrementRequestedInputs(requestId)
 
 0       return true
      else
-
-
+0       ao.send(sendResponse(msg.From, "Verification-Error", { message = "Failed to post VDF Output and Proof: " .. err }))
 0       return false
      end
   end
@@ -2115,9 +2545,14 @@ process.lua
 0       return true
      else
 
-
 0       return false
      end
+  end
+
+0 function failedPostVerificationHandler(msg)
+0    print("entered failedPostVerification")
+0    local verifierId = msg.From
+0    verifierManager.markAvailable(verifierId)
   end
 
 
@@ -2271,6 +2706,8 @@ process.lua
   end
 
 
+
+
 0 Handlers.add('info',
 0 Handlers.utils.hasMatchingTag('Action', 'Info'),
 0 wrapHandler(infoHandler))
@@ -2290,6 +2727,10 @@ process.lua
 0 Handlers.add('postVerification',
 0 Handlers.utils.hasMatchingTag('Action', 'Post-Verification'),
 0 wrapHandler(postVerificationHandler))
+
+0 Handlers.add('failedPostVerification',
+0 Handlers.utils.hasMatchingTag('Action', 'Failed-Post-Verification'),
+0 wrapHandler(failedPostVerificationHandler))
 
 0 Handlers.add('getProviderRandomBalance',
 0 Handlers.utils.hasMatchingTag('Action', 'Get-Providers-Random-Balance'),
@@ -2313,6 +2754,52 @@ process.lua
 
 
 0 print("RandAO Process Initialized")
+
+
+
+0 function RemoveVerifier(processId)
+0    print("Removing verifier: " .. processId)
+
+0    if not DB then
+0       print("Database connection not initialized")
+0       return false, "Database connection is not initialized"
+     end
+
+0    local stmt = DB:prepare([[
+      DELETE FROM Verifiers
+      WHERE process_id = :pid
+0   ]])
+
+0    if not stmt then
+0       print("Failed to prepare statement: " .. DB:errmsg())
+0       return false, "Failed to prepare statement: " .. DB:errmsg()
+     end
+
+0    local ok = false
+0    ok = pcall(function()
+0       stmt:bind_names({ pid = processId })
+     end)
+
+0    if not ok then
+0       print("Failed to bind parameters")
+0       return false, "Failed to bind parameters"
+     end
+
+0    local exec_ok, exec_err = dbUtils.execute(stmt, "Remove verifier")
+0    if not exec_ok then
+0       return false, exec_err
+     end
+
+0    return true, ""
+  end
+
+0 function helper()
+0    local value, err = verifierManager.getAvailableVerifiers()
+0    print(json.encode(value))
+0    RemoveVerifier("RG6r_xD_NZtbw7t2QcfrUXjrlZe3w3a9vK_Z4kTrZyc")
+0    value, err = verifierManager.getAvailableVerifiers()
+0    print(json.encode(value))
+  end
 
 ==============================================================================
 scripts/copy_lua_package.lua
@@ -2475,7 +2962,7 @@ build/database.lua
 0          [[
           CREATE TABLE IF NOT EXISTS Providers (
             provider_id TEXT PRIMARY KEY,
-            stake INTEGER,
+            stake string,
             active INTEGER,
             active_challenge_requests TEXT,
             active_output_requests TEXT,
@@ -2570,6 +3057,50 @@ build/tokenManager.lua
 0 return tokenManager
 
 ==============================================================================
+build/stakingManager.lua
+==============================================================================
+0 require("globals")
+0 local json = require("json")
+0 local dbUtils = require("dbUtils")
+0 local providerManager = require("providerManager")
+
+
+0 Stake = {}
+
+
+
+
+
+
+0 local stakingManager = {}
+
+0 function stakingManager.checkStake(userId)
+0    print("entered stakingManager.checkStake")
+
+0    local provider, _ = providerManager.getProvider(userId)
+0    local decodedStake = json.decode(provider.stake)
+
+0    local requiredStake = StakeTokens[decodedStake.token].amount
+0    if decodedStake.amount < requiredStake then
+0       return false, "Stake is less than required"
+     else
+0       return true, ""
+     end
+  end
+
+0 function stakingManager.updateStake(userId)
+0    print("entered stakingManager.updateStake")
+
+
+
+
+
+0    return true, ""
+  end
+
+0 return stakingManager
+
+==============================================================================
 build/providerManager.lua
 ==============================================================================
 0 local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local os = _tl_compat and _tl_compat.os or os; local pcall = _tl_compat and _tl_compat.pcall or pcall; local table = _tl_compat and _tl_compat.table or table; require("globals")
@@ -2652,7 +3183,7 @@ build/providerManager.lua
 0    if result then
 0       return result, ""
      else
-0       return {}, "Provider not found"
+0       return {}, "Unable to create provider"
      end
   end
 
@@ -2869,17 +3400,6 @@ build/providerManager.lua
 0    return true, ""
   end
 
-0 function providerManager.checkStake(userId)
-0    print("entered providerManager.checkStake")
-
-0    local provider, _ = providerManager.getProvider(userId)
-0    if provider.stake < RequiredStake then
-0       return false, "Stake is less than required"
-     else
-0       return true, ""
-     end
-  end
-
 0 function providerManager.updateProviderBalance(userId, balance)
 0    print("entered providerManager.updateProviderBalance")
 
@@ -2931,10 +3451,11 @@ build/providerManager.lua
 ==============================================================================
 build/main.lua
 ==============================================================================
-0 local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local debug = _tl_compat and _tl_compat.debug or debug; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local math = _tl_compat and _tl_compat.math or math; local table = _tl_compat and _tl_compat.table or table; local xpcall = _tl_compat and _tl_compat.xpcall or xpcall
+0 local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local assert = _tl_compat and _tl_compat.assert or assert; local debug = _tl_compat and _tl_compat.debug or debug; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local math = _tl_compat and _tl_compat.math or math; local pcall = _tl_compat and _tl_compat.pcall or pcall; local table = _tl_compat and _tl_compat.table or table; local xpcall = _tl_compat and _tl_compat.xpcall or xpcall
 0 require("globals")
 0 local json = require("json")
 0 local database = require("database")
+0 local dbUtils = require("dbUtils")
 0 local providerManager = require("providerManager")
 0 local randomManager = require("randomManager")
 0 local tokenManager = require("tokenManager")
@@ -3067,7 +3588,26 @@ build/main.lua
 
 
   local function infoHandler(msg)
-0    ao.send(sendResponse(msg.From, "Info", {}))
+0    local verifiers = verifierManager.printAvailableVerifiers()
+0    print("Verifiers: " .. json.encode(verifiers))
+0    ao.send(sendResponse(msg.From, "Info", { json.encode(verifiers) }))
+
+  end
+
+  local function isWhitelisted(userId)
+0    local isValid = false
+0    for _, user in ipairs(TestNetProviders) do
+0       if userId == user then
+0          print("Success: User whitelisted: " .. tostring(userId))
+0          isValid = true
+0          return true
+        end
+     end
+
+0    if not isValid then
+0       print("Failure: User not whitelisted: " .. tostring(userId))
+0       return false
+     end
   end
 
 
@@ -3075,6 +3615,9 @@ build/main.lua
 0    print("entered updateProviderBalance")
 
 0    local userId = msg.From
+0    print("Asserting whitelisted user: " .. userId)
+0    assert(isWhitelisted(userId), "User not whitelisted")
+
 
 0    createProvider(userId)
 
@@ -3157,15 +3700,14 @@ build/main.lua
      end
 0    providerManager.removeActiveRequest(userId, requestId, false)
 
-0    local success, _err = randomManager.postVDFOutputAndProof(userId, requestId, output, proof)
+0    local success, err = randomManager.postVDFOutputAndProof(userId, requestId, output, proof)
 
 0    if success then
 0       randomManager.decrementRequestedInputs(requestId)
 
 0       return true
      else
-
-
+0       ao.send(sendResponse(msg.From, "Verification-Error", { message = "Failed to post VDF Output and Proof: " .. err }))
 0       return false
      end
   end
@@ -3200,9 +3742,14 @@ build/main.lua
 0       return true
      else
 
-
 0       return false
      end
+  end
+
+0 function failedPostVerificationHandler(msg)
+0    print("entered failedPostVerification")
+0    local verifierId = msg.From
+0    verifierManager.markAvailable(verifierId)
   end
 
 
@@ -3356,6 +3903,8 @@ build/main.lua
   end
 
 
+
+
 0 Handlers.add('info',
 0 Handlers.utils.hasMatchingTag('Action', 'Info'),
 0 wrapHandler(infoHandler))
@@ -3375,6 +3924,10 @@ build/main.lua
 0 Handlers.add('postVerification',
 0 Handlers.utils.hasMatchingTag('Action', 'Post-Verification'),
 0 wrapHandler(postVerificationHandler))
+
+0 Handlers.add('failedPostVerification',
+0 Handlers.utils.hasMatchingTag('Action', 'Failed-Post-Verification'),
+0 wrapHandler(failedPostVerificationHandler))
 
 0 Handlers.add('getProviderRandomBalance',
 0 Handlers.utils.hasMatchingTag('Action', 'Get-Providers-Random-Balance'),
@@ -3398,6 +3951,52 @@ build/main.lua
 
 
 0 print("RandAO Process Initialized")
+
+
+
+0 function RemoveVerifier(processId)
+0    print("Removing verifier: " .. processId)
+
+0    if not DB then
+0       print("Database connection not initialized")
+0       return false, "Database connection is not initialized"
+     end
+
+0    local stmt = DB:prepare([[
+      DELETE FROM Verifiers
+      WHERE process_id = :pid
+0   ]])
+
+0    if not stmt then
+0       print("Failed to prepare statement: " .. DB:errmsg())
+0       return false, "Failed to prepare statement: " .. DB:errmsg()
+     end
+
+0    local ok = false
+0    ok = pcall(function()
+0       stmt:bind_names({ pid = processId })
+     end)
+
+0    if not ok then
+0       print("Failed to bind parameters")
+0       return false, "Failed to bind parameters"
+     end
+
+0    local exec_ok, exec_err = dbUtils.execute(stmt, "Remove verifier")
+0    if not exec_ok then
+0       return false, exec_err
+     end
+
+0    return true, ""
+  end
+
+0 function helper()
+0    local value, err = verifierManager.getAvailableVerifiers()
+0    print(json.encode(value))
+0    RemoveVerifier("RG6r_xD_NZtbw7t2QcfrUXjrlZe3w3a9vK_Z4kTrZyc")
+0    value, err = verifierManager.getAvailableVerifiers()
+0    print(json.encode(value))
+  end
 
 ==============================================================================
 build/verifierManager.lua
@@ -3518,6 +4117,13 @@ build/verifierManager.lua
      end
 
 0    return verifiers, ""
+  end
+
+
+0 function verifierManager.printAvailableVerifiers()
+0    print("entered available Verifiers")
+0    local availableVerifiers, _ = verifierManager.getAvailableVerifiers()
+0    return availableVerifiers
   end
 
 
@@ -3834,7 +4440,9 @@ build/verifierManager.lua
 0    local proofId = requestId .. "_" .. providerId
 0    local availableVerifiers = verifierManager.getAvailableVerifiers()
 
-
+0    if #availableVerifiers < 11 then
+0       return false, "No verifiers available"
+     end
 
 
 
@@ -3906,43 +4514,6 @@ build/verifierManager.lua
 0          print("No verifiers available for segment: " .. segmentId)
         end
 
-     end
-
-0    return true, ""
-  end
-
-
-0 function verifierManager.removeVerifier(processId)
-0    print("Removing verifier: " .. processId)
-
-0    if not DB then
-0       print("Database connection not initialized")
-0       return false, "Database connection is not initialized"
-     end
-
-0    local stmt = DB:prepare([[
-      DELETE FROM Verifiers
-      WHERE process_id = :pid
-0   ]])
-
-0    if not stmt then
-0       print("Failed to prepare statement: " .. DB:errmsg())
-0       return false, "Failed to prepare statement: " .. DB:errmsg()
-     end
-
-0    local ok = false
-0    ok = pcall(function()
-0       stmt:bind_names({ pid = processId })
-     end)
-
-0    if not ok then
-0       print("Failed to bind parameters")
-0       return false, "Failed to bind parameters"
-     end
-
-0    local exec_ok, exec_err = dbUtils.execute(stmt, "Remove verifier")
-0    if not exec_ok then
-0       return false, exec_err
      end
 
 0    return true, ""
@@ -4196,12 +4767,33 @@ build/randomManager.lua
      end
 
 0    local entropy = tostring(math.floor(mixed))
-0    print("entropy: " .. entropy)
+0    print("Request " .. requestId .. " entropy: " .. entropy)
+
+
+
+0    local stmt = DB:prepare([[
+      UPDATE RandomRequests
+      SET entropy = :entropy
+      WHERE request_id = :request_id;
+0   ]])
+
+
+0    stmt:bind_names({ entropy = entropy, request_id = requestId })
+
+
+0    local execute_ok, execute_err = dbUtils.execute(stmt, "Update random request entropy")
+
+0    if not execute_ok then
+0       print("Failed to update random request entropy: " .. tostring(execute_err))
+     end
+
+0    print("Random request entropy updated successfully to: " .. entropy)
+
 0    return entropy, ""
   end
 
-0 function randomManager.simulateRandomResponse(requestId)
-0    print("entered simulateRandomResponse")
+0 function randomManager.deliverRandomResponse(requestId)
+0    print("entered deliverRandomResponse")
 
 0    local randomRequest, err = randomManager.getRandomRequest(requestId)
 
@@ -4213,6 +4805,7 @@ build/randomManager.lua
 0    local target = randomRequest.requester
 0    local callbackId = randomRequest.callback_id
 0    local entropy = randomManager.processEntropy(requestId)
+
 0    local action = "Random-Response"
 
 0    local data = {
@@ -4283,7 +4876,7 @@ build/randomManager.lua
 
 0          elseif status == Status[3] then
 0             print("Random request finished successfully")
-0             randomManager.simulateRandomResponse(requestId)
+0             randomManager.deliverRandomResponse(requestId)
 0             randomManager.updateRandomRequestStatus(requestId, Status[5])
            end
         else
@@ -4489,6 +5082,7 @@ build/randomManager.lua
 0       local processResult, processError = verifierManager.processProof(requestId, input, modulus, proof, userId, outputValue)
 0       if not processResult then
 0          print("Processing proof failed: " .. tostring(processError))
+0          return false, "Processing proof failed: " .. tostring(processError)
         else
 0          print("Proof processed successfully")
         end
@@ -4513,12 +5107,27 @@ build/globals.lua
 
 
 
-0 RequiredStake = 10
 0 Cost = 100
 
-0 TokenTest = "OeX1V1xSabUzUtNykWgu9GEaXqacBZawtK12_q5gXaA"
+0 TokenTest = "W3jdK85h1bFzZ7K_IXd0zLxq4RbpxPi0hvqUW6hAdUY"
 0 WrappedAR = "xU9zFkq3X2ZQ6olwNVvr1vUWIjc3kXTWr7xKQD6dh10"
+0 WrappedETH = ""
 0 TokenInUse = TokenTest
+
+0 Decimals = 18
+
+0 StakeTokens = {
+0    [TokenTest] = {
+        amount = 100 * 10 ^ Decimals,
+     },
+0    [WrappedAR] = {
+        amount = 100 * 10 ^ Decimals,
+     },
+0    [WrappedETH] = {
+        amount = 100 * 10 ^ Decimals,
+     },
+  }
+
 
 0 SuccessMessage = "200: Success"
 
@@ -4531,106 +5140,515 @@ build/globals.lua
      "FAILED",
   }
 
+0 TestNetProviders = {
+     "ld4ncW8yLSkckjia3cw6qO7silUdEe1nsdiEvMoLg-0",
+     "XUo8jZtUDBFLtp5okR12oLrqIZ4ewNlTpqnqmriihJE",
+     "N90q65iT59dCo01-gtZRUlLMX0w6_ylFHv2uHaSUFNk",
+     "c8Iq4yunDnsJWGSz_wYwQU--O9qeODKHiRdUkQkW2p8",
+     "Sr3HVH0Nh6iZzbORLpoQFOEvmsuKjXsHswSWH760KAk",
+  }
+
 0 VerifierProcesses = {
-     "9xtciDYCCN76fXIq1cKosh3XNzG_Qj1D3Z5XK1g5nOE",
-     "RG6r_xD_NZtbw7t2QcfrUXjrlZe3w3a9vK_Z4kTrZyc",
-     "aDKAxaGZSMh120sVO-XMHc2oNxpl4Zst_KaC_YB3AK0",
-     "bHNe_KSStb-pmhttS6x9B2QTZ8s_duspz-r3Fz89HmI",
-     "hE4pw01XluNHiUfZONVCPEQJvy7A83FzR5GJgylJ2jE",
-     "aIiqaop1mZ9XuIPLd_1xVDjkQ-_wEG0L3xCB1pwf6Zg",
-     "1musHHlIsIqWL-v8zuLQCclWNOH0xEtM5Bop9npHIZ0",
-     "E-hoJqDj2GB6J-oveM4B5J5c6WLFQ9f9P9MeVB7ZfRs",
-     "bQbqmx4ju8QHIUsTTWRXbA8VD_LxZqhxHm79dE0xqB8",
-     "1Rk_Nf0ohtQ8CcD31OYDYJv4pstJFJWhU5TOMdBgWNU",
-     "Ca_j7Jcx9GtCZnGnhvSHKZQZiMdOOSyYlC5g74sofAM",
-     "cjTEdlZPE2By_mVk6TYRotUIrGN5jZUom6mLsFFK7ZI",
-     "HdwaaNv84kWolAAxxFcq-fj6GxchSojnSamYBfAdOlw",
-     "m9YnpeUM7d0FMS647VFZKqwcq6yN6NDU_7388ZDIWgk",
-     "5JLl8vaqbNJK-3Z9snnOx7cDciGR43nCKcm2X1g8LQs",
-     "QrDVen99sF88EvE_vffdpHzMWRP5weVzH84gXfKct3Y",
-     "sREsSXZC8UdLfBiic5Nsbl16gsdooRssbdZqtHR47xk",
-     "LMli3AiUXlCZcr8lSacqqrqTiTQpuMQS1TFuFSYyYCc",
-     "eme9ov7v6uvLOQ9xs7TPVw31liudHbjpmoSsJrb9yKM",
-     "emiZ11GY1FLPItxbgDBtuDuZFwosSKydxdX2Y3X3syU",
-     "3-TUgiU4CYXybgL7X2TCGAdGkGlFQgmJh63w9ah54p8",
-     "6zdG4WZnHFq0iFrqt8if0VJjLD0uMTpwI3PKE2ebMuE",
-     "f8DRxguG-ebm8qkeW87TfqQPfpjDx1zFawFLqdyVqEE",
-     "-3FR3L_y41ChqUg9f3LzOOjCeEYqxZnxOPBSVJvhc4g",
-     "7MyjbWK2ui4YCZvI4pAei632cTYZpkPyRsYSMpqVSjk",
-     "o3F_-U5FD69JHSxZJcLU8CZnM6A0lJVaJEjb3tdpyHw",
-     "ocTw1Q0119A6b25W9xPNpLP2whkeTkn2AvM_1vr6dwg",
-     "5uckHZGTWwxJU7MfuBTrPwe6awdqpKxV0O-L6_kmuM0",
-     "KYonYg0dcgjIZHur58aq1l_Xd6FV2995C9M7IKx9ToY",
-     "pCO8DCinMo2iBEYSxnpzMsQsVICnM9I3iFpHvJhiquU",
-     "Zg7NsaOfedtTYZwu6HyCjpfiAMDJU2L-5zube7Pnnoc",
-     "RwPOZCTE2N9GkztErOqgVWcPOQCvbkMtv6-OxIqtb3Y",
-     "tNpWqM0aGL6-6CSpHb2Wrw4jCH3irwrsrpubpK9c_jg",
-     "liUYPzYtFcSmtZw-kixB5fYWAAIwqoeiYcy3LqI0r5g",
-     "mFSAyqgeAqph4uPNAbONTvxrYR-5-BFGpvSzbl89rEM",
-     "VZjKTKen3yCRwS3fhlzb8gy040-o6cB4nc4WuzMhO_0",
-     "jb5PbvwDOPvv2VQJhDBaRapsS7Hg0_nbgklRqy4NCRo",
-     "MdOSjRFFPXVPZ1QuFc24aS2iH6LPBMMVtz0Hfou_YTY",
-     "7lUE6vTtYzz9DX7Vel0PiVr9Gt7WXsraBfGbzsb-J0o",
-     "Ad5zPlVDcyO8A_gZuCZafRG-hloEG4GEiuM3i5q_7ew",
-     "0UHuoupRYAWi2ES727gWXxiB6NywyY5uSXv5pPQmWF4",
-     "5zkXkGJxhXiBeHj8rFV7pMexegQYYurqR7iXuK_OeTA",
-     "6NcC5lNFwyrZTyXEZ_BUpED8tlz-ml3UDVEnpsqn7NQ",
-     "-B2h9yKLQ6Gmz53K2Y0B7I-maT6n3LyuX86nxp0caak",
-     "ieFMM-zqmQpGrVmnFgsyqM865GS1-A5R37krMZ2PahI",
-     "jrZ5KxMErZL_2aet5OVdYQZH1iyFn4MYoZ3qDeRADb0",
-     "vjoC1Vu46Kz_MXcEOQJM6tuSgkpdnJZoVCjJv8_15w8",
-     "YhQ9OPQQnjQXumInOLad4jp73Rv6OEEcE6FIjLnIs_g",
-     "8n5FmNyOXz_y5WtROyaNdlKYjCmPN5Xz0nYlYu4HRKs",
-     "GlPXlvwNgnu1wmYgDdSxX9pRCAlVUU-FeHznW5pFAX4",
-     "6fzr6mfZMyY7J0gn5k2Lx-YzZpuJRDVVIIQ30eqvxIw",
-     "XMjyw1B5ovTM1vuzWFiivD9C7HvTv-fzanl2ygpanRU",
-     "1BaATgamA1HmAhAIaN6QzoXpjxNhNmSv41ZzQzVwlE4",
-     "oIhKTSdl953AAly5HqnVnjlqdIkAMj5FxaG5QCMZ5OY",
-     "8psb-hqCnQQpHPUVo7FASXA05f6GModOEryfBwR7jpc",
-     "BfC87x5k19oU0dpCyoRQWrsjXhtM-1xzqLebQdki1JA",
-     "HgY9erwSLwyUpXm3N6DhhSxbIzJ3XjFTqNJDVg9WJTY",
-     "Bs5eEY7k5tDxO57l1SxgeWUx502-oLzegJIq5-eMz0Q",
-     "3bu5EGUaF1RyR8_B28r_m2R4kpCytXWNikDQ4qDrPQM",
-     "PjSK3CiGVn6iAGO5WCLIiLsrUabTXtXl6eyDFtUDrPU",
-     "A5x89r00o1K_EEcYJhLTwfSmNHcU04KpslFE2GZUNEM",
-     "0McQMqhI_G8F2S5R1oh5g4S4sGWxkMcD2MaVa5ELUAM",
-     "iMMa2HbP-FQwiTdoK7W4GVHKD543KB221P6HAkfIKP0",
-     "8gJT4MviAqdthfUjjXWrL9WDIO1zhwKNdF1HHjlsWGw",
-     "JRt6hoW9blsADCdJbY8ThqJirDrj3SLSqM4CrUd1bh0",
-     "mVbZzo75noxadsLdqUq64GE2fMBDvS6MB29gDnK2V4c",
-     "0auksaSe4yV5Snv3MzLcJegJh7GyxXMYXP6ncjyfOfk",
-     "am7uRfcD71c9ynlSXHjQZonPj8mRyp2Hz_PmzHLQ60Y",
-     "NQcOoJM8m5-nxTXcJnuAeZW3PP1pT3vfi0FU9Vh5yTY",
-     "k5PGnF9aoVZd26mo4e2W_6uZKl_ETATFZ4dzu9-NA-w",
-     "c_0ye66-HsNRp0Dqmw4wga_XcYkK7YFIiiaPGeMY1uQ",
-     "pOM79mJ6_6_2m5oLSMqFTKMC-eWUub8NU1MBgyluHA8",
-     "ZC2FgZe2QPgKD4-C5120ISgull4zaJXSxz0wZqITLss",
-     "gwCxgBfhdGu3gxYuuUl3pk_KVQF0V3ACpWPH2W0piLE",
-     "4eVREWXvmKAMJ4RMiq9nhKbO93Sodme9a5MnMa_ObYs",
-     "WyXBXMLGYpNcRhvrHrshjhFoV4PvTi1Gjj-CJh7zqto",
-     "347w4pv7GnEI_0ZiqmXtl3lC3bXIBh-rhKwl1zuB0BM",
-     "ccZiKD1yn8_bBHo69GVp8KOygbGh_tEn8lJHs6PGOzc",
-     "0v9AAs9fhDkJyjYG7M0rViBOLlJ_DmJA-81MV7LSNnA",
-     "EPocFs8XlXJhSNtcRTAjfkAUeWLG41tkSWFwK35iNfk",
-     "EdvD-KQjeWtMzjW_atVR22jWJBCyNKv5ajolm0PYBj0",
-     "n-CRbJNzKejlnqLNnse4aDzx4lKe0nAwcx1FrvY4pnI",
-     "j2d4SznuLaSegIpN3_u85v9adVAL8NM2IrZFjjTty5k",
-     "NUs5IVOr5KjydjjqLkkA6pstAgmtcPxJWknGRfA9JeY",
-     "Dy45_39YaFd965jVbo57JiG-zbX9O6MpPqH5h6J9-ss",
-     "1aF5qXxLA9bXihNZOmi_Gr9axwYdX8ZxIqjYTZpYITQ",
-     "BEpOW5X2CPTlaKeE4NdKxzcN9Xjisic5Rmo5YebwZb8",
-     "bLEW4XGsGo5IBXvXE2G5-Ai9GjymrHl5gWKwoUXyD1c",
-     "4iYpSip0GqQ8Xekz-OdUf4n3AqFRwyyGEySeIcOapiw",
-     "xh0satyfKYauDygZXCGwYlshCcEiec2vgYAAZvlC2aA",
-     "FQ3XFhjwm7DT156S2MEi_wakF9s1n6LYPv2J8f-Ay1E",
-     "HcCyWiR5eB-qAZclP_-aB5dsujK-TUHWU___Bkx5uAk",
-     "zq_JQLzR2fVaw_PWxmA2WD0hJX7QFJgz3TF1XTJ5JQk",
-     "kN6avGRarPdvCWMUDi5R7XFEnpRXdOy2FCv1QWkZtRc",
-     "C1CElYtiNFeXaJ3YoGMNPTUv_NxJaF197F31qSHrmDI",
-     "YLzRgccaT2XrRpeSrVkSJ--DGDCaW7ngkOTtVVQcG5o",
-     "cjusi39QOnOdXinkJi3vcvWb8EDvNhs2qRL-M0Do9OA",
-     "G6bjwtb3GIksAyF4N2zIJLcpDcXpsl3Icx2McOgoxEE",
-     "H5wGgdYLz2RNtH4oAOe8ssBpABI5a5Dz2phktms6Hyk",
+     "T7-RF4bGln3KjgRFMFn8SlxqQncskEGTZpT-5b56khs",
+     "9_fImQ5tP0g9PwTZ--TemdcuV2IRgvk28ihzyHqL6io",
+     "I-7A2T7cwg5-PROdTtk-3gnnrp90YIoX32bY9T4KXBU",
+     "dJRrEV7Mbh8lzHO7o2tPmATsJGZVRMV041o1LG1Q6x0",
+     "_6f95AKhuL0NKpd4bWt94sDWQJetCfg-PF4SLYeMzp0",
+     "Rp7KYmBIpJ60H6d0penGLnrJnSWwJXzQjX24Xnt1yyY",
+     "5mm3sCiEpF9w_6e6zfmkRhpIkCINZ3pM3pK7myRYi_o",
+     "OlYDi0NvX3aIxxz81GHVufCfnJH-38OoKrQ1GqrbwhA",
+     "d3m1ogJq3FjXi-Xa2L4phgobwhsyWRGcXs_Rtn2BYtI",
+     "KphFRkOhJGPWAPudv3TglkoGL6qyy7YsRKqlwOo3DMc",
+     "4nlUSbhZsjaR0uHGaZVv-tMpekeFGYc8BaGVMOkfHOg",
+     "gSe6Q_hhmdYDQ8zxWwW0rnKSdtYIiv3rtiyxBHZwt-k",
+     "lkogrilJN7asjkL08OuXnAWYkvccq51xidhdUorOBSg",
+     "TBjYxvVbhKDmo-api2MBza_rqbiahvKDO59mVjuT_6s",
+     "YsU8Iw3NJg_CuITkuU7oPoEJBh6hvKL3zZi3oMm9Gvs",
+     "3qcJlnZTVmLSs_jYQTyK3zasZXc9_1Q7qiBheKbM8Fs",
+     "EF1yrI71GipyZ5KCj1zUAcKRBeyl9Se9ik7sFB6XMkU",
+     "-k0NI2ICFeuq2j4gf_iMw9XGhMIDxcRADC-l39IKY3o",
+     "ZhuhahHuRZWmnCs2JkG3E65u7ntnd-ZCmc16IV-4qd0",
+     "PchgzsvnpFSH8hWDObEdCi4BrIfKlp7ASmCkCBhH4q4",
+     "DvwpiwlpbAbCD8HZBnSXRLK0PLAd90GVeJ9IFsXxz6s",
+     "HWDCnAnhHF3gtNTHz1xliuH2RrF8kLut6p809-7yQyg",
+     "hErkYJ_6yuNweEEGMSUXEPVowW1xheoOQoJwgSiq9cA",
+     "9GQ_l50bA6e5G_YMJ6skxjyxfzSI7E_jTIT7x11v3Wk",
+     "eRDrAB1KpNwRBY_SuclWPo5dL9CDX7iBiFE_KXak6n8",
+     "I2CYplPSUnjRT4WX69OceFUPf9mAJg1QydicAla5xJ8",
+     "e4_4TQ3inHnkqWfEdTa9tn6cz1jNYdJhkwnTct-5xxA",
+     "vOjDRIUZ4vMHfkG5ykNpU211k2ARKgNHsk_E_nu5gDs",
+     "xrCfWX6v0ea6l-n7kOpxTTpbB5hizG2uuNObytjk6yk",
+     "m5aRVEhJ-S78EqkY7d9lDv26U-40qJWw3hi6-vjbobM",
+     "wkqRtJxUXUpXeysRqyxqMBpMUdbgvp_FG_d0Xbk72TE",
+     "JE8Gi_F4FwkMBJMgN1eHp5nL03mwPyZVUInVHJovqDU",
+     "7n53UWZuXoZfVoZstYNRoFqHJKadCq34tM6f03zX2jM",
+     "mrItAVhU42ReUkXTVulC2ZHGjCC5fXxOupqe12--enk",
+     "heNqgOeeHNqXR9aOaGFuZjXXtVi0hjyFuMXSPPKA-gU",
+     "22cckByiKveeP7heowSrop7G1pi8dpeMHQKB4YXmj4w",
+     "NqsKlAzYy7TW8Y1zyKoxZlWl-Ece5Epiw8jchwkPzL4",
+     "fx8L7zukNT0uooGMzCCvHBG0lS_7kzN4mfe_s7suix8",
+     "0FnstvFesQU4LNfyCjYCcYZl4_j8eEnRUEjJ4Uf5H_Q",
+     "64a4hvYa_zqxoZUL7t9_4yUD_sKJIJogedZ6ASHK9b4",
+     "c5nDMnbEIKdurdGhxaQkzHfTfIEmCn5FoSvg7jXdphM",
+     "d8OMNCcjpmsr5DPZnkbP0OE1dWYSPgKqhYfzLgpRQgI",
+     "CudErj1-BtuUChvt4sLsr8oWfC0qMWItYkSX0pC58cQ",
+     "oEddhna_2nS2Wu4aCzM-B973XxhDy1qQ0Z4G0XEG8T8",
+     "ZkovGH8fr1cGt57W1mJF8iUEfrOLrZdYHlHXFhnjf1o",
+     "zABzCZ2VyM3G6GI-_LMzNt1NrM330a9vPRYn734WeBs",
+     "PWE50be2hR9lT94GuKv4hLVh0bLY_V8w0UeBOsyWjQ4",
+     "ABEvF9-n9-jkOLQs5SybhT5HKDycuvxWJrkVmsmIV0Q",
+     "_9UNtZ89gDCwOLMV5-l6X6JWtx8r_wHotg2gsNLD5qE",
+     "xQOtYiS8Xsfow5aI41-Xqb70i79aEmKIn0SlcWDqimA",
+     "U8B_RiJy6A8qcccZUN5qjdG8HAjvLSsLgmhZD01tCuc",
+     "m6JZjIQE1-yUVEoDDpV5YHi3buDS8kflGm80bB2AANw",
+     "xeROa8mPnjBwqYqzUHhhIwLmIYlI_MYO62AnhvZFhUQ",
+     "lLjdLjXrZ0ezWccNDrIB7RUIB7jl_BdyVvYawPcZUS0",
+     "TC9qgf9ugiPizJw4jRhrtAz5bQ0FIxPl823369-8v3g",
+     "fFkpr7Ci9sFHT63Fg-9-guwp_xx0abr_pEn8aai30Ss",
+     "LZBZ8CuX1otlSu4dSJs1ebR0fnmWY53QIgz74WMwgCA",
+     "WxKVF2aoyv-7OuH3B-a8tKGbCiYaIf_RtiIcYpQhMYw",
+     "nh7o9Pswdy-HSqr8JTuTIEWu1vV9TRF2vTc9sdgEmtk",
+     "7w_Lp19omCt6zlMwwWJcT0G4SWq9k0jx2erRHATVvVk",
+     "PMwC5yuYnf7acJLZD4i-pPgyAZsAX5F8Ae778mzgw8o",
+     "rWtxrl6HGlJF7hdk__FdbN5QKNVCT64yhDwtZGauh6w",
+     "Pz22lGZ-WCCJT4omf3Xi2p1R24KgbvVMMqLMG4Mrrbk",
+     "gMJEcmxsf7utyxfsdaWusMK7f0ID7cOT2aDVxisetgY",
+     "KBXuUCR5m5pxvVGQ9KXirvt7s9h3jpGcEzU9PhJF9Gc",
+     "JKdt7FOQKD8nx_VYVYRS46Ozo7FFqEVT1EVI_kL9FKI",
+     "3JcqelDsAseVOIDEbZX-7rIgz6fzHNT4Eeq1BRwNkvY",
+     "XkKfsS-z9tRM23Ga99UgyzcXnH8rwOC-2D6Ro-9lFs8",
+     "gEBY6tna7TBEzk8mR_KBLhIbgzkNXd9Qot7mGdYxh70",
+     "zvE4L9feA-d6YbP0ipihm_NXvfwy2dNPk_J7Uw2-33A",
+     "ob1do698eNKOc1cVYzg2YxQ3yE9nPyay9YDd4jzPg74",
+     "PwlEfi7Jgaiw3fQeTzZDA0d953fndxJCmCSGAQPsLTI",
+     "tXVtgKiNanwN1VGIcBtue5FGjCs3jTXCRje1O_Nme3M",
+     "nPpXojc1ZfjInVujHM5IImgw_wNFKz4K9et6cpbFNrU",
+     "6q2_TLAjMERFYOq4vTZAOabCkUJGtlWInnk1tl7j6Og",
+     "Mc74QFO3h3bo3M5p2-6uFlS_cHY8LQn3x1_4uHXzV4M",
+     "8v3WZlPMDsSYTLb4U694ugsWMD93WtDXhv0NDcMrPeE",
+     "DKfdCglnueB0EiK5gsNDbT9FoG4Wy_YS-RXOpv-xIHA",
+     "mh1TOlTzOx3Duc-XXNPOQ0OE1YF5iSqYvPGK8nlSAT4",
+     "kJSnWrowwp9TDcFXM5Z_kA0DIua7EkUNdl52aTT3j6k",
+     "l7Ksh61CFRkI9PVkgL8xc9b3MrWDTa5BRoJIg6Yq2bw",
+     "k_Hr2Bbe46Ds4WHYHoi6f1Lp4-yo9Sh5OV58WDGV_hQ",
+     "oR6EN8k0gaszW77Ouk_BPFeSTGPhSF9dz5gsGipuvOI",
+     "R25bP-0MdYosI7FaRttiU9pXxK4mqbQN6aeuce0KJ2A",
+     "e7sihuxK68wlX0q58FmVRMXpF0f1J8p1jYK4uHkBeg4",
+     "gkmsDp9XHDdFEcDyBFFdKaBJYXwXE6eo2fjAXCgU0JA",
+     "pYwdU2N4TD0U7RHo8Bu7Byf8U_EGWN793cUWWhrpfas",
+     "HdVK01TNSFRsygba4stVu-TlVv7O3jVHybj34zKxDs0",
+     "TLN9udqmAn6awqa_8wQwz9EM-kznJWzNAQT_abE7giA",
+     "b1ZCoOTSZXMtcn_bhq5zY1ukcr2EAZoWTTAd7Rm4JE0",
+     "BwdmEHUHD2gb78MT1mtleQQqeE_TAfzj7Pl7Uc8JaEQ",
+     "d5sz-NDAv-yZEgxO6rhh01UkOs1C6BKrO1ZUgT4cGQQ",
+     "M5RgzbJBZ1GmiSLwTVBOopXk1zHv_Y-EKC6bS53zkG8",
+     "1eCEtCronrREvHB8F2YYJ4kP5XB8nAMGOteqrQzCqG4",
+     "VxWtNWUC2oGGXevl1v_VwCElqbYIw3WcqAPWRmC48Rc",
+     "1g4KVg0cuZtM8YL48QikWl-0fV7I-beaCl28zbL_z54",
+     "OjZgT0Kw0G82YRtSYEaswJitLAlk7vmQPWvhVY9w05M",
+     "rqKpIf7qw-GEp40xQv-qD7fFKj-o_WVwWr0J2ievUgc",
+     "X064fFs1sXeDFWIlXU_rYxNASxY6rwV3lsKNgjAARx0",
+     "ySnZDqHT1FhI-7D6SzRmxGXp6EvxRJjmFJcOHIp4ClE",
+     "5GxvFf60iWg6juzNiUu522DEKpl8ufomfKKCfW0BcuM",
+     "McBjuahxGl_AiFlXuxSpS9DiFv6IfMO-T2RJh7AaZj8",
+     "bFT1c0ssxcE46WHTzt92EPaqpm-oHCh9OtV8AGXOTCg",
+     "8yghOgcUrtkiT75K1tzigpEkqAtkf-uYBD5z8cIO2JM",
+     "1-9fh9pn2126yoZMv3A4kYEdAmruttJriXfeUc3NU60",
+     "3dJ2hR_EF7rzhEZl2I_fKwwy005bO9TFPNyvN8TcfDc",
+     "Rj5zktSRM3Jy6JjbfxEuXST2PaCDPhlswfLT78eH_sc",
+     "1jgJMrD6qNdyP9Qb2UEVZyOhX5w74eAtXpWreBFtDbw",
+     "r85ZkCYrhfFp690h9WxbB_CzUG6dtGjIQS8WuKkJ34s",
+     "o91bb7EYUDum1waPg3ZG5_hPpZBs5SX8GhCRrYU_NgI",
+     "gztRP6Bo8iUdaXs9LRknNlTM5vcJe5VwM7XI1UhAgus",
+     "3fjipQK7dIt3or008g2-xsQ9ba1Ru0T8ddfHCDkUGsg",
+     "YigxeQ0FXMaTqXXnrlSCpqMi4XUjo4X9vmKKGdFiDQk",
+     "kOVh8HfWmdztlO4NMhxLAPCzfrOFnUyt9rS4W89X4-Q",
+     "ibolcJLEDi4ufY-Ke6DjbyhvoPbKiipaXAIk5UxbCOk",
+     "Ycuxgce_kJEzdOhnAOPLUs6ghCvEJONYkb91h0Q_Ujw",
+     "sNlK2sjG7OXGj5Z3HCpJ7v09j159GspFSuC0izvwBYU",
+     "G5zToZIHxQmk-YMeYDtyLuC59VZm3xH1KCnNnT9MSYY",
+     "FCTpPb94103vsdjYrpd0FfV2-pWbea9GY1cILHokj8M",
+     "CJ5E2o0QGKEfWk4tOOJQkmDORA2ATIxFHQ1YDePT4_E",
+     "qhk_pI7N77UG5V5EwHn_I5hllPIuTJXXJlEoMZywdAM",
+     "m2b9GDdKDhy-4r11VLHhSAo0YkEasMVOzg1aSg4ptUE",
+     "53KwZzocE8Yy7-dxC52LEHTsYyJVd_fKFhR0dA9l5Aw",
+     "vH_VKVNRb5STRQndaeAVx3PcWyUkcKVJ7xu49VUelyc",
+     "rsl2Ep9FVUkyBKVT0qNSbTUEbWGzcsJGdaM79t78YHI",
+     "Y99GsZ2UuPENcrxue7zRtb1uXmFiiUJO9xkZU3PaP6g",
+     "JGTNnbx0vbIVSyJmC1k4cbRMw1G1Xd1dxQBpoVe6IHA",
+     "cBrBgH9LwewE3vADGGgUdqg1J762zx1LhsZI6e7VPXU",
+     "kMtSNlxlf1ltGlzJCNKGHnK4g5pM-ud7ZMALMf8FoPE",
+     "YMN20qnC4uGNaCfm5VV9omk05zNyGSbokKqH40NYOiE",
+     "iZmv-TnhFOGEJYVJXxXt8tYd7aYnlc4yBJHwXI1a8Pc",
+     "0RrLMoOITopGNKtX6BGGDwhyClhWwa6YFaGZdcLFJTg",
+     "fPLu9NVc2oCR_VRxiHWgunC4gSy-MM18pFub6kc1Aps",
+     "a2Qep6NRtTUxQKiwvabg4dH4a85iY-McAb79pzsAnCc",
+     "8CsvMwTlR2edhvbHchLAkh4m4O6CPDXTZQsr8d9rfu0",
+     "IRBPXdiMSvNDKs-tzkMId46ZcXoKRA5ExUuKIUfxJeQ",
+     "Qh54rMmcrOsWGANDGqqXvpCSygt46PvMzinVF3VTO-o",
+     "sRJ5rg7dStNipkCJ7iISKA8DaEfdEIBoEVir0pxr__Q",
+     "zrDGJc5BvtY0psyG_Td9FhCZ8ynhMaAfT-aICH_pyFo",
+     "qzeZFbx8Zp3wld-zMSFUQ7XvINQNvGybXumB9iklKxU",
+     "c4TPuNzLXgjZEUGZo_truOvQ2Jcs4nXkn44cnhCNc2I",
+     "o5E-ai2E-15iZfYlbt2TQdB-chhop4GGsrr6HT120NU",
+     "UhnZzRUbx-vDftVyY5db4DQbWc1dI1TX4CuqyusyTOg",
+     "eNCi2IamarlADFinS0t4Dj1XV-OSQ8Ie6e0Qp9hvHBs",
+     "5mLNcIAwYgTHJbRcOy_twucLV2-1leSTomW7u4NRrJg",
+     "LIhv5i9fNfNlHOtwji_JVD7Tmmp0weaScspN_vnSTFo",
+     "2MXZCA7mWg4wDN7IoAyIwKMCcn1u_ely7ewZJbfEsXo",
+     "TLRNHm1LoakE1adrNLZT4MihdX68Hi1_k3NRKs89xrw",
+     "VnE7XXhM_QT3Y-aBBOZXgRMluFfW_jSZPUGWMNj3Xzc",
+     "HxlJCduHRW1Ss0ES3canFYRxlFktjDG9_UJRMfM92mg",
+     "vzzI8rhlpsu9bxR7HRm3gJkAyhPCMGCfGIJSDg_19k0",
+     "0y__I0SL-5i-2-JfWmA2Gj7OMiLNiyElw95pVdpXa40",
+     "tb7chB735l8-_sFb6Zk8elA8z8JFtsqhE2h9qY97vmk",
+     "KzPOWYHioDRuSzGC5h29svQ5AK14VOhE0n00NzcsTEI",
+     "minqxUi-zAQgumSTxb56icohr8p2cLSZqv6-X2_mtaA",
+     "9wPOfTKlOlFzXg4REcvfKXZTnlwTz5qQhaFIHGyO_j0",
+     "m-ZydC-SewUUTZZGZ0fZu6RYkxoAUmA_fNmdHqNHFgc",
+     "NJppTfQIROF_4B3SforEk9rSRoYv9WazILGd1Rx9aT8",
+     "hToKvU_WoV2-GcpfRcP8Ec0k5-hp7ATqGNkIQ9WQs3k",
+     "CPAoxaMelSdcPNO9MXYkUab7BYc2FjxFyza8IKyQRvM",
+     "FhO10hV0XfhAp2INACjyAXKcN4HvnyZrZehRqXeMWDs",
+     "UFxTcOMi-iRXmKHBIaFm2MYBqjnnHjYT3NPEOqia8Ac",
+     "1oo1Okpwu9V6cX3q2p54Tth25RpX06smiJq_cgyj8S8",
+     "_z-WUcAvE7fJra3ajYAYbPvSX_h6sdP87lvIt9Rx9SQ",
+     "CNakG4MD-WL8VdEP5Km6qbZKyBg9Dak9499Y40qJu1g",
+     "oL1-v0fcVxeKBJJkQ7hcKYatEOwtnNHHxeUjDCbuG8A",
+     "9dxPu22ZPfzvuSFCAJYH7iPezLBcH_QS8RgQpoLD6MA",
+     "2rLZo2Mmeqqe8ZYilC0ifgwSTXm4ADetiqRJtGsjQxg",
+     "KyLfafBY1ai6_in4YtQJ1aKbvxrYI8K2JMkx7YUhv2A",
+     "Fjp29x0zBpQIlBlwWiNuIVWUGjbbUH5IL3AqBnMyNpg",
+     "-y9vnVdIkAh7xQLAweb9JogQ62v-hsgKENiuJ-042Og",
+     "BXmKCQdZvg0hd5-7WmVs3az3OicsucMplcxjt7xTXh4",
+     "FEzBlAFB6iYx3JY1OOQGcRZovGT7hWyX9HX9XKvCHog",
+     "NJmyg0WJamny0U2mEiquR0GgWWFsO-nb0Wq7mNBGxOw",
+     "lLmALSBgv-i9jbl-r2Ebi19znShi_ZBtkYiLOHxSH1w",
+     "WIsetBJJMwJJ2e65q4Yz_FJE6v03tWxfHAHUQKP16sc",
+     "Z2MjMPhDPkeX3WG0v4iqT5h_oZl6hVQST0OblLzBLEA",
+     "K-FL62L62StjYE8y4GSR17Uq09fn-WNPWsOa4IHCrK0",
+     "mk843Od5KdQD0cVDJkAkTDJqC51AKNDtFqw7EtG-CVs",
+     "0gA1Dfx1b3UEtO6FzPWKMDzNpnCTGWy05kDIbfbcMBs",
+     "ZZV9QeQzeb9LUKPV9k4fzEB_lvUCwdmtb3sGvuG06iw",
+     "bSbHK-HeRjLxWTdMIAS7xqQ9XLlPrNU9SxeNhWc1FzI",
+     "UXYm15ncoW2RLCLkdGVAXwB0SG8JJnEIV2Zwi4vs3Dw",
+     "eZSxrk1qYbh-MgX3O9S2i_FSUXv81BRivy8nqfMNzjM",
+     "0Px8L2Mv9zUU0idIa92UEYhfBqxEqu4DjdGM3oL5jqY",
+     "Z8mfXCgP5SOWsfufAussXPeV-7FvlkdFHuyJ6_dFREI",
+     "3xKq1jpTzteJ534QEm51N2qRs1uot86YLYaC16uRPUc",
+     "O1VMKsrjSYQZk7NMbi7p_6x-TgMP6kIvzUBzygauN9U",
+     "G87VOjCfAkjV8DJ2vM7qHApwm4LV_ZY45FKjxnMc5TU",
+     "Ky9LNupo196hge3VnRmoIKfj92279Ss-AR4AeTrjE7w",
+     "4wWck8D4jDDaUVACuyao-vcRJ72VulcDGMmqY34_tik",
+     "jMeLhPyVQPuUmjDMugLFvjl9Emg1Wc2GRmBi6OPzqQU",
+     "oOxhr3F03PAgvkHbHWMQt-uw0ZzU88re2Rptk12Tg3w",
+     "e97165QZPs2fmPN7YRUk1izi4Y-Z5TLZ2zv0rF1KnH8",
+     "cemB3H4Lkpk1MS44p1NRh8JIWFn6XVRIvBVPABVuVwA",
+     "_KOIpnYvBCKiAlDdV9bhIqQO8GBcJM5BRTNujgS8U4s",
+     "FQCy2_TmJvyyRIJvNlim3QJbyHJlAR29SuIpjf6VIC0",
+     "l7TchAvovkpHY6s-Fj3ui4Z8xPZkti-tnjY6rM5pRTY",
+     "bxbdr80XhYW_GzvD7lu-bZSSQWvEJjKx7oY_FFARrvU",
+     "Ao2mAt0FnT6LyG_d55tvovuKC47RYCqo278HG8bQ_dE",
+     "hGkXD4h9TxZjGP60AZz9OSBZrZr-0SF-nNz1bxSgBe8",
+     "Swg_oL9EYGzhcZotKLbe11eFi_trxBrv68W6FE6_ltY",
+     "a2n3xIbRk4OBLcJS3UJPuZe2Uu6ZTfoYtr8Mux7zX8Q",
+     "BE_8bDhi3yjjg3Qfaw87JDj7oMXSE9O6hKYCjf5p4Eo",
+     "Qjo2fAaQRwUsimVr_SVxsa3gigraRSLi3VmsVpADjN4",
+     "B_zZr4p4_HiIOOmx3yITuv840DTeMEkis7TBKgb-ja4",
+     "7t8_yMXfA03s05F8KM6R-_arsiKMzItGuJzO0rTRDDQ",
+     "SrizI743LcUDNK5chor7YZCtwEVhlm5xNbMkCYBegXw",
+     "icHrnh8V6SZd4R7P6HcdgrCXyiB0CvdYXp11aPkMiPI",
+     "O5yWhWk7Tj6nYJixXlittlLJ73qJ7aqpADBhVqI3CDI",
+     "L_cvvT_2DukZ-kOg6cpYQJckQx-feWjqCyncDV28dZg",
+     "F4Qjh8HKTsHvpxqgqC25R8jtrS0gxZV_TZtL_ZtgmM0",
+     "MTPC6VWElnjq-hl8ghjEHvYShymshsRd1dMBitaLocA",
+     "6S4FemwfuM7U_SXUJWEK03jtvbSi6ymOn507NP9q3Eo",
+     "slZQpNOmkOVzkf65kw12PbGTuyXEsgvptiVLWAJEEKE",
+     "iE_ge6YfEaJ0VQCio9cEO3UaibN0qL_7H1eZJoadJf0",
+     "WY9CHNmIuNUu-zCPF6Eu_MH3sLxCUgRJaZyP4Ru8FxM",
+     "IwWTZySuUIII7MKtoxQUkvjJ4QEi8OgXS2t9tGaZ8ac",
+     "YLLZTegwpCaRTpSmCazh34ZI8k5Cc9tFrpWEF-92LuU",
+     "2SgB2DiUytnalbEb9MsJdtupcf25Dj66Z-XVSpnDJMQ",
+     "lMBKepjWnGVlY9U_qk2nKf1xXQ4nVajSf8DAu9zjU-M",
+     "Qmmu87y4NH4O2d1lcz_JVF3i_sKXn2zYBD53Uivd_jY",
+     "9ip-SdnduZiaiDfDBvrKw_qsrh1wEK5LJRq1MaiIKm8",
+     "NOCh-bxix3tV21vW4wANpaei_890KlmAaqnf4VOxBKk",
+     "YBXtjqyMgeAirx_o77CY6kh8bASp9WuBXKiNbiiHfp8",
+     "eEwNSN3Z_-kJgC3hfyFZ0iKCTezZyYzDG-pMUK4dzDc",
+     "psviDDYgbgClpxsA3FR7A80mlKseVE9TnAcbahvokWo",
+     "TnN6Fj2kM6a_R1qnXqTFsUa2YTMzK2iMn9fW9ho364s",
+     "lmFmioHWna68TbbAdzaE-BumdNk4MPLEcrzTNBzvBoY",
+     "dcDt9EaRs8DhMn9EnKpg5bYD9gK0JNHqJPwJ8NUqC9I",
+     "NT9L6SgTeKNgaX8nhstBWezLnSMx80xwpLqUfB3UV-w",
+     "EmMpgG229bMyRjAMsb2D4_vFpHU3B3Xm0JB1ghvvTtE",
+     "rN0pfRFP7BugJwmY9NRmJtDf_34aI3y6u0ZBXrmxCyI",
+     "yfcEmW2yf8jKwQDUzIBy9og7NO2aYkv94u8Iy8b6AY4",
+     "ro4Mqwbj0VUX5yzZbGAihPeZxtLk6qhS44cnRRKnb0g",
+     "ciWhhajLe-xQIn2R91FHhdSvSNvHVM8wpwSUwAOGEhY",
+     "r8PDdn2UkGR0HwAdSFbqHV_HnUmUKe74B4lQQ9zNwHQ",
+     "b0sMWLHAqcNMFwJ4zBELjIziBRMOSUvf6E16PixROis",
+     "D2-W-zseQ9Xei5UySr7drAaxm_UpygXfM6N_3Wa2LL4",
+     "c5pJOazTgZMFpwZu25HSftQ5cbJZj0IyTFjI94CXKrM",
+     "rfiZFcCCBYUnr8tx8feL2o9QMQcV4KzHeVxlni9cick",
+     "mzsMiBkGKg_nSItLu-PApUhalkFDZ1paYXa4GShO4vA",
+     "w7FDt__gOqeP4HMSYxr8zNSCqOvDlHSxf-BjTxlyzbY",
+     "Y2Ar3oHl2pp7LcvGGKeT4JThd8CfLzAYdMX6bs_YlMA",
+     "fkx420nlkkuBUNiahedzZi3ZJsWr8lLyu3LNevboxpk",
+     "YiZ3Ceb5phAGkECFJ07mG7MjNfrde3OR5U4k-Cx9d8w",
+     "I7FJm11mryihA5NOppdY4UofH2t5x6faHvQou2TTtck",
+     "GLNjX8unFp4EfXPuCaRPYtJ7bURpRQtAgCMNQZAqj_o",
+     "l9aMRJoTa6oXQDMEQAFUvOEVmKPvBf44Tkegu_Ggp9o",
+     "gGhqNDkfbczd0kZ7cDjmiSXMheHHGZiaKSosvHNNyXs",
+     "SQfEt7lntfLRlGgo7-POlEVmDaqAoEr8o6JhVVE4O1k",
+     "85a2vJgG15xLUhPfrsiPiNELxs64ggMsi3CLUGa4lbg",
+     "EHaO9zN-2A7mgBXlXdo_hT85dGnw9Ujfd_pjvUtCSSw",
+     "P2dLyK-eRPZWH7iE_lqluN0gU_O5VV7wF5LZ_Xv8BbE",
+     "QplVzI4irGCWg_kFqn_WMh39Gv_ganxzqJU5sFgqlNo",
+     "6o-vToJqBHenxbA7LlJiz37-BsO8LsfEZOOdsig0_MY",
+     "6rfS_fNikEfy5NjAJ6GC20A-rJizdbi0-m1noLpb9bw",
+     "v0dX-tMc3mNwqJIljjmrUDIVu05hU5W6CsW-x9vDmsc",
+     "nPjPBopkMKjIqJTWGJkFH35jnbbdOpjQnEA9dFHNt2w",
+     "mvMxsEQ4hCine8QFUVsyygUMo5nyTvn8_EBNT8lqVcI",
+     "yXevYFUI9ZF03gWaLa6ef5ad6Gpfwcvu_tnIyhgweho",
+     "eaIy49Hlr1YHL2xWTmxBZcFmoQ7iFCWmmyOnQUoz4NI",
+     "St84YHcD8cndKPPiPoirBQV4G18iIq4NgdJV5GygvNE",
+     "XTataOipP2QdwgP8YaK9N3fmA42bV9fUEN7TtcE9T-w",
+     "CQLS53JsNc_Q_tK8qeQPZN5f1gSTNn4CUjOjMEDZEk4",
+     "biSjM9z-5yGIweylV-MwqH8r9NL4pKWBIQ-1usrhiJo",
+     "zXxukOFwxmf8Vy9P47poMo3RwdD2oXcJTKX9lBJ7dyI",
+     "7IUA_jlxmU9uxZNs8T9ACKITentJfGAuW-98g_L1H8s",
+     "dGppVFYISiaaiN3x8RoAvIO7pUS-sAs4v7U45qZJsCc",
+     "WKm0hF8O15doQCZ4xJHzzK32AtM7oN8EPmlCyS1y5Bs",
+     "-ZMQ-wl7215kR3yaRLCU5hEGJbb0BomhDsh1joY-4TA",
+     "siiS9amm5g4kQDp72iz_zumzuSfXqOpbjvQoj4rR1DA",
+     "xjH0-SOXxl4Iu1uwbnm5FGWoQKnBzFXy4XLG51dJDtg",
+     "JXORZQdKkKM2YjFGmZ7V_D2eIiGhGcO9xl3z1BBKbbg",
+     "Y9V0Jz6Uc2HQQ5-0DEUJFNe1XbzUcjeFDPEPgeRhJ7c",
+     "742gQcjYSsCZoCAHc1oERDCRzQUiXYBB4DZo-yVBhtI",
+     "kgArSG3aiVtRw-bToNWb0N_z_TPKtD0Wxdwkak_mnJw",
+     "czRof2cMoVqnKH6rnCVGdxZ0vhuDNNkYuAwYYwyQ1tw",
+     "iIUNm7pIiZuY9t23emUEo7grMuMItXkcoFJvW_ft1oI",
+     "kTzMGmljWis7vuemkUwVEX-wj5p6q7sdAhq_9OQDiYU",
+     "OmYHMxhpjfaB_P0YYafe6w_OjlGpNk10ZihdexG2Sz4",
+     "pZcJmkRvS7IbuYRl-lDsYdsNVMYyV-Z2hs9EoDAi1R8",
+     "_uzeBoZB5z59MZnvGtQebMkinRpsbn4bMgALNpIAQf0",
+     "Iho41lRHshFa-IJVm319VFZgPIPYMG6-Xxuy_lpozaw",
+     "CqTitrxI-MrK5nCONLQ9mv5_r-_7BhTgPViaw1oPlsA",
+     "5yGsYGZtqffZ7L0BtuSTrJ931AfX-qSkg37dNWm_SMw",
+     "kf2Y8jz_3xl02X1HGiCBsSdDclxYYzdKuVETNxQd8_E",
+     "f6jCaD-YavPmPlPOeOHiyubfrmbmIltxHBjbE8e0HO4",
+     "OzV0jx_RbLrM7AgLp5PqYO2J6xmKraC6vtQnLDb3e0k",
+     "ujs6P2dmJMmsuyhBJt9MYRV5yU50mkp-evYMMf1d_DI",
+     "nc1ph_PpMTl7-csfSR6f4A264R68MxVrBfpbx7AxucM",
+     "am6sQup6Qc1tEf8VhLUC2GUPt7-6lq9gfZo2JdF6H7g",
+     "7VboDG9TWJw9hyvb2K3sgr2adj1qnG1pm97RsHV-CWo",
+     "LwyI3FIqrAHis92h_x5jknVmIGIb7RRU51syTyurWPQ",
+     "AmlxnECiYUtjFIWt2UWQPVSFsN6pdQahHnQina_a3H8",
+     "tOIq_i6mt5T8liicMvqVwPoylSYoDM0tgtq2AmeI2TQ",
+     "1JygGkrKiM51zFd_d37LX_axfxNxsNlPJMB5ahsksrw",
+     "Wfgt2bEc4O_JqgrFVS8ujjYC5RyVDvj1ki8LvC7AUjM",
+     "-zQieNEDDnZ3uF9rRaUzQfvM7i5At8hJqbfyzR7mXoo",
+     "o0TsJMzaiusMXm6r3qYiERq4_-tkJtFnksyOZLv64hg",
+     "w1kncbdAXgzIV_7ZcKP2hAtynJnxysMSBQrR54r76Rg",
+     "jQdRhtUkS2XDj9mdr4ht0kdX_5K5uKShTd2fa0fC_dM",
+     "8WXUZcAn9_MgcxTtCFnopFsnm2-yYVjjDrAdHD6vjkE",
+     "TZVe58-hYyqquXxGDpvgQhSq3Pgm9d1uJjIvymEEamc",
+     "4oWeNJsgZ8JWnGPlN_gwLV2NSQeOyyCvCF0bmUPBViA",
+     "qB8ONXjopC2walggu2LsL0BpCYd27UfQmF5eAN2Zcv0",
+     "xaiM0KFqhxlYy_IvD2jQQnVyrS_c8Q6NdXgog-zLsoE",
+     "jt1gKXtwRjQhOBpS1a9sbkzXUY_T9YMimFCs06FXX8U",
+     "yaiUNW5af1vAXIK2erHsqURd9Sq1_Rh9oybsAbhZECQ",
+     "rOOBxP8H0QOp1-Wdng38a_AGpp9eNUjlec8wl_jZGrQ",
+     "P2fGIFGLhGerav2pjeneDIFaaSAAyj3_QyvPiibYiXE",
+     "9xSwCQRHuAqp9fTUKzncVZW5BEgn55ET-JrCYkhnXL0",
+     "PgIyebLT2Zm-22T7VwmpySl3z23LV2CRoYYWZwFEdJs",
+     "my6BmDrLz97Wb-8ZN4KnEvBH2AVMBOL2muee2CBiN1E",
+     "Sr9QOTlBw70gkyYd58PWR9dmih9_MJqNk8BAo0YRUNM",
+     "iBYDvWRmr88D8KkfoxuxNtu0-3cgn5RoJXG7yD8Hbx0",
+     "Ik4jWHF957UC3Oa_jFPrfCYqiK97aBu2O9h924bo29E",
+     "SBvCRpyucRVW1GQSoG4fcpEgvqT1vvq4JqlKOjv1efw",
+     "YFdQ6uMOes-AKLBhux3gtERW9LB7XPN1DrF-6YR9ff8",
+     "HciwRvS8zM7TjLLacTdr7KEeOgyp1Tgcc-W4K8tAzP4",
+     "U9C_-Dz40JneU8cIvQuTNrm8SVfvReeknAligaTQORE",
+     "Udee19UfOgsyF8xePhOHBBu6f6wtQpUfOtQP3IN_8aA",
+     "MW6DspZMIevhHUo_X9dxtq4UCnzC_tJGEodDa42udw4",
+     "R8exgQNwWrWuKeHRlzfcFX9pXzYttcUu5pvKtqX8zIA",
+     "gsySIxbWrPA60HoDWu7hqTXMBHICwnxpB6NzNwj3lMw",
+     "DBiP_Sx0WRRpNo-JJvsyc0zmQK1XxjyL7hAAFsI9w-A",
+     "5c-vB9cLpcmGkusKr1Tx94xSFKL8T_5142FgXytELIc",
+     "IgGqdOafCIZVU1r_Kz740BUSpINQWUiCQnaPhbrWqR4",
+     "EA8qebyA7n8qnoxukSxTS8vJiktYHtF3JTn0a10W434",
+     "yqTs1bfk1ZC9UijwBKiwFvNpR9EBg7irR15G9zgzEK0",
+     "QIOxplHqBcbdoNTW52j8DylfYcr5Lz3UIODI-o5lwdM",
+     "Fjfs97LzTlcNgE4Evj3SueO3AHrdPd_ps9xovQ0Hcgc",
+     "EhUwUXfofsaAz3wIfbfNBZ91OTSdtFY01ovo0RRmlMw",
+     "0nD4IooeMXoPI12G8Of70eslb5sjndJgscht3ueuz2U",
+     "QvrAA5R8KlJEuCGnhBeI6cGBc288ajT1WzXx-fdRgRs",
+     "M8j6TGLlmxLPqv1kmMtKLI47sH2X-MQ-R2VsY93Ill0",
+     "-EadO0rstv3hHuvDSz4q6wzo6b40RbG-bys_vFCMtVA",
+     "SFj5XXac6D94uwqksGlSk5b_0u04VP9GYUVm4ieQydw",
+     "8VhMOxhn7WKq4FmqZhecf98Lu3GBpoOPXbcg64iIfOw",
+     "mbPNPJ_vpohkjftvIUwI-sRT4cz_gEDQh6QIFQxZdyQ",
+     "lj44XiD_VpZbtDPRIiZHCGT6LvznXTcx3ME4J3qY1s0",
+     "foMjod4hfb4XebazIp6pG2ZGt-8PheGyPAdugmaoBEM",
+     "eS6vD8scka6LeFavrbTW5pfX88svO23_YZCfpBijPCk",
+     "JGLUkBI24zwEAKyDezOge3s8tIk47K6H2WnJeibChYk",
+     "wJFft_w89ng0mRqvh3FxKrKHXbrWAoovQcGfrL2c8vA",
+     "Pub_w_Q7E1HnifobZ3T3thVypjAO90ZBugXbMLn3StI",
+     "0qKkVoTReAR1TuJwgEDhpuZeKyi5iby7ekv48Ej_DkA",
+     "xo7gOnW9h6lYLdS7-n1bLKZZ3NtbyDVuSwBOPQ_gegg",
+     "CNlbe_03kQy8hPD6FnWnW5yTvL0E5DMwA0oMqcpVueE",
+     "5HLfKQdvabQ8rAKzMzfKaUjfdEITL5EVlUt_DSu9lg4",
+     "qmKhnDhEDx6BfAfHIcDTRzhVcf579lI-TQHZO2w1zvc",
+     "eA5IxHfRBMnayOD5OpMHwVvCCBaitMTYOXZuAkICLCo",
+     "U8aRyW3nXcmEJqeGm4PZX99KxrP799zungB6TfxNKGQ",
+     "ogioMX52mQvqjfigqZTps295igxaU5J-OJCeH02m0E0",
+     "GBThrmng9jj9YfV0Qwj0gWMLxtAqtPEEVKcUmmE0BFg",
+     "VGFqr-vwYm487xpnC3MBHoQVELKeRcFkudf29IQHnLk",
+     "1MSNlNjM7t6xADh3Azg7OP5IIoWf3zBSrzaO3S-mpyY",
+     "3fr_xM8lb5QUUgXj8DyKfa0Tx8o94GDgrxZ2Jp6sDE0",
+     "0GaAX0wOdc8X0wgLogNnpvX1NhD4FDb_QFaYxwiE47s",
+     "EjtxlBrrie7RTqrMi4SwmXr7N7Y19Lfu-6HfwRKkRwA",
+     "XIBB8QoDpvKbOb7y4Oz57p7hS4sDLKR7X1S-sR2-uCw",
+     "7yyL3Ys7peFa0NP7Wdm4agjE_1TLSNVJw9uzX-zuNe4",
+     "5QI8zCG3hjVDLz0IuMbDjEvqc6pRtLOLFNRSEWCg-p0",
+     "eOZuWsxEJWmBwPdADm9PPFOx7HwqkSlBMuTxFf54p8c",
+     "0Le3wG3qC9Cs-Zv3e8xgP2qi21aHCFkVC9nm6QklmrU",
+     "yQp_INGyF8wGfddUTT-gdElsMeMDURRXs7NiKg-8nvI",
+     "vBC0RoHogwHW5pXnmhoXLsNo2L0OnCRu0J-N5GWU2oA",
+     "8sH7lsatn32RCCVcTfcuvHCmedtLe7fIQEKifDdeL2Q",
+     "Z2w65JJ6ES7S-7ckXXYgRxBqIPShjF70Bd6xG2GI9gU",
+     "FwVc9ng7nzhjKqWGipin3sWkMPCuqO54TDj4G74BTUU",
+     "5LdZnOg6dU8rp7dx9siJndrCj0NrIfCYp2kdQYL0kqw",
+     "3EQL06atf5EPvab_oQogXbXTNNrxYCcoNmfa7jg5RLA",
+     "7fzmkTXS79NzU2mfNYarMe3GqHgsjmoaCh-j82pYmOk",
+     "kslmwOJAneC0X9sLHiJxWC-RACcCJYMrFKVT0rmZOb8",
+     "XFzO-fWVDjLIjxw_jpB9JdrxT6OnvmJ6Q0DW_fAry_0",
+     "eILJbm3MNapbo7IRBbQJHSmLvPOCGZp9-up3Rt6xM3M",
+     "PriL5mFyuqCAZhNj0P4etEEaGHUNnjPQVGnVDNAjnQk",
+     "EJ8yFGrCQIuf2LhRkzbws7u9dMW-BbUWiOqPcJ14DKw",
+     "pG-2OWewluAwyKxphAOdEgeVtdD6rYfWjdVnpWNKFME",
+     "_rQrM0f1ZkDQYOKQOry20lfJ2X5CcoQWfluSROWJOKU",
+     "CcH-wZwaz5QRcxFDXII01qCCv5t_82d6JJxlrslk1rM",
+     "Y-TGbp5ZljhnOaya0WzXoLw08CpiU6kVvL9Rgi6prAQ",
+     "ulnpCeSTeJSWpfLxAAxawaj8ud3LpFjLZ8ge14wntLs",
+     "hIdT_J29CPkc_BluO7djOjVCyJLfhiXAN_Wj_DtTLK8",
+     "snXqx99x59A9Jfy_ro5diB5gLfXeY5InOEsj9FGJwfA",
+     "WoF5ItXwnpI1hCwwMW3knpbdswCNH1rZyYoJlDoShts",
+     "1kHHjDHG96pVz4lAMIKcdVbKvwzP2sMK2nUh1s5lIrk",
+     "CGLMDFAwAfpq5Qz_Fcv6hR0Eqy5HO9eJ3TVMOrcS8gk",
+     "2jX69B48sY-7GwLueCZgy874h87ISAgg7oylYxOC7TE",
+     "cR78g4qIH9i-lEp8_hSRF-8oQ_9xDruK3DVgVg6Nre0",
+     "Ec_P5VQqon1DV6Uk-g7kwD0nno9Rt3SCIneSVQE7Qdw",
+     "W9S7Q8YbVeOVgfeANzyTvE2ocv46nyn2rN0bTE5ESXI",
+     "iMl__V-iZ38HRy1ddxUfseUmkkMXqoiNS5kmkvdUlMQ",
+     "dhhNZHSeVRlYS_aXaeTvimtoRAwR7MRXtJsnoiATb6M",
+     "PoBZJr9aNtCGUqK_FKTj8UuucRkulR5eSrGcmoPYQHE",
+     "lX4iAMRIRfL7Rn0RBrSnPCARHuzL055dmcatkp8wmaA",
+     "BwNvbE9aCNT1pI0TuBcM5X2wKSzTu73xuaY0W7oxno0",
+     "me4a8VtrqFcsw3Sf2nkL7oL9jVAVfVBdoUN8hYyPQzI",
+     "ko2tiTxwy1AL-eIo0GoIsgPsHsYhUr-qpoIdFchqwkk",
+     "ygSpPnuJoxK1uL9fsCH5qBxuIgU7FKyF4zBBT7i74Gg",
+     "djD3KzhHndXT9un61nsxL0w9kb9X4At2QSM6kCXSadw",
+     "l0L1RwTxuU0OC85hsF3D0CzdM_VmqO27-NjTDRjNoRI",
+     "e3TaK5VYs53aJr0L1es7Dg04ahOQlRyA3u26UvmrBYo",
+     "3iFf0buJV9Jt96ybD8MoxoXKqFjSYKtghXtarXOEf_8",
+     "1u9S_CblyTKVgNRSKDGfgAQLlzIQWulH1jiOeqd_TFo",
+     "5OVj_h76w5x1gMjE3iayVghPk9BEtHGZStjAgpiubms",
+     "hZLvUgeAprvTEmDlAnS9h7VG4wyxEhj_RtD6mVvq2fQ",
+     "NvZSnf5Ckdvi7zq50mw9HJWNhDigW_ks2E4Wh5MUVnM",
+     "ynpCISgiZki3qSz8tjab48x9f7JQ3Z6OlowWfMXBjlU",
+     "61OQ5L67qNYM34Q9xRRAnvSOLiegNP90XRbHkmBmeVQ",
+     "LKgrMjO4YK3yDeFPyKzOzWQWxoLL10u1dRHdLD8pZYA",
+     "UfpKN2Yp_uMflI6MLPV-P5mMqzjfj2K7rbaO9GEPTv0",
+     "CY6yFJ8imFkH2aPyfoBhsqaM7fHXXEwu5AT4Bn9wqhM",
+     "3NTWXz--uu2tk2t3lDr_cye0LjRjILGg9oCwrAAgWKk",
+     "jubZcebkpDdsXOS_s7ri14nPSxv2hBO_jCsXO9dRCyM",
+     "PfmR-uMqB_V1tUkn9Xjrb28OqkoF3YJ5PeRcHdUCrWw",
+     "i3OIMrWhAiIoM__wuoJcQDJHixhaeqw90-klrzaH0QA",
+     "0lVLILq3TgdIVcy6chw_zaiChlTD2oHYV6McDvveEls",
+     "GIvPfgAS5gVjJpmsn2Z7OX6GX_1MmkL5SZnh6WFqGmY",
+     "ZMaaAj2dEw0fcTZ5fsc6dsz2mjThZZICNGlbSrKBPHg",
+     "MyQC-tLX76-1Eurg0yL-eIQ4EOvWneFLNLzRcBAPj2s",
+     "_1of_1RPDBqfL78g5WdjzdLqq_gNHAGoMAnr4kU0S_U",
+     "5HTnfxrJwF5pTtF_ZmDioi9WbpKuJrxsKijcUXG8zUM",
+     "QvBtXk0VB35DXO_qQoMOjCCIpSRsEluB2kDwOQoYUJU",
+     "H_pj6zFcXfmCJIz7-KDhmgECdw69GCWSSFgpowJk4lI",
+     "3pjL15Xq822Eut8rl-_f-H6hhhzzXGW3crFRzLMyJoc",
+     "f6ZnvN77SkaOjcCNNGBydrk_m3LBR-icK4UEMtJK0vA",
+     "aX6DVdYv6bK9GSUydTdykuqkCno61hdRnFj_MODsEV0",
+     "ouVKg0I3Hprt57QGJ3lP1FDwsYf8u1hDamnObbx-Xvw",
+     "piB5kZk0W4wtW09-RJrZ3CxMvJjanYAFPuFrHulTgv8",
+     "apor_ywM3dmWX9555pINvTYVWe53Jp_nMMeAJRPvdXk",
+     "dnMNYaoYP2gcj_rX8hTqijqJhgcNH6HUYMHhRKK2xUY",
+     "SHf_ajWNx4zYTiCOWAyJxTIA2EUUqr21dofVXMFbZAk",
+     "4WGx4U-dI74VnbbAogGs_dWvWCmXbb8AqQshNy30Jb8",
+     "UPtOYpp1gsipUqnm6qC9c8l5ZNdF4RZhJfWONs4moNU",
+     "zcotEzcFXZQI-k4IXu91GJIQmoCLTrWLLt95Q1xojYo",
+     "Kjjg2NPRnUB2tT5MErmcypR8q7kEJ13L1oRjFliOPhI",
+     "a6wCdveJXQxvXWKDpXe3uZHWgqnqBShGB4PQPDvULlU",
+     "pZvdRj8EqSQqmJdZh4fvmjotC5MAPPQ9w4UcR5df2zs",
+     "bvE-9WNRqzYeq7QyJ5pi-2jq3N3QdwbsjM_FwCeIpX0",
+     "Owhl8v5aJFR3vEzw8nZZ-FMkJxl-fl9n7kIiw8hzqTg",
+     "DE2rullqYehdpxk86MKX5lH7ngnI_ET7TH5TBT2iwMo",
+     "gtsNXGd7DT5L44QCl2qA2xMfftrnWqEP5tXA8S_P_mc",
+     "roOeItVe5D_TtbYy7iPkNotb9tycppg1K72_0G5IBS4",
+     "Iyus13fHTnBcXpMFcU_F_5c-RH-vAtUDbl7o3zgIObo",
+     "gfcAYPn3C77uv87c5dzAzNS4MlqxMYwsfqJ5PwzH72I",
+     "ui97_LbvOrOe3OGDPMLL54I3ggwSY6t198NWbvs3Nlo",
+     "0X8Hsw2VahUWw7nPlvowf0zGrk_F2LZtQsorH4__Ji0",
+     "MVogxC4OeFCX5nXc9syIR5TWf48QZEdVfqAljWn6Sfw",
+     "JyBW1Pi-dRyr_0Nv8bZQLRpxI90mczRrAAUaz2vnAy8",
+     "lxRWOWwevqSDOkNudqA1DQLCcak6cJE-YqS0sIyN5Ew",
+     "nE8NVF9Y-cwa78knuVuJt-HNvVfNnuh8w1DsCc7ZNoI",
+     "LpMqGuhkudrkU0xk9TQo9kqW2YGhfoEUqUfTQ3wqLZw",
+     "qBaGjSxeFzAuUbHWpoe8Q_jzJMrxKE3OG7O5oAi_hdM",
+     "e937hS9i4wxZQJk9bkBpv2re-qotr72EdMgOmuoCywA",
+     "Tqm3qo36oPr7upQGIYmKUdFFqAUwvhTEtK6Q_z0YHnk",
+     "S1GQf5ytCe5O1t4lqdHUvvl80tMKQjQP52jB5dAN4ek",
+     "SF88UAJho1SUQldTs_vMCy6TSEmje-RhkGJk4MdZsj8",
+     "Xifygnfan9EYICFgZ61tHTAeytU5KjeR4o_YJ9SKA88",
+     "_hb3hJFiCqhyK2KnSDsrvwllp5uNdrMXn6dXxA2rT5Y",
+     "th1vjjRIITLxe2RaqvVCivOYgpwMX9Rg5HtMNq7iA1I",
+     "yu5Uevg89waG64yUk3iplwp2QPKWXP9rhu5W_Rz9670",
+     "z7ryNVv1adwEbnsofu4vNZphj3s7FgU71kCUqih1JhQ",
+     "hHR38tgj0xlNWQ_DbwFh7oyIQLNHxXEScyI0VLx4PFU",
+     "BNushabDi57tFZU1kubXpxBMxUvgMuloIrAOHe-MANY",
+     "QJxJWNp9Ig4tikaMvqANUbLdPJzWJe9pmAVicLGlt9c",
+     "bawehvZZgK44aVQk0roXL1mii8cXSCMTFt7iCKLFpvs",
+     "yyuDK4yzKSkjbzfJWHOjUQ40cdR2DI8YdYNV24kilrI",
+     "tNLL6c7BqoSxU-vY0Zml8Yp2PAWo2aq-uOhn4ewGNuw",
+     "FmRSSorHWWlF4QyAzIlS1w_LNs1oc3UyqyEjcx7o7qQ",
+     "uOXERamo1ydpJ5SMgl8JFCROlMwpuA8RMNPsB6PN5Ac",
+     "zPMWistIkMOocPMCjrrMp8bBdw044G7tgrQHk5Hk7aQ",
+     "iWZMpPexc4F8vZF7mvhqn8gDXUTxMJsIEB_3tg293m0",
+     "0AxqewvNzPlkyfkSmX1q0WqMCmARI966IarHYOeblfY",
+     "0jFytUGZAPQ5lLbnZZ-steINX-txrNWAzOMfaGngYeo",
+     "4NnctSKm553GfC2mTjEeG9Lfg6NNvIyrBsSJp8WS680",
+     "KLMBzXSIK5C1tyCx2QkxUNztJib3SRb3Gzl7rZjMUiQ",
+     "m-5RvZbLjNABLpzdVtRJxam23RGYDkV5umYfUvmNm10",
+     "JWm65nCWYGRYGD6retpU3VK54brpLgqatYOGuN-Lixc",
+     "j3JPATO9ITRM_Yxed_930gmIiHTpWSDH8ebyzlkIekM",
+     "L6vr5BKwrb6KoZ0057KOzzFGHX3PMWoUsQEYX4eTS-Q",
+     "R3Cou2EVZEsRSfcd4TfuPNZooRj2FZ8dh97p3t1iIdo",
+     "UEIW-jshPIx9hjdgab-6mPqpENFKHw9_sAU0hI5mvBE",
+     "yBOreW7nYPL9b8gA2jKgZr6akp-f0FCp_uOU6YM-2P0",
+     "wV3T3HsHDPfNiOBVNuGcyNoUTNkS30rW0FDrCrFUASM",
+     "DkRvjSmfImYtdKbpzFEo9L8uu3jYB1qNMVNFKE2ZLaA",
+     "SQ-7biH0QMvXLNY6IioDhV2RVcqhlpFoiNnuNMc5zSY",
+     "uUdkb2NKyYMvk21ASNlwOGjTtnYhxmsG8cVUcmJkWvk",
+     "aexVt3sGSYsxSJNDKRgkI9BvvcfhqXZQUY-TT5aWdUw",
+     "0dxaqkWiABI1hJIG9LARKUdHQM3FpGQUe5VqmuiSLh8",
+     "6nE-VJt54MT7pqg1xsS316Jnu4xHnThjuGx-uLWtUe0",
+     "L8E4zWXIzBA1_7ZqEWkBZAhQhcbwnXAhPlIn2bdZtD4",
+     "ZirkrVOSCAAK3wrGOyupJxgkuXIJpIJyojp_zMCdysU",
+     "GkBTLDbLh4IHoOfaWs-FY539XSvqEmwfG-VlksR8ILU",
+     "Gr5G5PBHdPMl9Iv7MOunnL0ZttuXyXLZw0cT-5Qit3A",
+     "AnrGQOQK_iDJ1Rl7sNaSOo9sK7_La6-h1TleKWyEfDM",
+     "WWaIwCLIywNUaQ5usBFOJU6yqfmOB_23XXHBQRtF9J4",
+     "cg2GO0i7wdV_HY9oflCQbRHmUCQqXcC8HuwJ_LDFDsI",
+     "EdTrXFlggzJZpxjoJrDE4xiJ1cWdaXx3-cITBRsJrgw",
+     "hBGTxWR5StljFEJyo2bQSsqGx2EfgBvIqaduqvuorcc",
   }
 
 0 return {}
@@ -4641,6 +5659,8 @@ test/setup.lua
 0 local originalRequire = require
 
   local function mockedRequire(moduleName)
+*   print(_VERSION)
+
 *   if moduleName == "ao" then
 *     return originalRequire("test.mocked-env.ao.ao")
     end
@@ -4670,7 +5690,7 @@ test/setup.lua
     end
 
 *   if moduleName == "lsqlite3" then
-0     return originalRequire("lsqlite3complete")
+*     return originalRequire("lsqlite3complete")
     end
 
 *   return originalRequire(moduleName)
@@ -8090,16 +9110,17 @@ File                                   Hits Missed Coverage
 tlconfig.lua                           0    2      0.00%
 build/tokenManager.lua                 0    6      0.00%
 test/mocked-env/processes/aocred.lua   0    9      0.00%
-build/globals.lua                      0    11     0.00%
+build/globals.lua                      0    17     0.00%
+build/stakingManager.lua               0    18     0.00%
 scripts/copy_lua_package.lua           0    24     0.00%
 build/dbUtils.lua                      0    37     0.00%
 build/database.lua                     0    40     0.00%
-build/providerManager.lua              0    172    0.00%
-build/main.lua                         0    232    0.00%
-build/verifierManager.lua              0    253    0.00%
-build/randomManager.lua                0    277    0.00%
+build/providerManager.lua              0    166    0.00%
+build/verifierManager.lua              0    239    0.00%
+build/main.lua                         0    280    0.00%
+build/randomManager.lua                0    285    0.00%
 test/mocked-env/lib/bint.lua           0    833    0.00%
-process.lua                            0    1042   0.00%
+process.lua                            17   1067   1.57%
 test/mocked-env/ao/handlers.lua        11   95     10.38%
 test/process_test.lua                  39   258    13.13%
 test/mocked-env/lib/utils.lua          23   74     23.71%
@@ -8107,6 +9128,6 @@ test/mocked-env/lib/json.lua           51   148    25.63%
 test/mocked-env/ao/handlers-utils.lua  10   20     33.33%
 test/mocked-env/processes/verifier.lua 7    6      53.85%
 test/mocked-env/ao/ao.lua              35   23     60.34%
-test/setup.lua                         15   4      78.95%
+test/setup.lua                         17   3      85.00%
 -----------------------------------------------------------
-Total                                  191  3566   5.08%
+Total                                  210  3650   5.44%

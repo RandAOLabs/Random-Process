@@ -234,12 +234,33 @@ function randomManager.processEntropy(requestId)
    end
 
    local entropy = tostring(math.floor(mixed))
-   print("entropy: " .. entropy)
+   print("Request " .. requestId .. " entropy: " .. entropy)
+
+
+
+   local stmt = DB:prepare([[
+    UPDATE RandomRequests
+    SET entropy = :entropy
+    WHERE request_id = :request_id;
+  ]])
+
+
+   stmt:bind_names({ entropy = entropy, request_id = requestId })
+
+
+   local execute_ok, execute_err = dbUtils.execute(stmt, "Update random request entropy")
+
+   if not execute_ok then
+      print("Failed to update random request entropy: " .. tostring(execute_err))
+   end
+
+   print("Random request entropy updated successfully to: " .. entropy)
+
    return entropy, ""
 end
 
-function randomManager.simulateRandomResponse(requestId)
-   print("entered simulateRandomResponse")
+function randomManager.deliverRandomResponse(requestId)
+   print("entered deliverRandomResponse")
 
    local randomRequest, err = randomManager.getRandomRequest(requestId)
 
@@ -251,6 +272,7 @@ function randomManager.simulateRandomResponse(requestId)
    local target = randomRequest.requester
    local callbackId = randomRequest.callback_id
    local entropy = randomManager.processEntropy(requestId)
+
    local action = "Random-Response"
 
    local data = {
@@ -321,7 +343,7 @@ function randomManager.decrementRequestedInputs(requestId)
 
          elseif status == Status[3] then
             print("Random request finished successfully")
-            randomManager.simulateRandomResponse(requestId)
+            randomManager.deliverRandomResponse(requestId)
             randomManager.updateRandomRequestStatus(requestId, Status[5])
          end
       else
@@ -527,6 +549,7 @@ function randomManager.postVDFOutputAndProof(userId, requestId, outputValue, pro
       local processResult, processError = verifierManager.processProof(requestId, input, modulus, proof, userId, outputValue)
       if not processResult then
          print("Processing proof failed: " .. tostring(processError))
+         return false, "Processing proof failed: " .. tostring(processError)
       else
          print("Proof processed successfully")
       end

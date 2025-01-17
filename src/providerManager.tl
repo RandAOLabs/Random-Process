@@ -6,7 +6,7 @@ local json = require "json"
 -- Type definitions
 global record Provider
   provider_id: string
-  stake: integer
+  stake: string
   active: integer
   active_challenge_requests: string
   active_output_requests: string
@@ -78,7 +78,7 @@ function providerManager.getProvider(userId: string): Provider, string
   if result then
     return result as Provider, ""
   else
-    return {} as Provider, "Provider not found"
+    return {} as Provider, "Unable to create provider"
   end
 end
 
@@ -287,22 +287,6 @@ function providerManager.hasActiveRequest(userId: string, requestId: string, cha
     return false
   else
     return false
-  end
-end
-
-function providerManager.checkStakeStubbed(_userId: string): boolean, string
-  print("entered providerManager.checkStakeStubbed")
-  return true, ""
-end
-
-function providerManager.checkStake(userId: string): boolean, string
-  print("entered providerManager.checkStake")
-
-  local provider, _ = providerManager.getProvider(userId)
-  if provider.stake < RequiredStake then 
-    return false, "Stake is less than required"
-  else
-    return true, ""
   end
 end
 

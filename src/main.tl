@@ -2,6 +2,7 @@
 require "globals"
 local json            = require "json"
 local database        = require "database"
+local dbUtils         = require "dbUtils"
 local providerManager = require "providerManager"
 local randomManager   = require "randomManager"
 local tokenManager    = require "tokenManager"
@@ -134,7 +135,26 @@ end
 
 -- Handler to return the process info
 local function infoHandler(msg: Message)
-    ao.send(sendResponse(msg.From, "Info", {}))
+    local verifiers = verifierManager.printAvailableVerifiers()
+    print("Verifiers: " .. json.encode(verifiers))
+    ao.send(sendResponse(msg.From, "Info", {json.encode(verifiers)}))
+
+end
+
+local function isWhitelisted(userId): boolean
+  local isValid = false
+  for _, user in ipairs(TestNetProviders) do
+    if userId == user then
+      print("Success: User whitelisted: " .. tostring(userId))
+      isValid = true
+      return true
+    end
+  end
+
+  if not isValid then
+    print("Failure: User not whitelisted: " .. tostring(userId))
+    return false
+  end
 end
 
 -- Handler for updating providers balance
@@ -142,9 +162,12 @@ global function updateProviderBalanceHandler(msg: Message): boolean
   print("entered updateProviderBalance")
   
   local userId = msg.From
-    -- Stubbed create provider as we have not implemented staking
-    createProvider(userId)
-    -- todo remove this all  
+  print("Asserting whitelisted user: " .. userId)
+  assert(isWhitelisted(userId), "User not whitelisted")
+
+  -- Stubbed create provider as we have not implemented staking
+  createProvider(userId)
+  -- todo remove this all  
   local staked, _ = providerManager.checkStakeStubbed(userId)
   -- Check if staked TODO remove stubbed
   if not staked then 
@@ -224,20 +247,19 @@ global function postVDFOutputAndProofHandler(msg: Message): boolean
   end
   providerManager.removeActiveRequest(userId, requestId, false)
 
-  local success, _err = randomManager.postVDFOutputAndProof(userId, requestId, output, proof)
+  local success, err = randomManager.postVDFOutputAndProof(userId, requestId, output, proof)
 
   if success then
     randomManager.decrementRequestedInputs(requestId)
     --ao.send(sendResponse(msg.From, "Posted VDF Output and Proof", SuccessMessage))
     return true
   else
-    -- need to hella revert shit if this fails
-    --ao.send(sendResponse(msg.From, "Error", {message = "Failed to post VDF Output and Proof: " .. err}))
+    ao.send(sendResponse(msg.From, "Verification-Error", {message = "Failed to post VDF Output and Proof: " .. err}))
     return false
   end
 end
 
--- Handler for posting VDF output and proof
+-- Handler for posting verifier verification of segment authenticity
 global function postVerificationHandler(msg: Message): boolean
   print("entered postVerification")
 
@@ -266,10 +288,15 @@ global function postVerificationHandler(msg: Message): boolean
     --ao.send(sendResponse(msg.From, "Posted Verification", SuccessMessage))
     return true
   else
-    -- need to hella revert shit if this fails
     --ao.send(sendResponse(msg.From, "Error", {message = "Failed to post Verification: " .. err}))
     return false
   end
+end
+
+global function failedPostVerificationHandler(msg: Message): boolean
+  print("entered failedPostVerification")
+  local verifierId = msg.From
+  verifierManager.markAvailable(verifierId)
 end
 
 -- Handler for getting provider balance
@@ -422,6 +449,8 @@ global function getRandomRequestViaCallbackIdHandler(msg: Message): boolean
   return true
 end
 
+
+
 -- Add handlers
 Handlers.add('info', 
 Handlers.utils.hasMatchingTag('Action', 'Info'), 
@@ -442,6 +471,10 @@ wrapHandler(postVDFOutputAndProofHandler))
 Handlers.add('postVerification',
 Handlers.utils.hasMatchingTag('Action', 'Post-Verification'),
 wrapHandler(postVerificationHandler))
+
+Handlers.add('failedPostVerification',
+Handlers.utils.hasMatchingTag('Action', 'Failed-Post-Verification'),
+wrapHandler(failedPostVerificationHandler))
 
 Handlers.add('getProviderRandomBalance', 
 Handlers.utils.hasMatchingTag('Action', 'Get-Providers-Random-Balance'), 
@@ -465,3 +498,49 @@ wrapHandler(getRandomRequestViaCallbackIdHandler))
 
 -- Logging
 print("RandAO Process Initialized")
+
+
+-- Remove a verifier from the database
+global function RemoveVerifier(processId: string): boolean, string
+  print("Removing verifier: " .. processId)
+  
+  if not DB then
+    print("Database connection not initialized")
+    return false, "Database connection is not initialized"
+  end
+  
+  local stmt = DB:prepare([[
+    DELETE FROM Verifiers 
+    WHERE process_id = :pid
+  ]])
+  
+  if not stmt then
+    print("Failed to prepare statement: " .. DB:errmsg())
+    return false, "Failed to prepare statement: " .. DB:errmsg()
+  end
+  
+  local ok = false
+  ok = pcall(function()
+    stmt:bind_names({pid = processId})
+  end)
+  
+  if not ok then
+    print("Failed to bind parameters")
+    return false, "Failed to bind parameters"
+  end
+  
+  local exec_ok, exec_err = dbUtils.execute(stmt, "Remove verifier")
+  if not exec_ok then
+    return false, exec_err
+  end
+  
+  return true, ""
+end
+
+global function helper() 
+  local value, err = verifierManager.getAvailableVerifiers()
+  print(json.encode(value))
+  RemoveVerifier("RG6r_xD_NZtbw7t2QcfrUXjrlZe3w3a9vK_Z4kTrZyc")
+  value, err = verifierManager.getAvailableVerifiers()
+  print(json.encode(value))
+end

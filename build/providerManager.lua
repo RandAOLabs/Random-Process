@@ -78,7 +78,7 @@ function providerManager.getProvider(userId)
    if result then
       return result, ""
    else
-      return {}, "Provider not found"
+      return {}, "Unable to create provider"
    end
 end
 
@@ -293,17 +293,6 @@ end
 function providerManager.checkStakeStubbed(_userId)
    print("entered providerManager.checkStakeStubbed")
    return true, ""
-end
-
-function providerManager.checkStake(userId)
-   print("entered providerManager.checkStake")
-
-   local provider, _ = providerManager.getProvider(userId)
-   if provider.stake < RequiredStake then
-      return false, "Stake is less than required"
-   else
-      return true, ""
-   end
 end
 
 function providerManager.updateProviderBalance(userId, balance)

@@ -5,23 +5,24 @@ import { message, result, createDataItemSigner, spawn } from "@permaweb/aoconnec
 const wallet = JSON.parse(readFileSync("./hera.json").toString(),);
 const availableRandomValues = 44
 const providerId    = "ld4ncW8yLSkckjia3cw6qO7silUdEe1nsdiEvMoLg-0"
-const providerId2   = "N90q65iT59dCo01-gtZRUlLMX0w6_ylFHv2uHaSUFNk"
-const processId     = "vgH7EXVs6-vxxilja6lkBruHlgOkyqddFVg-BVp3eJc"
-const randomTesting = "u30Uoc4FFiUbj01khnGCgjooT6buGJnTsQJrafKe0ns"
-const tokenId       = "OeX1V1xSabUzUtNykWgu9GEaXqacBZawtK12_q5gXaA"
+const providerId2   = "c8Iq4yunDnsJWGSz_wYwQU--O9qeODKHiRdUkQkW2p8"
+const providerId3   = "Sr3HVH0Nh6iZzbORLpoQFOEvmsuKjXsHswSWH760KAk"
+const processId     = "KbaY8P4h9wdHYKHlBSLbXN_yd-9gxUDxSgBackUxTiQ" // "QeVaQXBmIFfLuc29G5bXnylBIJXqON4naIbZrQTk8Iw"
+const randomTesting = "m3h7fUeAcR36tn2y13o4LjNum-mgwCCA8eGiH01AdEc"
+const tokenId       = "7enZBOhWsyU3A5oCt8HtMNNPHSxXYJVTlOGOetR9IDw"
 let providers = {
-    provider_ids: ["XUo8jZtUDBFLtp5okR12oLrqIZ4ewNlTpqnqmriihJE", "N90q65iT59dCo01-gtZRUlLMX0w6_ylFHv2uHaSUFNk"]
+    provider_ids: ["ld4ncW8yLSkckjia3cw6qO7silUdEe1nsdiEvMoLg-0"]
 }
 const requestIds = [
-    "ba4c9880-0e78-4a0e-a2c0-69c494baafb0"
+    "706f393e-d1e6-479e-a64d-1003850e3bd0"
 ]
 
 const requestInputs     = 1
-const requestId         = "96f08858-1b70-46e7-91bd-e8552f85d43e"
-const callbackId        = "call me back :("
+const requestId         = "8dd33fdf-4f05-4aad-8c18-ec3ff1d9c90d"
+const callbackId        = "e894ec35-057b-4db1-a8bc-2bfd75ebbdac"
 const input             = "0xf8e3b0de92842f97fb47b393f45187f2"
 const modulus           = "0x40e77a538238e49424de6139311eaee7d7f1e31a0e87b2051e1f94bb4b0ad2d"
-const output            = "4990561140291830025"
+const output            = "13497708056"
 const proof             = JSON.stringify([
     "0x2888fbced9adbafdda5b31e515a8c984f5d6180b7cf27ebe548b6f62f24c787", 
     "0x1866cbe0f97df7b8ab8271a768b7ec4471ccc01629e4f81a84dc928145397b", 
@@ -92,7 +93,7 @@ async function getStatus() {
           The "data" portion of the message
           If not specified a random string will be generated
         */
-        data: JSON.stringify({ providerId: "XUo8jZtUDBFLtp5okR12oLrqIZ4ewNlTpqnqmriihJE" }),
+        data: JSON.stringify({ providerId: providerId3 }),
 
     })
 
@@ -161,7 +162,7 @@ async function getActiveRequests() {
           The "data" portion of the message
           If not specified a random string will be generated
         */
-        data: JSON.stringify({ providerId: "XUo8jZtUDBFLtp5okR12oLrqIZ4ewNlTpqnqmriihJE" }),
+        data: JSON.stringify({ providerId: providerId3 }),
 
     })
 

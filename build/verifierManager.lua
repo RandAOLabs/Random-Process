@@ -117,6 +117,13 @@ function verifierManager.getAvailableVerifiers()
 end
 
 
+function verifierManager.printAvailableVerifiers()
+   print("entered available Verifiers")
+   local availableVerifiers, _ = verifierManager.getAvailableVerifiers()
+   return availableVerifiers
+end
+
+
 function verifierManager.getStats()
    local stats = {
       total_available = 0,
@@ -430,7 +437,9 @@ function verifierManager.processProof(requestId, input, modulus, proofJson, prov
    local proofId = requestId .. "_" .. providerId
    local availableVerifiers = verifierManager.getAvailableVerifiers()
 
-
+   if #availableVerifiers < 11 then
+      return false, "No verifiers available"
+   end
 
 
 
@@ -502,43 +511,6 @@ function verifierManager.processProof(requestId, input, modulus, proofJson, prov
          print("No verifiers available for segment: " .. segmentId)
       end
 
-   end
-
-   return true, ""
-end
-
-
-function verifierManager.removeVerifier(processId)
-   print("Removing verifier: " .. processId)
-
-   if not DB then
-      print("Database connection not initialized")
-      return false, "Database connection is not initialized"
-   end
-
-   local stmt = DB:prepare([[
-    DELETE FROM Verifiers
-    WHERE process_id = :pid
-  ]])
-
-   if not stmt then
-      print("Failed to prepare statement: " .. DB:errmsg())
-      return false, "Failed to prepare statement: " .. DB:errmsg()
-   end
-
-   local ok = false
-   ok = pcall(function()
-      stmt:bind_names({ pid = processId })
-   end)
-
-   if not ok then
-      print("Failed to bind parameters")
-      return false, "Failed to bind parameters"
-   end
-
-   local exec_ok, exec_err = dbUtils.execute(stmt, "Remove verifier")
-   if not exec_ok then
-      return false, exec_err
    end
 
    return true, ""

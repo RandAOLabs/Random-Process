@@ -11,6 +11,6 @@ rm luacov.report.out.index
 rm luacov.stats.out
 
 # Run tests
-$BIN_PATH/busted test --pattern "_test"
+$BIN_PATH/busted --lua=lua5.3 test --pattern "_test"
 
 luacov-console

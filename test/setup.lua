@@ -1,6 +1,8 @@
 local originalRequire = require
 
 local function mockedRequire(moduleName)
+  print(_VERSION)
+
   if moduleName == "ao" then
     return originalRequire("test.mocked-env.ao.ao")
   end
