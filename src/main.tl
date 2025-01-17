@@ -7,6 +7,7 @@ local providerManager = require "providerManager"
 local randomManager   = require "randomManager"
 local tokenManager    = require "tokenManager"
 local verifierManager = require "verifierManager"
+local stakingManager  = require "stakingManager"
 
 -- Type definitions
 global record ResponseData
@@ -168,7 +169,9 @@ global function updateProviderBalanceHandler(msg: Message): boolean
   -- Stubbed create provider as we have not implemented staking
   createProvider(userId)
   -- todo remove this all  
-  local staked, _ = providerManager.checkStakeStubbed(userId)
+  local staked, _ = stakingManager.checkStakeStubbed(userId)
+  -- local staked, _ = stakingManager.checkStake(userId)
+
   -- Check if staked TODO remove stubbed
   if not staked then 
     ao.send(sendResponse(msg.From, "Error", {message = "Update failed: Provider not staked"}))
