@@ -1,6 +1,8 @@
 local originalRequire = require
 
 local function mockedRequire(moduleName)
+  print(_VERSION)
+
   if moduleName == "ao" then
     return originalRequire("test.mocked-env.ao.ao")
   end
@@ -13,8 +15,8 @@ local function mockedRequire(moduleName)
     return originalRequire("test.mocked-env.ao.handlers")
   end
 
-  if moduleName == "aocred" then
-    return originalRequire("test.mocked-env.processes.aocred")
+  if moduleName == "verifier" then
+    return originalRequire("test.mocked-env.processes.verifier")
   end
 
   if moduleName == ".bint" then

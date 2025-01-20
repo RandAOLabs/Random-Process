@@ -2,13 +2,21 @@
 require "globals"
 local json            = require "json"
 local database        = require "database"
+local dbUtils         = require "dbUtils"
 local providerManager = require "providerManager"
 local randomManager   = require "randomManager"
 local tokenManager    = require "tokenManager"
+local verifierManager = require "verifierManager"
+local stakingManager  = require "stakingManager"
 
 -- Type definitions
 global record ResponseData
   Target: string
+  Action: string
+  Data: string
+end
+
+global record ReplyData
   Action: string
   Data: string
 end
@@ -27,6 +35,12 @@ global record PostVDFOutputAndProofData
   requestId: string
   output: string
   proof: string
+end
+
+global record CheckpointResponseData
+  request_id: string
+  segment_id: string
+  valid: boolean
 end
 
 global record GetProviderRandomBalanceData
@@ -58,7 +72,8 @@ end
 
 global record GetOpenRandomRequestsResponse
   providerId: string
-  activeRequests: RequestList
+  activeChallengeRequests: RequestList
+  activeOutputRequests: RequestList
 end
 
 global record RandomRequestResponse
@@ -73,10 +88,21 @@ end
 -- Initialize the database
 database.initializeDatabase()
 
+-- Initialize the verifier manager
+verifierManager.initializeVerifierManager()
+
 -- Helper function to send a response
 global function sendResponse(target: string, action: string, data: any): ResponseData
   return {
     Target = target,
+    Action = action,
+    Data = json.encode(data)
+  }
+end
+
+-- Helper function to send a reply
+global function sendReply(action: string, data: any): ResponseData
+  return {
     Action = action,
     Data = json.encode(data)
   }
@@ -110,7 +136,26 @@ end
 
 -- Handler to return the process info
 local function infoHandler(msg: Message)
-    ao.send(sendResponse(msg.From, "Info", {}))
+    local verifiers = verifierManager.printAvailableVerifiers()
+    print("Verifiers: " .. json.encode(verifiers))
+    ao.send(sendResponse(msg.From, "Info", {json.encode(verifiers)}))
+
+end
+
+local function isWhitelisted(userId): boolean
+  local isValid = false
+  for _, user in ipairs(TestNetProviders) do
+    if userId == user then
+      print("Success: User whitelisted: " .. tostring(userId))
+      isValid = true
+      return true
+    end
+  end
+
+  if not isValid then
+    print("Failure: User not whitelisted: " .. tostring(userId))
+    return false
+  end
 end
 
 -- Handler for updating providers balance
@@ -118,10 +163,15 @@ global function updateProviderBalanceHandler(msg: Message): boolean
   print("entered updateProviderBalance")
   
   local userId = msg.From
-    -- Stubbed create provider as we have not implemented staking
-    createProvider(userId)
-    -- todo remove this all  
-  local staked, _ = providerManager.checkStakeStubbed(userId)
+  print("Asserting whitelisted user: " .. userId)
+  assert(isWhitelisted(userId), "User not whitelisted")
+
+  -- Stubbed create provider as we have not implemented staking
+  createProvider(userId)
+  -- todo remove this all  
+  local staked, _ = stakingManager.checkStakeStubbed(userId)
+  -- local staked, _ = stakingManager.checkStake(userId)
+
   -- Check if staked TODO remove stubbed
   if not staked then 
     ao.send(sendResponse(msg.From, "Error", {message = "Update failed: Provider not staked"}))
@@ -130,13 +180,13 @@ global function updateProviderBalanceHandler(msg: Message): boolean
 
   local data = (json.decode(msg.Data as string) as UpdateProviderRandomBalanceData)
   local balance = data.availableRandomValues
-  local success, err = providerManager.updateProviderBalance(userId, balance)
+  local success, _err = providerManager.updateProviderBalance(userId, balance)
 
   if success then
-    ao.send(sendResponse(msg.From, "Updated Provider Random Balance", SuccessMessage))
+    --ao.send(sendResponse(msg.From, "Updated Provider Random Balance", SuccessMessage))
     return true
   else
-    ao.send(sendResponse(msg.From, "Error", {message = "Failed to update provider balance: " .. err}))
+    --ao.send(sendResponse(msg.From, "Error", {message = "Failed to update provider balance: " .. err}))
     return false
   end
 end
@@ -152,20 +202,22 @@ global function postVDFChallengeHandler(msg: Message): boolean
   local modulus = data.modulus
   local input = data.input
 
-  local requested = providerManager.hasActiveRequest(userId, requestId)
+  local requested = providerManager.hasActiveRequest(userId, requestId, true)
   
   if not requested then
     ao.send(sendResponse(msg.From, "Error", {message = "Failed to post VDF Input: " .. "not requested"}))
     return false
   end
 
-  local success, err = randomManager.postVDFChallenge(userId, requestId, input, modulus)
+  local success, _err = randomManager.postVDFChallenge(userId, requestId, input, modulus)
 
   if success then
-    ao.send(sendResponse(msg.From, "Posted VDF Input", SuccessMessage))
+    providerManager.removeActiveRequest(userId, requestId, true)
+    randomManager.decrementRequestedInputs(requestId)
+    --ao.send(sendResponse(msg.From, "Posted VDF Input", SuccessMessage))
     return true
   else
-    ao.send(sendResponse(msg.From, "Error", {message = "Failed to post VDF Input: " .. err}))
+    --ao.send(sendResponse(msg.From, "Error", {message = "Failed to post VDF Input: " .. err}))
     return false
   end
 end
@@ -191,23 +243,63 @@ global function postVDFOutputAndProofHandler(msg: Message): boolean
 
   local requestId = data.requestId
 
-  local requested = providerManager.hasActiveRequest(userId, requestId)
-  
+  local requested = providerManager.hasActiveRequest(userId, requestId, false)
   if not requested then
     ao.send(sendResponse(msg.From, "Error", {message = "Failed to post VDF Output: " .. "not requested"}))
     return false
   end
+  providerManager.removeActiveRequest(userId, requestId, false)
 
   local success, err = randomManager.postVDFOutputAndProof(userId, requestId, output, proof)
 
   if success then
-    providerManager.removeActiveRequest(userId, requestId)
-    ao.send(sendResponse(msg.From, "Posted VDF Output and Proof", SuccessMessage))
+    randomManager.decrementRequestedInputs(requestId)
+    --ao.send(sendResponse(msg.From, "Posted VDF Output and Proof", SuccessMessage))
     return true
   else
-    ao.send(sendResponse(msg.From, "Error", {message = "Failed to post VDF Output and Proof: " .. err}))
+    ao.send(sendResponse(msg.From, "Verification-Error", {message = "Failed to post VDF Output and Proof: " .. err}))
     return false
   end
+end
+
+-- Handler for posting verifier verification of segment authenticity
+global function postVerificationHandler(msg: Message): boolean
+  print("entered postVerification")
+
+  local verifierId = msg.From
+
+  local data = (json.decode(msg.Data as string) as CheckpointResponseData)
+
+  local valid = data.valid
+  local requestId = data.request_id
+  local segmentId = data.segment_id
+
+  local function validateVerificationInputs(_valid: boolean, _requestId: string, _segmentId: string): boolean
+    return true
+  end
+  
+  if valid == nil or segmentId == nil or requestId == nil or not validateVerificationInputs(valid, requestId, segmentId) then
+    print("Failed to post Verification: " .. "values not provided or malformed")
+    ao.send(sendResponse(msg.From, "Error", {message = "Failed to post Verification: " .. "values not provided or malformed"}))
+    return false
+  end
+  
+  local success, _err = verifierManager.processVerification(verifierId, requestId, segmentId, valid)
+  
+  if success then
+    randomManager.decrementRequestedInputs(requestId)
+    --ao.send(sendResponse(msg.From, "Posted Verification", SuccessMessage))
+    return true
+  else
+    --ao.send(sendResponse(msg.From, "Error", {message = "Failed to post Verification: " .. err}))
+    return false
+  end
+end
+
+global function failedPostVerificationHandler(msg: Message): boolean
+  print("entered failedPostVerification")
+  local verifierId = msg.From
+  verifierManager.markAvailable(verifierId)
 end
 
 -- Handler for getting provider balance
@@ -257,11 +349,11 @@ global function creditNoticeHandler(msg: Message): boolean
     return false
   end
 
-  local userId = msg.Sender
-  local providers = msg.Tags["X-Providers"] or nil
+  local userId            = msg.Sender
+  local providers         = msg.Tags["X-Providers"] or nil
+  local requestedInputs   = msg.Tags["X-RequestedInputs"] or ""
 
-
-  local success, err = randomManager.createRandomRequest(userId, providers, callbackId)
+  local success, err = randomManager.createRandomRequest(userId, providers, callbackId, requestedInputs)
 
   if success then
     ao.send(sendResponse(userId, "Created New Random Request", SuccessMessage))
@@ -278,17 +370,30 @@ global function getOpenRandomRequestsHandler(msg: Message): boolean
 
   local data = (json.decode(msg.Data as string) as GetOpenRandomRequestsData)
   local providerId = data.providerId
-  local activeRequests, err = providerManager.getActiveRequests(providerId)
+  
+  local _, providerErr = providerManager.getProvider(providerId)
 
-  if err == "" then
-    local requestIds = json.decode(activeRequests) as RequestList
-    local responseData: GetOpenRandomRequestsResponse = { providerId = providerId, activeRequests = requestIds }
-    ao.send(sendResponse(msg.From, "Get-Open-Random-Requests-Response", responseData))
-    return true
-  else
-    ao.send(sendResponse(msg.From, "Error", {message = "Provider not found: " .. err}))
+  if providerErr ~= "" then
+    ao.send(sendResponse(msg.From, "Error", {message = "Provider not found"}))
     return false
   end
+
+  local responseData: GetOpenRandomRequestsResponse = { providerId = providerId, activeChallengeRequests = { request_ids = {} }, activeOutputRequests = { request_ids = {} } }
+  
+  local activeChallengeRequests, err = providerManager.getActiveRequests(providerId, true)
+  local activeOutputRequests, outputErr = providerManager.getActiveRequests(providerId, false)
+
+  if err == "" then
+    local requestIds = json.decode(activeChallengeRequests) as RequestList
+    responseData.activeChallengeRequests = requestIds
+  end
+  if outputErr == "" then
+    local requestIds = json.decode(activeOutputRequests) as RequestList
+    responseData.activeOutputRequests = requestIds
+  end
+
+  ao.send(sendResponse(msg.From, "Get-Open-Random-Requests-Response", responseData))
+  return true
 end
 
 -- Handler for getting random requests
@@ -341,10 +446,13 @@ global function getRandomRequestViaCallbackIdHandler(msg: Message): boolean
     end
   end
   table.insert(responseData.randomRequestResponses, requestResponse)
+  msg.reply({Data = json.encode(responseData)})
 
-  ao.send(sendResponse(msg.From, "Get-Random-Requests-Response", responseData))
+  -- ao.send(sendResponse(msg.From, "Get-Random-Requests-Response", responseData))
   return true
 end
+
+
 
 -- Add handlers
 Handlers.add('info', 
@@ -362,6 +470,14 @@ wrapHandler(postVDFChallengeHandler))
 Handlers.add('postVDFOutputAndProof', 
 Handlers.utils.hasMatchingTag('Action', 'Post-VDF-Output-And-Proof'), 
 wrapHandler(postVDFOutputAndProofHandler))
+
+Handlers.add('postVerification',
+Handlers.utils.hasMatchingTag('Action', 'Post-Verification'),
+wrapHandler(postVerificationHandler))
+
+Handlers.add('failedPostVerification',
+Handlers.utils.hasMatchingTag('Action', 'Failed-Post-Verification'),
+wrapHandler(failedPostVerificationHandler))
 
 Handlers.add('getProviderRandomBalance', 
 Handlers.utils.hasMatchingTag('Action', 'Get-Providers-Random-Balance'), 
@@ -385,3 +501,49 @@ wrapHandler(getRandomRequestViaCallbackIdHandler))
 
 -- Logging
 print("RandAO Process Initialized")
+
+
+-- Remove a verifier from the database
+global function RemoveVerifier(processId: string): boolean, string
+  print("Removing verifier: " .. processId)
+  
+  if not DB then
+    print("Database connection not initialized")
+    return false, "Database connection is not initialized"
+  end
+  
+  local stmt = DB:prepare([[
+    DELETE FROM Verifiers 
+    WHERE process_id = :pid
+  ]])
+  
+  if not stmt then
+    print("Failed to prepare statement: " .. DB:errmsg())
+    return false, "Failed to prepare statement: " .. DB:errmsg()
+  end
+  
+  local ok = false
+  ok = pcall(function()
+    stmt:bind_names({pid = processId})
+  end)
+  
+  if not ok then
+    print("Failed to bind parameters")
+    return false, "Failed to bind parameters"
+  end
+  
+  local exec_ok, exec_err = dbUtils.execute(stmt, "Remove verifier")
+  if not exec_ok then
+    return false, exec_err
+  end
+  
+  return true, ""
+end
+
+global function helper() 
+  local value, err = verifierManager.getAvailableVerifiers()
+  print(json.encode(value))
+  RemoveVerifier("RG6r_xD_NZtbw7t2QcfrUXjrlZe3w3a9vK_Z4kTrZyc")
+  value, err = verifierManager.getAvailableVerifiers()
+  print(json.encode(value))
+end

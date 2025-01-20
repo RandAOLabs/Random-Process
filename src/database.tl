@@ -46,12 +46,34 @@ function database.initializeDatabase(): boolean
       [[
         CREATE TABLE IF NOT EXISTS Providers (
           provider_id TEXT PRIMARY KEY,
-          stake INTEGER,
+          stake string,
           active INTEGER,
-          active_requests TEXT,
+          active_challenge_requests TEXT,
+          active_output_requests TEXT,
           random_balance INTEGER,
           created_at INTEGER
         );
+      ]],
+      -- Verifiers DB Table
+      [[
+        CREATE TABLE IF NOT EXISTS Verifiers (
+          process_id TEXT PRIMARY KEY,
+          status TEXT NOT NULL,
+          current_segment TEXT
+        )
+      ]],
+      -- Verifier Segments DB Table
+      [[
+        CREATE TABLE IF NOT EXISTS VerifierSegments (
+          segment_id TEXT PRIMARY KEY,
+          proof_id TEXT NOT NULL,
+          verifier_id TEXT,
+          segment_data TEXT NOT NULL,
+          status TEXT NOT NULL,
+          timestamp INTEGER NOT NULL,
+          result TEXT,
+          FOREIGN KEY(verifier_id) REFERENCES Verifiers(process_id)
+        )
       ]],
       [[
         CREATE TABLE IF NOT EXISTS RandomRequests (
@@ -59,6 +81,7 @@ function database.initializeDatabase(): boolean
           requester TEXT,
           callback_id TEXT,
           providers TEXT,
+          requested_inputs INTEGER,
           status TEXT,
           entropy TEXT,
           created_at INTEGER
