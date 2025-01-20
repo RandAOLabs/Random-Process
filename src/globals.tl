@@ -10,12 +10,14 @@ global CurrentRequestId: integer
 
 global Cost: number = 100
 
-global TokenTest: string = "W3jdK85h1bFzZ7K_IXd0zLxq4RbpxPi0hvqUW6hAdUY"
+global TokenTest: string = "7enZBOhWsyU3A5oCt8HtMNNPHSxXYJVTlOGOetR9IDw"
 global WrappedAR: string = "xU9zFkq3X2ZQ6olwNVvr1vUWIjc3kXTWr7xKQD6dh10"
 global WrappedETH: string = ""
 global TokenInUse: string = TokenTest
 
 global Decimals: integer = 18
+
+global UnstakePeriod: integer = 50000 -- 50 seconds
 
 global StakeTokens = {
     [TokenTest] = {

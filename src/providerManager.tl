@@ -24,11 +24,9 @@ end
 
 local providerManager = {}
 
-function providerManager.createProvider(userId: string): boolean, string
+function providerManager.createProvider(userId: string, timestamp: number): boolean, string
   print("entered providerManager.createProvider")
-  
-  local timestamp = os.time()
-  
+    
   if not DB then
     print("Database connection not initialized")
     return false, "Database connection is not initialized"

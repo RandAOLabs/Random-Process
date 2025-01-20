@@ -130,7 +130,7 @@ end
 
 -- TODO Remove with staking
 local function createProvider(userid: string): boolean
-  local success, _ = providerManager.createProvider(userid)
+  local success, _ = providerManager.createProvider(userid, os.time())
   return success
 end
 
@@ -323,6 +323,15 @@ end
 -- Handler for creating random requests
 global function creditNoticeHandler(msg: Message): boolean
   print("entered creditNotice")
+
+  local xStake = msg.Tags["X-Stake"] or nil
+
+  -- TODO improve
+  if xStake ~= nil then  
+    stakingManager.processStake(msg)
+    return true
+  end
+
 
   local value = math.floor(tonumber(msg.Quantity))
   local callbackId = msg.Tags["X-CallbackId"] or nil
