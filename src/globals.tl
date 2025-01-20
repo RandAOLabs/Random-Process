@@ -29,7 +29,6 @@ global StakeTokens = {
     }
 }
 
-
 global SuccessMessage: string = "200: Success"
 
 global Status = {
