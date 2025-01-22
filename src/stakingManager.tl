@@ -25,11 +25,15 @@ function stakingManager.checkStake(userId: string): boolean, string
 
   local provider, err = providerManager.getProvider(userId)
   
-  if err ~= "" then
+  if err ~= "" or provider.stake == nil then
     return false, err
   end
   
   local decodedStake = json.decode(provider.stake) as Stake
+
+  if decodedStake == nil then
+    return false, "Stake not found"
+  end
 
   local requiredStake = StakeTokens[decodedStake.token].amount
   if decodedStake.amount < requiredStake then 
@@ -51,6 +55,17 @@ function stakingManager.getStatus(userId: string): string, string
   local decodedStake = json.decode(provider.stake) as Stake
 
   return decodedStake.status, ""
+end
+
+function stakingManager.viewProviderStake(userId: string): string, string
+  print("entered stakingManager.viewProviderStake")
+
+  local provider, err = providerManager.getProvider(userId)
+  
+  if err ~= "" then
+    return "", err
+  end
+  return provider.stake, ""
 end
 
 function stakingManager.updateStake(userId: string, token: string, amount: number, status: string, timestamp: number): boolean, string
@@ -88,6 +103,12 @@ function stakingManager.processStake(msg: Message): boolean, string
   local token = msg.From
   local amount = tonumber(msg.Quantity)
   local provider = msg.Sender
+
+  local _, providerErr = providerManager.getProvider(provider)
+
+  if providerErr ~= "" then
+    providerManager.createProvider(provider, msg.Timestamp)
+  end
 
   if stakingManager.checkStake(provider) then
     tokenManager.returnTokens(msg, "Stake already exists")
@@ -133,11 +154,13 @@ function stakingManager.unstake(userId: string, currentTimestamp: number): boole
   local status = decodedStake.status
   local timestamp = decodedStake.timestamp
 
-  if status == "unstaking" and timestamp + UnstakePeriod > currentTimestamp then
-     
-    
-    
-    return false, "Stake is not ready to be unstaked"
+  if status == "unstaking" then
+    if timestamp + UnstakePeriod > currentTimestamp then
+      return false, "Stake is not ready to be unstaked"
+    end
+    stakingManager.updateStake(userId, "", 0, "inactive", currentTimestamp)
+    tokenManager.sendTokens(token, userId, tostring(amount), "Unstaking tokens from Random Process")
+    return true, ""
   end
 
   local ok, errMsg = stakingManager.updateStake(userId, token, amount, "unstaking", currentTimestamp)

@@ -210,12 +210,14 @@ Admin = "KLzn6IzhmML7M-XXFNSI29GVNd3xSHtH26zuKa1TWn8"
 
 Cost = 100
 
-TokenTest = "W3jdK85h1bFzZ7K_IXd0zLxq4RbpxPi0hvqUW6hAdUY"
+TokenTest = "7enZBOhWsyU3A5oCt8HtMNNPHSxXYJVTlOGOetR9IDw"
 WrappedAR = "xU9zFkq3X2ZQ6olwNVvr1vUWIjc3kXTWr7xKQD6dh10"
 WrappedETH = ""
 TokenInUse = TokenTest
 
 Decimals = 18
+
+UnstakePeriod = 50000
 
 StakeTokens = {
    [TokenTest] = {
@@ -228,7 +230,6 @@ StakeTokens = {
       amount = 100 * 10 ^ Decimals,
    },
 }
-
 
 SuccessMessage = "200: Success"
 
@@ -759,7 +760,7 @@ end
 do
 local _ENV = _ENV
 package.preload[ "providerManager" ] = function( ... ) local arg = _G.arg;
-local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local os = _tl_compat and _tl_compat.os or os; local pcall = _tl_compat and _tl_compat.pcall or pcall; local table = _tl_compat and _tl_compat.table or table; require("globals")
+local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local pcall = _tl_compat and _tl_compat.pcall or pcall; local table = _tl_compat and _tl_compat.table or table; require("globals")
 
 local dbUtils = require("dbUtils")
 local json = require("json")
@@ -785,10 +786,8 @@ RequestList = {}
 
 local providerManager = {}
 
-function providerManager.createProvider(userId)
+function providerManager.createProvider(userId, timestamp)
    print("entered providerManager.createProvider")
-
-   local timestamp = os.time()
 
    if not DB then
       print("Database connection not initialized")
@@ -839,7 +838,7 @@ function providerManager.getProvider(userId)
    if result then
       return result, ""
    else
-      return {}, "Unable to create provider"
+      return {}, "Unable to reterive provider"
    end
 end
 
@@ -1051,11 +1050,6 @@ function providerManager.hasActiveRequest(userId, requestId, challenge)
    end
 end
 
-function providerManager.checkStakeStubbed(_userId)
-   print("entered providerManager.checkStakeStubbed")
-   return true, ""
-end
-
 function providerManager.updateProviderBalance(userId, balance)
    print("entered providerManager.updateProviderBalance")
 
@@ -1114,6 +1108,7 @@ local json = require("json")
 local dbUtils = require("dbUtils")
 local providerManager = require("providerManager")
 local verifierManager = require("verifierManager")
+local stakingManager = require("stakingManager")
 
 
 ProviderVDFResult = {}
@@ -1500,7 +1495,17 @@ function randomManager.createRandomRequest(userId, providers, callbackId, reques
 
 
    local providerList = json.decode(providers)
-   if not providerList or not providerList.provider_ids or #providerList.provider_ids == 0 then
+   local staked = true
+
+   for _, providerId in ipairs(providerList.provider_ids) do
+      local providerStaked, _ = stakingManager.checkStake(providerId)
+      if not providerStaked then
+         staked = false
+         break
+      end
+   end
+
+   if not staked or not providerList or not providerList.provider_ids or #providerList.provider_ids == 0 then
       return false, "Invalid providers list"
    end
 
@@ -1671,6 +1676,186 @@ function randomManager.postVDFOutputAndProof(userId, requestId, outputValue, pro
 end
 
 return randomManager
+end
+end
+
+do
+local _ENV = _ENV
+package.preload[ "stakingManager" ] = function( ... ) local arg = _G.arg;
+local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local pcall = _tl_compat and _tl_compat.pcall or pcall; require("globals")
+local json = require("json")
+local dbUtils = require("dbUtils")
+local providerManager = require("providerManager")
+local tokenManager = require("tokenManager")
+
+
+Stake = {}
+
+
+
+
+
+
+
+local stakingManager = {}
+
+function stakingManager.checkStakeStubbed(_userId)
+   print("entered stakingManager.checkStakeStubbed")
+   return true, ""
+end
+
+function stakingManager.checkStake(userId)
+   print("entered stakingManager.checkStake")
+
+   local provider, err = providerManager.getProvider(userId)
+
+   if err ~= "" or provider.stake == nil then
+      return false, err
+   end
+
+   local decodedStake = json.decode(provider.stake)
+
+   if decodedStake == nil then
+      return false, "Stake not found"
+   end
+
+   local requiredStake = StakeTokens[decodedStake.token].amount
+   if decodedStake.amount < requiredStake then
+      return false, "Stake is less than required"
+   else
+      return true, ""
+   end
+end
+
+function stakingManager.getStatus(userId)
+   print("entered stakingManager.getStatus")
+
+   local provider, err = providerManager.getProvider(userId)
+
+   if err ~= "" then
+      return "", err
+   end
+
+   local decodedStake = json.decode(provider.stake)
+
+   return decodedStake.status, ""
+end
+
+function stakingManager.viewProviderStake(userId)
+   print("entered stakingManager.viewProviderStake")
+
+   local provider, err = providerManager.getProvider(userId)
+
+   if err ~= "" then
+      return "", err
+   end
+   return provider.stake, ""
+end
+
+function stakingManager.updateStake(userId, token, amount, status, timestamp)
+   print("entered stakingManager.updateStake")
+
+   local stake = {
+      provider_id = userId,
+      token = token,
+      amount = amount,
+      status = status,
+      timestamp = timestamp,
+   }
+
+   local stmt = DB:prepare([[
+    UPDATE Providers
+    SET stake = :stake
+    WHERE provider_id = :provider_id;
+  ]])
+   stmt:bind_names({ provider_id = userId, stake = json.encode(stake) })
+
+   local ok = pcall(function()
+      dbUtils.execute(stmt, "Failed to update provider stake")
+   end)
+
+   if ok then
+      return true, ""
+   else
+      return false, "Failed to update provider balance"
+   end
+end
+
+function stakingManager.processStake(msg)
+   print("entered stakingManager.processStake")
+
+   local token = msg.From
+   local amount = tonumber(msg.Quantity)
+   local provider = msg.Sender
+
+   local _, providerErr = providerManager.getProvider(provider)
+
+   if providerErr ~= "" then
+      providerManager.createProvider(provider, msg.Timestamp)
+   end
+
+   if stakingManager.checkStake(provider) then
+      tokenManager.returnTokens(msg, "Stake already exists")
+      return false, "Stake already exists"
+   end
+
+   if not StakeTokens[token] then
+      tokenManager.returnTokens(msg, "Invalid Token")
+      return false, "Invalid Token"
+   end
+
+   if amount < StakeTokens[token].amount then
+      tokenManager.returnTokens(msg, "Stake is less than required")
+      return false, "Stake is less than required"
+   end
+
+   local ok, err = stakingManager.updateStake(provider, token, amount, "active", msg.Timestamp)
+   if not ok then
+      tokenManager.returnTokens(msg, err)
+      return false, err
+   end
+
+   return true, ""
+end
+
+function stakingManager.unstake(userId, currentTimestamp)
+   print("entered stakingManager.unstake")
+
+   if stakingManager.checkStake(userId) == false then
+      return false, "User is not staked"
+   end
+
+   local provider, err = providerManager.getProvider(userId)
+
+   if err ~= "" then
+      return false, err
+   end
+
+   local decodedStake = json.decode(provider.stake)
+
+   local token = decodedStake.token
+   local amount = decodedStake.amount
+   local status = decodedStake.status
+   local timestamp = decodedStake.timestamp
+
+   if status == "unstaking" then
+      if timestamp + UnstakePeriod > currentTimestamp then
+         return false, "Stake is not ready to be unstaked"
+      end
+      stakingManager.updateStake(userId, "", 0, "inactive", currentTimestamp)
+      tokenManager.sendTokens(token, userId, tostring(amount), "Unstaking tokens from Random Process")
+      return true, ""
+   end
+
+   local ok, errMsg = stakingManager.updateStake(userId, token, amount, "unstaking", currentTimestamp)
+   if not ok then
+      return false, errMsg
+   end
+
+   return true, ""
+end
+
+return stakingManager
 end
 end
 
@@ -2229,7 +2414,7 @@ return verifierManager
 end
 end
 
-local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local assert = _tl_compat and _tl_compat.assert or assert; local debug = _tl_compat and _tl_compat.debug or debug; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local math = _tl_compat and _tl_compat.math or math; local pcall = _tl_compat and _tl_compat.pcall or pcall; local table = _tl_compat and _tl_compat.table or table; local xpcall = _tl_compat and _tl_compat.xpcall or xpcall
+local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local debug = _tl_compat and _tl_compat.debug or debug; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local math = _tl_compat and _tl_compat.math or math; local pcall = _tl_compat and _tl_compat.pcall or pcall; local table = _tl_compat and _tl_compat.table or table; local xpcall = _tl_compat and _tl_compat.xpcall or xpcall
 require("globals")
 local json = require("json")
 local database = require("database")
@@ -2238,6 +2423,7 @@ local providerManager = require("providerManager")
 local randomManager = require("randomManager")
 local tokenManager = require("tokenManager")
 local verifierManager = require("verifierManager")
+local stakingManager = require("stakingManager")
 
 
 ResponseData = {}
@@ -2278,6 +2464,10 @@ GetProviderRandomBalanceData = {}
 
 
 GetOpenRandomRequestsData = {}
+
+
+
+ViewProviderStakeData = {}
 
 
 
@@ -2359,12 +2549,6 @@ local function wrapHandler(handlerFn)
 end
 
 
-local function createProvider(userid)
-   local success, _ = providerManager.createProvider(userid)
-   return success
-end
-
-
 local function infoHandler(msg)
    local verifiers = verifierManager.printAvailableVerifiers()
    print("Verifiers: " .. json.encode(verifiers))
@@ -2372,34 +2556,14 @@ local function infoHandler(msg)
 
 end
 
-local function isWhitelisted(userId)
-   local isValid = false
-   for _, user in ipairs(TestNetProviders) do
-      if userId == user then
-         print("Success: User whitelisted: " .. tostring(userId))
-         isValid = true
-         return true
-      end
-   end
-
-   if not isValid then
-      print("Failure: User not whitelisted: " .. tostring(userId))
-      return false
-   end
-end
-
 
 function updateProviderBalanceHandler(msg)
    print("entered updateProviderBalance")
 
    local userId = msg.From
-   print("Asserting whitelisted user: " .. userId)
-   assert(isWhitelisted(userId), "User not whitelisted")
 
+   local staked, _ = stakingManager.checkStake(userId)
 
-   createProvider(userId)
-
-   local staked, _ = providerManager.checkStakeStubbed(userId)
 
    if not staked then
       ao.send(sendResponse(msg.From, "Error", { message = "Update failed: Provider not staked" }))
@@ -2424,6 +2588,14 @@ function postVDFChallengeHandler(msg)
    print("entered postVDFChallenge")
 
    local userId = msg.From
+
+   local staked, _ = stakingManager.checkStake(userId)
+
+
+   if not staked then
+      ao.send(sendResponse(msg.From, "Error", { message = "Post failed: Provider not staked" }))
+      return false
+   end
 
    local data = (json.decode(msg.Data))
    local requestId = data.requestId
@@ -2455,6 +2627,14 @@ function postVDFOutputAndProofHandler(msg)
    print("entered postVDFOutputAndProof")
 
    local userId = msg.From
+
+   local staked, _ = stakingManager.checkStake(userId)
+
+
+   if not staked then
+      ao.send(sendResponse(msg.From, "Error", { message = "Post failed: Provider not staked" }))
+      return false
+   end
 
    local data = (json.decode(msg.Data))
    local output = data.output
@@ -2552,6 +2732,14 @@ end
 function creditNoticeHandler(msg)
    print("entered creditNotice")
 
+   local xStake = msg.Tags["X-Stake"] or nil
+
+
+   if xStake ~= nil then
+      stakingManager.processStake(msg)
+      return true
+   end
+
    local value = math.floor(tonumber(msg.Quantity))
    local callbackId = msg.Tags["X-CallbackId"] or nil
 
@@ -2588,6 +2776,36 @@ function creditNoticeHandler(msg)
       return true
    else
       ao.send(sendResponse(userId, "Error", { message = "Failed to create new random request: " .. err }))
+      tokenManager.returnTokens(msg, err)
+      return false
+   end
+end
+
+
+function unstakeHandler(msg)
+   print("entered unstake")
+   local userId = msg.From
+   local success, err = stakingManager.unstake(userId, msg.Timestamp)
+   if success then
+      ao.send(sendResponse(userId, "Unstaked", SuccessMessage))
+      return true
+   else
+      ao.send(sendResponse(userId, "Error", { message = "Failed to unstake: " .. err }))
+      return false
+   end
+end
+
+
+function viewProviderStakeHandler(msg)
+   print("entered viewProviderStake")
+   local data = (json.decode(msg.Data))
+   local providerId = data.providerId
+   local stake, err = stakingManager.viewProviderStake(providerId)
+   if err == "" then
+      ao.send(sendResponse(msg.From, "Viewed Provider Stake", stake))
+      return true
+   else
+      ao.send(sendResponse(msg.From, "Error", { message = "Failed to view provider stake: " .. err }))
       return false
    end
 end
@@ -2714,6 +2932,14 @@ wrapHandler(getProviderRandomBalanceHandler))
 Handlers.add('creditNotice',
 Handlers.utils.hasMatchingTag('Action', 'Credit-Notice'),
 wrapHandler(creditNoticeHandler))
+
+Handlers.add('unstake',
+Handlers.utils.hasMatchingTag('Action', 'Unstake'),
+wrapHandler(unstakeHandler))
+
+Handlers.add('viewProviderStake',
+Handlers.utils.hasMatchingTag('Action', 'View-Provider-Stake'),
+wrapHandler(viewProviderStakeHandler))
 
 Handlers.add('getOpenRandomRequests',
 Handlers.utils.hasMatchingTag('Action', 'Get-Open-Random-Requests'),

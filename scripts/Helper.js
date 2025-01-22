@@ -7,18 +7,19 @@ const availableRandomValues = 44
 const providerId    = "ld4ncW8yLSkckjia3cw6qO7silUdEe1nsdiEvMoLg-0"
 const providerId2   = "c8Iq4yunDnsJWGSz_wYwQU--O9qeODKHiRdUkQkW2p8"
 const providerId3   = "Sr3HVH0Nh6iZzbORLpoQFOEvmsuKjXsHswSWH760KAk"
-const processId     = "KbaY8P4h9wdHYKHlBSLbXN_yd-9gxUDxSgBackUxTiQ" // "QeVaQXBmIFfLuc29G5bXnylBIJXqON4naIbZrQTk8Iw"
+const processId     = "WYtVAlC2kXWPr8gM1tidWrl2e1PTIDjzQJrWlXC1KeY" // "QeVaQXBmIFfLuc29G5bXnylBIJXqON4naIbZrQTk8Iw"
 const randomTesting = "m3h7fUeAcR36tn2y13o4LjNum-mgwCCA8eGiH01AdEc"
 const tokenId       = "7enZBOhWsyU3A5oCt8HtMNNPHSxXYJVTlOGOetR9IDw"
 let providers = {
     provider_ids: ["ld4ncW8yLSkckjia3cw6qO7silUdEe1nsdiEvMoLg-0"]
 }
-const requestIds = [
-    "706f393e-d1e6-479e-a64d-1003850e3bd0"
-]
+
 
 const requestInputs     = 1
-const requestId         = "8dd33fdf-4f05-4aad-8c18-ec3ff1d9c90d"
+const requestId         = "972b012f-d0b0-4cb5-8f68-0ac73f917e93"
+const requestIds = [
+    requestId
+]
 const callbackId        = "e894ec35-057b-4db1-a8bc-2bfd75ebbdac"
 const input             = "0xf8e3b0de92842f97fb47b393f45187f2"
 const modulus           = "0x40e77a538238e49424de6139311eaee7d7f1e31a0e87b2051e1f94bb4b0ad2d"
@@ -93,7 +94,7 @@ async function getStatus() {
           The "data" portion of the message
           If not specified a random string will be generated
         */
-        data: JSON.stringify({ providerId: providerId3 }),
+        data: JSON.stringify({ providerId: providerId }),
 
     })
 
@@ -162,7 +163,7 @@ async function getActiveRequests() {
           The "data" portion of the message
           If not specified a random string will be generated
         */
-        data: JSON.stringify({ providerId: providerId3 }),
+        data: JSON.stringify({ providerId: providerId }),
 
     })
 
@@ -439,7 +440,6 @@ async function highLow() {
     return id;
 }
 
-
 async function viewGame() {
     let tags = [
         { name: "Action", value: "View-Game" },
@@ -473,6 +473,108 @@ async function viewGame() {
     if (Messages && Messages.length > 0) {
         const data = JSON.parse(Messages[0].Data);
         console.log("Random Requests: ", data);
+    }
+    
+    return id;
+}
+
+async function stake() {
+    let tags = [
+        { name: "Action", value: "Transfer" },
+        { name: "Quantity", value: "100000000000000000000" },
+        { name: "Recipient", value: processId },
+        { name: "X-Stake", value: "true" },
+    ]   
+
+    let id = await message({
+        /*
+          The arweave TXID of the process, this will become the "target".
+          This is the process the message is ultimately sent to.
+        */
+        process: tokenId,
+        // Tags that the process will use as input.
+        tags,
+        // A signer function used to build the message "signature"
+        signer: createDataItemSigner(wallet),
+        /*
+          The "data" portion of the message
+          If not specified a random string will be generated
+        */
+    })
+
+    console.log(id)
+    return id;
+}
+
+async function viewStake() {
+    let tags = [
+        { name: "Action", value: "View-Provider-Stake" },
+    ]
+
+    let id = await message({
+        /*
+          The arweave TXID of the process, this will become the "target".
+          This is the process the message is ultimately sent to.
+        */
+        process: processId,
+        // Tags that the process will use as input.
+        tags,
+        // A signer function used to build the message "signature"
+        signer: createDataItemSigner(wallet),
+        /*
+          The "data" portion of the message
+          If not specified a random string will be generated
+        */
+        data: JSON.stringify({ providerId: providerId }),
+
+    })
+
+    //console.log(id)
+    const { Output, Messages } = await result({
+        message: id,
+        process: processId,
+    });
+    
+    if (Messages && Messages.length > 0) {
+        const data = JSON.parse(Messages[0].Data);
+        console.log("Status: ", data);
+    }
+    
+    return id;
+}
+
+async function unstake() {
+    let tags = [
+        { name: "Action", value: "Unstake" },
+    ]
+
+    let id = await message({
+        /*
+          The arweave TXID of the process, this will become the "target".
+          This is the process the message is ultimately sent to.
+        */
+        process: processId,
+        // Tags that the process will use as input.
+        tags,
+        // A signer function used to build the message "signature"
+        signer: createDataItemSigner(wallet),
+        /*
+          The "data" portion of the message
+          If not specified a random string will be generated
+        */
+        data: JSON.stringify({ providerId: providerId }),
+
+    })
+
+    //console.log(id)
+    const { Output, Messages } = await result({
+        message: id,
+        process: processId,
+    });
+    
+    if (Messages && Messages.length > 0) {
+        const data = JSON.parse(Messages[0].Data);
+        console.log("Status: ", data);
     }
     
     return id;
@@ -557,6 +659,24 @@ async function main() {
     } else if (inputArg == 13) {
         try {
             await viewGame()
+        } catch (err) {
+            console.error("Error reading process IDs or sending messages:", err);
+        }
+    } else if (inputArg == 14) {
+        try {
+            await stake()
+        } catch (err) {
+            console.error("Error reading process IDs or sending messages:", err);
+        }
+    } else if (inputArg == 15) {
+        try {
+            await viewStake()
+        } catch (err) {
+            console.error("Error reading process IDs or sending messages:", err);
+        }
+    } else if (inputArg == 16) {
+        try {
+            await unstake()
         } catch (err) {
             console.error("Error reading process IDs or sending messages:", err);
         }

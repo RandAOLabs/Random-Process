@@ -76,7 +76,7 @@ function providerManager.getProvider(userId: string): Provider, string
   if result then
     return result as Provider, ""
   else
-    return {} as Provider, "Unable to create provider"
+    return {} as Provider, "Unable to reterive provider"
   end
 end
 

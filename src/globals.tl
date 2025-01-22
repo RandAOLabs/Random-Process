@@ -17,7 +17,7 @@ global TokenInUse: string = TokenTest
 
 global Decimals: integer = 18
 
-global UnstakePeriod: integer = 50000 -- 50 seconds
+global UnstakePeriod: integer = 50000 -- 50 seconds -- 1209600000 -- 14 days
 
 global StakeTokens = {
     [TokenTest] = {

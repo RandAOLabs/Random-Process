@@ -3,6 +3,7 @@ local json = require("json")
 local dbUtils = require("dbUtils")
 local providerManager = require("providerManager")
 local verifierManager = require("verifierManager")
+local stakingManager = require("stakingManager")
 
 
 ProviderVDFResult = {}
@@ -389,7 +390,17 @@ function randomManager.createRandomRequest(userId, providers, callbackId, reques
 
 
    local providerList = json.decode(providers)
-   if not providerList or not providerList.provider_ids or #providerList.provider_ids == 0 then
+   local staked = true
+
+   for _, providerId in ipairs(providerList.provider_ids) do
+      local providerStaked, _ = stakingManager.checkStake(providerId)
+      if not providerStaked then
+         staked = false
+         break
+      end
+   end
+
+   if not staked or not providerList or not providerList.provider_ids or #providerList.provider_ids == 0 then
       return false, "Invalid providers list"
    end
 

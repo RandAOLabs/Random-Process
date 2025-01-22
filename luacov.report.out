@@ -235,12 +235,14 @@ process.lua
 
 0 Cost = 100
 
-0 TokenTest = "W3jdK85h1bFzZ7K_IXd0zLxq4RbpxPi0hvqUW6hAdUY"
+0 TokenTest = "7enZBOhWsyU3A5oCt8HtMNNPHSxXYJVTlOGOetR9IDw"
 0 WrappedAR = "xU9zFkq3X2ZQ6olwNVvr1vUWIjc3kXTWr7xKQD6dh10"
 0 WrappedETH = ""
 0 TokenInUse = TokenTest
 
 0 Decimals = 18
+
+0 UnstakePeriod = 50000
 
 0 StakeTokens = {
 0    [TokenTest] = {
@@ -253,7 +255,6 @@ process.lua
         amount = 100 * 10 ^ Decimals,
      },
   }
-
 
 0 SuccessMessage = "200: Success"
 
@@ -784,7 +785,7 @@ process.lua
   do
 * local _ENV = _ENV
 * package.preload[ "providerManager" ] = function( ... ) local arg = _G.arg;
-0 local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local os = _tl_compat and _tl_compat.os or os; local pcall = _tl_compat and _tl_compat.pcall or pcall; local table = _tl_compat and _tl_compat.table or table; require("globals")
+0 local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local pcall = _tl_compat and _tl_compat.pcall or pcall; local table = _tl_compat and _tl_compat.table or table; require("globals")
 
 0 local dbUtils = require("dbUtils")
 0 local json = require("json")
@@ -810,10 +811,8 @@ process.lua
 
 0 local providerManager = {}
 
-0 function providerManager.createProvider(userId)
+0 function providerManager.createProvider(userId, timestamp)
 0    print("entered providerManager.createProvider")
-
-0    local timestamp = os.time()
 
 0    if not DB then
 0       print("Database connection not initialized")
@@ -864,7 +863,7 @@ process.lua
 0    if result then
 0       return result, ""
      else
-0       return {}, "Unable to create provider"
+0       return {}, "Unable to reterive provider"
      end
   end
 
@@ -1076,11 +1075,6 @@ process.lua
      end
   end
 
-0 function providerManager.checkStakeStubbed(_userId)
-0    print("entered providerManager.checkStakeStubbed")
-0    return true, ""
-  end
-
 0 function providerManager.updateProviderBalance(userId, balance)
 0    print("entered providerManager.updateProviderBalance")
 
@@ -1139,6 +1133,7 @@ process.lua
 0 local dbUtils = require("dbUtils")
 0 local providerManager = require("providerManager")
 0 local verifierManager = require("verifierManager")
+0 local stakingManager = require("stakingManager")
 
 
 0 ProviderVDFResult = {}
@@ -1525,7 +1520,17 @@ process.lua
 
 
 0    local providerList = json.decode(providers)
-0    if not providerList or not providerList.provider_ids or #providerList.provider_ids == 0 then
+0    local staked = true
+
+0    for _, providerId in ipairs(providerList.provider_ids) do
+0       local providerStaked, _ = stakingManager.checkStake(providerId)
+0       if not providerStaked then
+0          staked = false
+           break
+        end
+     end
+
+0    if not staked or not providerList or not providerList.provider_ids or #providerList.provider_ids == 0 then
 0       return false, "Invalid providers list"
      end
 
@@ -1696,6 +1701,186 @@ process.lua
   end
 
 0 return randomManager
+  end
+  end
+
+  do
+* local _ENV = _ENV
+* package.preload[ "stakingManager" ] = function( ... ) local arg = _G.arg;
+0 local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local pcall = _tl_compat and _tl_compat.pcall or pcall; require("globals")
+0 local json = require("json")
+0 local dbUtils = require("dbUtils")
+0 local providerManager = require("providerManager")
+0 local tokenManager = require("tokenManager")
+
+
+0 Stake = {}
+
+
+
+
+
+
+
+0 local stakingManager = {}
+
+0 function stakingManager.checkStakeStubbed(_userId)
+0    print("entered stakingManager.checkStakeStubbed")
+0    return true, ""
+  end
+
+0 function stakingManager.checkStake(userId)
+0    print("entered stakingManager.checkStake")
+
+0    local provider, err = providerManager.getProvider(userId)
+
+0    if err ~= "" or provider.stake == nil then
+0       return false, err
+     end
+
+0    local decodedStake = json.decode(provider.stake)
+
+0    if decodedStake == nil then
+0       return false, "Stake not found"
+     end
+
+0    local requiredStake = StakeTokens[decodedStake.token].amount
+0    if decodedStake.amount < requiredStake then
+0       return false, "Stake is less than required"
+     else
+0       return true, ""
+     end
+  end
+
+0 function stakingManager.getStatus(userId)
+0    print("entered stakingManager.getStatus")
+
+0    local provider, err = providerManager.getProvider(userId)
+
+0    if err ~= "" then
+0       return "", err
+     end
+
+0    local decodedStake = json.decode(provider.stake)
+
+0    return decodedStake.status, ""
+  end
+
+0 function stakingManager.viewProviderStake(userId)
+0    print("entered stakingManager.viewProviderStake")
+
+0    local provider, err = providerManager.getProvider(userId)
+
+0    if err ~= "" then
+0       return "", err
+     end
+0    return provider.stake, ""
+  end
+
+0 function stakingManager.updateStake(userId, token, amount, status, timestamp)
+0    print("entered stakingManager.updateStake")
+
+0    local stake = {
+        provider_id = userId,
+        token = token,
+        amount = amount,
+        status = status,
+        timestamp = timestamp,
+     }
+
+0    local stmt = DB:prepare([[
+      UPDATE Providers
+      SET stake = :stake
+      WHERE provider_id = :provider_id;
+0   ]])
+0    stmt:bind_names({ provider_id = userId, stake = json.encode(stake) })
+
+0    local ok = pcall(function()
+0       dbUtils.execute(stmt, "Failed to update provider stake")
+     end)
+
+0    if ok then
+0       return true, ""
+     else
+0       return false, "Failed to update provider balance"
+     end
+  end
+
+0 function stakingManager.processStake(msg)
+0    print("entered stakingManager.processStake")
+
+0    local token = msg.From
+0    local amount = tonumber(msg.Quantity)
+0    local provider = msg.Sender
+
+0    local _, providerErr = providerManager.getProvider(provider)
+
+0    if providerErr ~= "" then
+0       providerManager.createProvider(provider, msg.Timestamp)
+     end
+
+0    if stakingManager.checkStake(provider) then
+0       tokenManager.returnTokens(msg, "Stake already exists")
+0       return false, "Stake already exists"
+     end
+
+0    if not StakeTokens[token] then
+0       tokenManager.returnTokens(msg, "Invalid Token")
+0       return false, "Invalid Token"
+     end
+
+0    if amount < StakeTokens[token].amount then
+0       tokenManager.returnTokens(msg, "Stake is less than required")
+0       return false, "Stake is less than required"
+     end
+
+0    local ok, err = stakingManager.updateStake(provider, token, amount, "active", msg.Timestamp)
+0    if not ok then
+0       tokenManager.returnTokens(msg, err)
+0       return false, err
+     end
+
+0    return true, ""
+  end
+
+0 function stakingManager.unstake(userId, currentTimestamp)
+0    print("entered stakingManager.unstake")
+
+0    if stakingManager.checkStake(userId) == false then
+0       return false, "User is not staked"
+     end
+
+0    local provider, err = providerManager.getProvider(userId)
+
+0    if err ~= "" then
+0       return false, err
+     end
+
+0    local decodedStake = json.decode(provider.stake)
+
+0    local token = decodedStake.token
+0    local amount = decodedStake.amount
+0    local status = decodedStake.status
+0    local timestamp = decodedStake.timestamp
+
+0    if status == "unstaking" then
+0       if timestamp + UnstakePeriod > currentTimestamp then
+0          return false, "Stake is not ready to be unstaked"
+        end
+0       stakingManager.updateStake(userId, "", 0, "inactive", currentTimestamp)
+0       tokenManager.sendTokens(token, userId, tostring(amount), "Unstaking tokens from Random Process")
+0       return true, ""
+     end
+
+0    local ok, errMsg = stakingManager.updateStake(userId, token, amount, "unstaking", currentTimestamp)
+0    if not ok then
+0       return false, errMsg
+     end
+
+0    return true, ""
+  end
+
+0 return stakingManager
   end
   end
 
@@ -2254,7 +2439,7 @@ process.lua
   end
   end
 
-* local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local assert = _tl_compat and _tl_compat.assert or assert; local debug = _tl_compat and _tl_compat.debug or debug; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local math = _tl_compat and _tl_compat.math or math; local pcall = _tl_compat and _tl_compat.pcall or pcall; local table = _tl_compat and _tl_compat.table or table; local xpcall = _tl_compat and _tl_compat.xpcall or xpcall
+* local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local debug = _tl_compat and _tl_compat.debug or debug; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local math = _tl_compat and _tl_compat.math or math; local pcall = _tl_compat and _tl_compat.pcall or pcall; local table = _tl_compat and _tl_compat.table or table; local xpcall = _tl_compat and _tl_compat.xpcall or xpcall
 * require("globals")
 0 local json = require("json")
 0 local database = require("database")
@@ -2263,6 +2448,7 @@ process.lua
 0 local randomManager = require("randomManager")
 0 local tokenManager = require("tokenManager")
 0 local verifierManager = require("verifierManager")
+0 local stakingManager = require("stakingManager")
 
 
 0 ResponseData = {}
@@ -2303,6 +2489,10 @@ process.lua
 
 
 0 GetOpenRandomRequestsData = {}
+
+
+
+0 ViewProviderStakeData = {}
 
 
 
@@ -2384,12 +2574,6 @@ process.lua
   end
 
 
-  local function createProvider(userid)
-0    local success, _ = providerManager.createProvider(userid)
-0    return success
-  end
-
-
   local function infoHandler(msg)
 0    local verifiers = verifierManager.printAvailableVerifiers()
 0    print("Verifiers: " .. json.encode(verifiers))
@@ -2397,34 +2581,14 @@ process.lua
 
   end
 
-  local function isWhitelisted(userId)
-0    local isValid = false
-0    for _, user in ipairs(TestNetProviders) do
-0       if userId == user then
-0          print("Success: User whitelisted: " .. tostring(userId))
-0          isValid = true
-0          return true
-        end
-     end
-
-0    if not isValid then
-0       print("Failure: User not whitelisted: " .. tostring(userId))
-0       return false
-     end
-  end
-
 
 0 function updateProviderBalanceHandler(msg)
 0    print("entered updateProviderBalance")
 
 0    local userId = msg.From
-0    print("Asserting whitelisted user: " .. userId)
-0    assert(isWhitelisted(userId), "User not whitelisted")
 
+0    local staked, _ = stakingManager.checkStake(userId)
 
-0    createProvider(userId)
-
-0    local staked, _ = providerManager.checkStakeStubbed(userId)
 
 0    if not staked then
 0       ao.send(sendResponse(msg.From, "Error", { message = "Update failed: Provider not staked" }))
@@ -2449,6 +2613,14 @@ process.lua
 0    print("entered postVDFChallenge")
 
 0    local userId = msg.From
+
+0    local staked, _ = stakingManager.checkStake(userId)
+
+
+0    if not staked then
+0       ao.send(sendResponse(msg.From, "Error", { message = "Post failed: Provider not staked" }))
+0       return false
+     end
 
 0    local data = (json.decode(msg.Data))
 0    local requestId = data.requestId
@@ -2480,6 +2652,14 @@ process.lua
 0    print("entered postVDFOutputAndProof")
 
 0    local userId = msg.From
+
+0    local staked, _ = stakingManager.checkStake(userId)
+
+
+0    if not staked then
+0       ao.send(sendResponse(msg.From, "Error", { message = "Post failed: Provider not staked" }))
+0       return false
+     end
 
 0    local data = (json.decode(msg.Data))
 0    local output = data.output
@@ -2577,6 +2757,14 @@ process.lua
 0 function creditNoticeHandler(msg)
 0    print("entered creditNotice")
 
+0    local xStake = msg.Tags["X-Stake"] or nil
+
+
+0    if xStake ~= nil then
+0       stakingManager.processStake(msg)
+0       return true
+     end
+
 0    local value = math.floor(tonumber(msg.Quantity))
 0    local callbackId = msg.Tags["X-CallbackId"] or nil
 
@@ -2613,6 +2801,36 @@ process.lua
 0       return true
      else
 0       ao.send(sendResponse(userId, "Error", { message = "Failed to create new random request: " .. err }))
+0       tokenManager.returnTokens(msg, err)
+0       return false
+     end
+  end
+
+
+0 function unstakeHandler(msg)
+0    print("entered unstake")
+0    local userId = msg.From
+0    local success, err = stakingManager.unstake(userId, msg.Timestamp)
+0    if success then
+0       ao.send(sendResponse(userId, "Unstaked", SuccessMessage))
+0       return true
+     else
+0       ao.send(sendResponse(userId, "Error", { message = "Failed to unstake: " .. err }))
+0       return false
+     end
+  end
+
+
+0 function viewProviderStakeHandler(msg)
+0    print("entered viewProviderStake")
+0    local data = (json.decode(msg.Data))
+0    local providerId = data.providerId
+0    local stake, err = stakingManager.viewProviderStake(providerId)
+0    if err == "" then
+0       ao.send(sendResponse(msg.From, "Viewed Provider Stake", stake))
+0       return true
+     else
+0       ao.send(sendResponse(msg.From, "Error", { message = "Failed to view provider stake: " .. err }))
 0       return false
      end
   end
@@ -2739,6 +2957,14 @@ process.lua
 0 Handlers.add('creditNotice',
 0 Handlers.utils.hasMatchingTag('Action', 'Credit-Notice'),
 0 wrapHandler(creditNoticeHandler))
+
+0 Handlers.add('unstake',
+0 Handlers.utils.hasMatchingTag('Action', 'Unstake'),
+0 wrapHandler(unstakeHandler))
+
+0 Handlers.add('viewProviderStake',
+0 Handlers.utils.hasMatchingTag('Action', 'View-Provider-Stake'),
+0 wrapHandler(viewProviderStakeHandler))
 
 0 Handlers.add('getOpenRandomRequests',
 0 Handlers.utils.hasMatchingTag('Action', 'Get-Open-Random-Requests'),
@@ -3059,10 +3285,11 @@ build/tokenManager.lua
 ==============================================================================
 build/stakingManager.lua
 ==============================================================================
-0 require("globals")
+0 local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local pcall = _tl_compat and _tl_compat.pcall or pcall; require("globals")
 0 local json = require("json")
 0 local dbUtils = require("dbUtils")
 0 local providerManager = require("providerManager")
+0 local tokenManager = require("tokenManager")
 
 
 0 Stake = {}
@@ -3072,13 +3299,28 @@ build/stakingManager.lua
 
 
 
+
 0 local stakingManager = {}
+
+0 function stakingManager.checkStakeStubbed(_userId)
+0    print("entered stakingManager.checkStakeStubbed")
+0    return true, ""
+  end
 
 0 function stakingManager.checkStake(userId)
 0    print("entered stakingManager.checkStake")
 
-0    local provider, _ = providerManager.getProvider(userId)
+0    local provider, err = providerManager.getProvider(userId)
+
+0    if err ~= "" or provider.stake == nil then
+0       return false, err
+     end
+
 0    local decodedStake = json.decode(provider.stake)
+
+0    if decodedStake == nil then
+0       return false, "Stake not found"
+     end
 
 0    local requiredStake = StakeTokens[decodedStake.token].amount
 0    if decodedStake.amount < requiredStake then
@@ -3088,12 +3330,130 @@ build/stakingManager.lua
      end
   end
 
-0 function stakingManager.updateStake(userId)
+0 function stakingManager.getStatus(userId)
+0    print("entered stakingManager.getStatus")
+
+0    local provider, err = providerManager.getProvider(userId)
+
+0    if err ~= "" then
+0       return "", err
+     end
+
+0    local decodedStake = json.decode(provider.stake)
+
+0    return decodedStake.status, ""
+  end
+
+0 function stakingManager.viewProviderStake(userId)
+0    print("entered stakingManager.viewProviderStake")
+
+0    local provider, err = providerManager.getProvider(userId)
+
+0    if err ~= "" then
+0       return "", err
+     end
+0    return provider.stake, ""
+  end
+
+0 function stakingManager.updateStake(userId, token, amount, status, timestamp)
 0    print("entered stakingManager.updateStake")
 
+0    local stake = {
+        provider_id = userId,
+        token = token,
+        amount = amount,
+        status = status,
+        timestamp = timestamp,
+     }
 
+0    local stmt = DB:prepare([[
+      UPDATE Providers
+      SET stake = :stake
+      WHERE provider_id = :provider_id;
+0   ]])
+0    stmt:bind_names({ provider_id = userId, stake = json.encode(stake) })
 
+0    local ok = pcall(function()
+0       dbUtils.execute(stmt, "Failed to update provider stake")
+     end)
 
+0    if ok then
+0       return true, ""
+     else
+0       return false, "Failed to update provider balance"
+     end
+  end
+
+0 function stakingManager.processStake(msg)
+0    print("entered stakingManager.processStake")
+
+0    local token = msg.From
+0    local amount = tonumber(msg.Quantity)
+0    local provider = msg.Sender
+
+0    local _, providerErr = providerManager.getProvider(provider)
+
+0    if providerErr ~= "" then
+0       providerManager.createProvider(provider, msg.Timestamp)
+     end
+
+0    if stakingManager.checkStake(provider) then
+0       tokenManager.returnTokens(msg, "Stake already exists")
+0       return false, "Stake already exists"
+     end
+
+0    if not StakeTokens[token] then
+0       tokenManager.returnTokens(msg, "Invalid Token")
+0       return false, "Invalid Token"
+     end
+
+0    if amount < StakeTokens[token].amount then
+0       tokenManager.returnTokens(msg, "Stake is less than required")
+0       return false, "Stake is less than required"
+     end
+
+0    local ok, err = stakingManager.updateStake(provider, token, amount, "active", msg.Timestamp)
+0    if not ok then
+0       tokenManager.returnTokens(msg, err)
+0       return false, err
+     end
+
+0    return true, ""
+  end
+
+0 function stakingManager.unstake(userId, currentTimestamp)
+0    print("entered stakingManager.unstake")
+
+0    if stakingManager.checkStake(userId) == false then
+0       return false, "User is not staked"
+     end
+
+0    local provider, err = providerManager.getProvider(userId)
+
+0    if err ~= "" then
+0       return false, err
+     end
+
+0    local decodedStake = json.decode(provider.stake)
+
+0    local token = decodedStake.token
+0    local amount = decodedStake.amount
+0    local status = decodedStake.status
+0    local timestamp = decodedStake.timestamp
+
+0    if status == "unstaking" then
+0       if timestamp + UnstakePeriod > currentTimestamp then
+0          return false, "Stake is not ready to be unstaked"
+        end
+0       stakingManager.updateStake(userId, "", 0, "inactive", currentTimestamp)
+0       tokenManager.sendTokens(token, userId, tostring(amount), "Unstaking tokens from Random Process")
+0       return true, ""
+     end
+
+0    local ok, errMsg = stakingManager.updateStake(userId, token, amount, "unstaking", currentTimestamp)
+0    if not ok then
+0       return false, errMsg
+     end
 
 0    return true, ""
   end
@@ -3103,7 +3463,7 @@ build/stakingManager.lua
 ==============================================================================
 build/providerManager.lua
 ==============================================================================
-0 local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local os = _tl_compat and _tl_compat.os or os; local pcall = _tl_compat and _tl_compat.pcall or pcall; local table = _tl_compat and _tl_compat.table or table; require("globals")
+0 local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local pcall = _tl_compat and _tl_compat.pcall or pcall; local table = _tl_compat and _tl_compat.table or table; require("globals")
 
 0 local dbUtils = require("dbUtils")
 0 local json = require("json")
@@ -3129,10 +3489,8 @@ build/providerManager.lua
 
 0 local providerManager = {}
 
-0 function providerManager.createProvider(userId)
+0 function providerManager.createProvider(userId, timestamp)
 0    print("entered providerManager.createProvider")
-
-0    local timestamp = os.time()
 
 0    if not DB then
 0       print("Database connection not initialized")
@@ -3183,7 +3541,7 @@ build/providerManager.lua
 0    if result then
 0       return result, ""
      else
-0       return {}, "Unable to create provider"
+0       return {}, "Unable to reterive provider"
      end
   end
 
@@ -3395,11 +3753,6 @@ build/providerManager.lua
      end
   end
 
-0 function providerManager.checkStakeStubbed(_userId)
-0    print("entered providerManager.checkStakeStubbed")
-0    return true, ""
-  end
-
 0 function providerManager.updateProviderBalance(userId, balance)
 0    print("entered providerManager.updateProviderBalance")
 
@@ -3451,7 +3804,7 @@ build/providerManager.lua
 ==============================================================================
 build/main.lua
 ==============================================================================
-0 local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local assert = _tl_compat and _tl_compat.assert or assert; local debug = _tl_compat and _tl_compat.debug or debug; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local math = _tl_compat and _tl_compat.math or math; local pcall = _tl_compat and _tl_compat.pcall or pcall; local table = _tl_compat and _tl_compat.table or table; local xpcall = _tl_compat and _tl_compat.xpcall or xpcall
+0 local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local debug = _tl_compat and _tl_compat.debug or debug; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local math = _tl_compat and _tl_compat.math or math; local pcall = _tl_compat and _tl_compat.pcall or pcall; local table = _tl_compat and _tl_compat.table or table; local xpcall = _tl_compat and _tl_compat.xpcall or xpcall
 0 require("globals")
 0 local json = require("json")
 0 local database = require("database")
@@ -3460,6 +3813,7 @@ build/main.lua
 0 local randomManager = require("randomManager")
 0 local tokenManager = require("tokenManager")
 0 local verifierManager = require("verifierManager")
+0 local stakingManager = require("stakingManager")
 
 
 0 ResponseData = {}
@@ -3500,6 +3854,10 @@ build/main.lua
 
 
 0 GetOpenRandomRequestsData = {}
+
+
+
+0 ViewProviderStakeData = {}
 
 
 
@@ -3581,12 +3939,6 @@ build/main.lua
   end
 
 
-  local function createProvider(userid)
-0    local success, _ = providerManager.createProvider(userid)
-0    return success
-  end
-
-
   local function infoHandler(msg)
 0    local verifiers = verifierManager.printAvailableVerifiers()
 0    print("Verifiers: " .. json.encode(verifiers))
@@ -3594,34 +3946,14 @@ build/main.lua
 
   end
 
-  local function isWhitelisted(userId)
-0    local isValid = false
-0    for _, user in ipairs(TestNetProviders) do
-0       if userId == user then
-0          print("Success: User whitelisted: " .. tostring(userId))
-0          isValid = true
-0          return true
-        end
-     end
-
-0    if not isValid then
-0       print("Failure: User not whitelisted: " .. tostring(userId))
-0       return false
-     end
-  end
-
 
 0 function updateProviderBalanceHandler(msg)
 0    print("entered updateProviderBalance")
 
 0    local userId = msg.From
-0    print("Asserting whitelisted user: " .. userId)
-0    assert(isWhitelisted(userId), "User not whitelisted")
 
+0    local staked, _ = stakingManager.checkStake(userId)
 
-0    createProvider(userId)
-
-0    local staked, _ = providerManager.checkStakeStubbed(userId)
 
 0    if not staked then
 0       ao.send(sendResponse(msg.From, "Error", { message = "Update failed: Provider not staked" }))
@@ -3646,6 +3978,14 @@ build/main.lua
 0    print("entered postVDFChallenge")
 
 0    local userId = msg.From
+
+0    local staked, _ = stakingManager.checkStake(userId)
+
+
+0    if not staked then
+0       ao.send(sendResponse(msg.From, "Error", { message = "Post failed: Provider not staked" }))
+0       return false
+     end
 
 0    local data = (json.decode(msg.Data))
 0    local requestId = data.requestId
@@ -3677,6 +4017,14 @@ build/main.lua
 0    print("entered postVDFOutputAndProof")
 
 0    local userId = msg.From
+
+0    local staked, _ = stakingManager.checkStake(userId)
+
+
+0    if not staked then
+0       ao.send(sendResponse(msg.From, "Error", { message = "Post failed: Provider not staked" }))
+0       return false
+     end
 
 0    local data = (json.decode(msg.Data))
 0    local output = data.output
@@ -3774,6 +4122,14 @@ build/main.lua
 0 function creditNoticeHandler(msg)
 0    print("entered creditNotice")
 
+0    local xStake = msg.Tags["X-Stake"] or nil
+
+
+0    if xStake ~= nil then
+0       stakingManager.processStake(msg)
+0       return true
+     end
+
 0    local value = math.floor(tonumber(msg.Quantity))
 0    local callbackId = msg.Tags["X-CallbackId"] or nil
 
@@ -3810,6 +4166,36 @@ build/main.lua
 0       return true
      else
 0       ao.send(sendResponse(userId, "Error", { message = "Failed to create new random request: " .. err }))
+0       tokenManager.returnTokens(msg, err)
+0       return false
+     end
+  end
+
+
+0 function unstakeHandler(msg)
+0    print("entered unstake")
+0    local userId = msg.From
+0    local success, err = stakingManager.unstake(userId, msg.Timestamp)
+0    if success then
+0       ao.send(sendResponse(userId, "Unstaked", SuccessMessage))
+0       return true
+     else
+0       ao.send(sendResponse(userId, "Error", { message = "Failed to unstake: " .. err }))
+0       return false
+     end
+  end
+
+
+0 function viewProviderStakeHandler(msg)
+0    print("entered viewProviderStake")
+0    local data = (json.decode(msg.Data))
+0    local providerId = data.providerId
+0    local stake, err = stakingManager.viewProviderStake(providerId)
+0    if err == "" then
+0       ao.send(sendResponse(msg.From, "Viewed Provider Stake", stake))
+0       return true
+     else
+0       ao.send(sendResponse(msg.From, "Error", { message = "Failed to view provider stake: " .. err }))
 0       return false
      end
   end
@@ -3936,6 +4322,14 @@ build/main.lua
 0 Handlers.add('creditNotice',
 0 Handlers.utils.hasMatchingTag('Action', 'Credit-Notice'),
 0 wrapHandler(creditNoticeHandler))
+
+0 Handlers.add('unstake',
+0 Handlers.utils.hasMatchingTag('Action', 'Unstake'),
+0 wrapHandler(unstakeHandler))
+
+0 Handlers.add('viewProviderStake',
+0 Handlers.utils.hasMatchingTag('Action', 'View-Provider-Stake'),
+0 wrapHandler(viewProviderStakeHandler))
 
 0 Handlers.add('getOpenRandomRequests',
 0 Handlers.utils.hasMatchingTag('Action', 'Get-Open-Random-Requests'),
@@ -4536,6 +4930,7 @@ build/randomManager.lua
 0 local dbUtils = require("dbUtils")
 0 local providerManager = require("providerManager")
 0 local verifierManager = require("verifierManager")
+0 local stakingManager = require("stakingManager")
 
 
 0 ProviderVDFResult = {}
@@ -4922,7 +5317,17 @@ build/randomManager.lua
 
 
 0    local providerList = json.decode(providers)
-0    if not providerList or not providerList.provider_ids or #providerList.provider_ids == 0 then
+0    local staked = true
+
+0    for _, providerId in ipairs(providerList.provider_ids) do
+0       local providerStaked, _ = stakingManager.checkStake(providerId)
+0       if not providerStaked then
+0          staked = false
+           break
+        end
+     end
+
+0    if not staked or not providerList or not providerList.provider_ids or #providerList.provider_ids == 0 then
 0       return false, "Invalid providers list"
      end
 
@@ -5109,12 +5514,14 @@ build/globals.lua
 
 0 Cost = 100
 
-0 TokenTest = "W3jdK85h1bFzZ7K_IXd0zLxq4RbpxPi0hvqUW6hAdUY"
+0 TokenTest = "7enZBOhWsyU3A5oCt8HtMNNPHSxXYJVTlOGOetR9IDw"
 0 WrappedAR = "xU9zFkq3X2ZQ6olwNVvr1vUWIjc3kXTWr7xKQD6dh10"
 0 WrappedETH = ""
 0 TokenInUse = TokenTest
 
 0 Decimals = 18
+
+0 UnstakePeriod = 50000
 
 0 StakeTokens = {
 0    [TokenTest] = {
@@ -5127,7 +5534,6 @@ build/globals.lua
         amount = 100 * 10 ^ Decimals,
      },
   }
-
 
 0 SuccessMessage = "200: Success"
 
@@ -9110,17 +9516,17 @@ File                                   Hits Missed Coverage
 tlconfig.lua                           0    2      0.00%
 build/tokenManager.lua                 0    6      0.00%
 test/mocked-env/processes/aocred.lua   0    9      0.00%
-build/globals.lua                      0    17     0.00%
-build/stakingManager.lua               0    18     0.00%
+build/globals.lua                      0    18     0.00%
 scripts/copy_lua_package.lua           0    24     0.00%
 build/dbUtils.lua                      0    37     0.00%
 build/database.lua                     0    40     0.00%
-build/providerManager.lua              0    166    0.00%
+build/stakingManager.lua               0    91     0.00%
+build/providerManager.lua              0    162    0.00%
 build/verifierManager.lua              0    239    0.00%
-build/main.lua                         0    280    0.00%
-build/randomManager.lua                0    285    0.00%
+build/randomManager.lua                0    291    0.00%
+build/main.lua                         0    306    0.00%
 test/mocked-env/lib/bint.lua           0    833    0.00%
-process.lua                            17   1067   1.57%
+process.lua                            19   1187   1.58%
 test/mocked-env/ao/handlers.lua        11   95     10.38%
 test/process_test.lua                  39   258    13.13%
 test/mocked-env/lib/utils.lua          23   74     23.71%
@@ -9130,4 +9536,4 @@ test/mocked-env/processes/verifier.lua 7    6      53.85%
 test/mocked-env/ao/ao.lua              35   23     60.34%
 test/setup.lua                         17   3      85.00%
 -----------------------------------------------------------
-Total                                  210  3650   5.44%
+Total                                  212  3872   5.19%

@@ -1,4 +1,4 @@
-local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local os = _tl_compat and _tl_compat.os or os; local pcall = _tl_compat and _tl_compat.pcall or pcall; local table = _tl_compat and _tl_compat.table or table; require("globals")
+local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local pcall = _tl_compat and _tl_compat.pcall or pcall; local table = _tl_compat and _tl_compat.table or table; require("globals")
 
 local dbUtils = require("dbUtils")
 local json = require("json")
@@ -24,10 +24,8 @@ RequestList = {}
 
 local providerManager = {}
 
-function providerManager.createProvider(userId)
+function providerManager.createProvider(userId, timestamp)
    print("entered providerManager.createProvider")
-
-   local timestamp = os.time()
 
    if not DB then
       print("Database connection not initialized")
@@ -78,7 +76,7 @@ function providerManager.getProvider(userId)
    if result then
       return result, ""
    else
-      return {}, "Unable to create provider"
+      return {}, "Unable to reterive provider"
    end
 end
 
@@ -288,11 +286,6 @@ function providerManager.hasActiveRequest(userId, requestId, challenge)
    else
       return false
    end
-end
-
-function providerManager.checkStakeStubbed(_userId)
-   print("entered providerManager.checkStakeStubbed")
-   return true, ""
 end
 
 function providerManager.updateProviderBalance(userId, balance)

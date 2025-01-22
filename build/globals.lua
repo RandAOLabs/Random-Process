@@ -10,12 +10,14 @@ Admin = "KLzn6IzhmML7M-XXFNSI29GVNd3xSHtH26zuKa1TWn8"
 
 Cost = 100
 
-TokenTest = "W3jdK85h1bFzZ7K_IXd0zLxq4RbpxPi0hvqUW6hAdUY"
+TokenTest = "7enZBOhWsyU3A5oCt8HtMNNPHSxXYJVTlOGOetR9IDw"
 WrappedAR = "xU9zFkq3X2ZQ6olwNVvr1vUWIjc3kXTWr7xKQD6dh10"
 WrappedETH = ""
 TokenInUse = TokenTest
 
 Decimals = 18
+
+UnstakePeriod = 50000
 
 StakeTokens = {
    [TokenTest] = {
@@ -28,7 +30,6 @@ StakeTokens = {
       amount = 100 * 10 ^ Decimals,
    },
 }
-
 
 SuccessMessage = "200: Success"
 

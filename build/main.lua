@@ -1,4 +1,4 @@
-local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local assert = _tl_compat and _tl_compat.assert or assert; local debug = _tl_compat and _tl_compat.debug or debug; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local math = _tl_compat and _tl_compat.math or math; local pcall = _tl_compat and _tl_compat.pcall or pcall; local table = _tl_compat and _tl_compat.table or table; local xpcall = _tl_compat and _tl_compat.xpcall or xpcall
+local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local debug = _tl_compat and _tl_compat.debug or debug; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local math = _tl_compat and _tl_compat.math or math; local pcall = _tl_compat and _tl_compat.pcall or pcall; local table = _tl_compat and _tl_compat.table or table; local xpcall = _tl_compat and _tl_compat.xpcall or xpcall
 require("globals")
 local json = require("json")
 local database = require("database")
@@ -7,6 +7,7 @@ local providerManager = require("providerManager")
 local randomManager = require("randomManager")
 local tokenManager = require("tokenManager")
 local verifierManager = require("verifierManager")
+local stakingManager = require("stakingManager")
 
 
 ResponseData = {}
@@ -47,6 +48,10 @@ GetProviderRandomBalanceData = {}
 
 
 GetOpenRandomRequestsData = {}
+
+
+
+ViewProviderStakeData = {}
 
 
 
@@ -128,12 +133,6 @@ local function wrapHandler(handlerFn)
 end
 
 
-local function createProvider(userid)
-   local success, _ = providerManager.createProvider(userid)
-   return success
-end
-
-
 local function infoHandler(msg)
    local verifiers = verifierManager.printAvailableVerifiers()
    print("Verifiers: " .. json.encode(verifiers))
@@ -141,34 +140,14 @@ local function infoHandler(msg)
 
 end
 
-local function isWhitelisted(userId)
-   local isValid = false
-   for _, user in ipairs(TestNetProviders) do
-      if userId == user then
-         print("Success: User whitelisted: " .. tostring(userId))
-         isValid = true
-         return true
-      end
-   end
-
-   if not isValid then
-      print("Failure: User not whitelisted: " .. tostring(userId))
-      return false
-   end
-end
-
 
 function updateProviderBalanceHandler(msg)
    print("entered updateProviderBalance")
 
    local userId = msg.From
-   print("Asserting whitelisted user: " .. userId)
-   assert(isWhitelisted(userId), "User not whitelisted")
 
+   local staked, _ = stakingManager.checkStake(userId)
 
-   createProvider(userId)
-
-   local staked, _ = providerManager.checkStakeStubbed(userId)
 
    if not staked then
       ao.send(sendResponse(msg.From, "Error", { message = "Update failed: Provider not staked" }))
@@ -193,6 +172,14 @@ function postVDFChallengeHandler(msg)
    print("entered postVDFChallenge")
 
    local userId = msg.From
+
+   local staked, _ = stakingManager.checkStake(userId)
+
+
+   if not staked then
+      ao.send(sendResponse(msg.From, "Error", { message = "Post failed: Provider not staked" }))
+      return false
+   end
 
    local data = (json.decode(msg.Data))
    local requestId = data.requestId
@@ -224,6 +211,14 @@ function postVDFOutputAndProofHandler(msg)
    print("entered postVDFOutputAndProof")
 
    local userId = msg.From
+
+   local staked, _ = stakingManager.checkStake(userId)
+
+
+   if not staked then
+      ao.send(sendResponse(msg.From, "Error", { message = "Post failed: Provider not staked" }))
+      return false
+   end
 
    local data = (json.decode(msg.Data))
    local output = data.output
@@ -321,6 +316,14 @@ end
 function creditNoticeHandler(msg)
    print("entered creditNotice")
 
+   local xStake = msg.Tags["X-Stake"] or nil
+
+
+   if xStake ~= nil then
+      stakingManager.processStake(msg)
+      return true
+   end
+
    local value = math.floor(tonumber(msg.Quantity))
    local callbackId = msg.Tags["X-CallbackId"] or nil
 
@@ -357,6 +360,36 @@ function creditNoticeHandler(msg)
       return true
    else
       ao.send(sendResponse(userId, "Error", { message = "Failed to create new random request: " .. err }))
+      tokenManager.returnTokens(msg, err)
+      return false
+   end
+end
+
+
+function unstakeHandler(msg)
+   print("entered unstake")
+   local userId = msg.From
+   local success, err = stakingManager.unstake(userId, msg.Timestamp)
+   if success then
+      ao.send(sendResponse(userId, "Unstaked", SuccessMessage))
+      return true
+   else
+      ao.send(sendResponse(userId, "Error", { message = "Failed to unstake: " .. err }))
+      return false
+   end
+end
+
+
+function viewProviderStakeHandler(msg)
+   print("entered viewProviderStake")
+   local data = (json.decode(msg.Data))
+   local providerId = data.providerId
+   local stake, err = stakingManager.viewProviderStake(providerId)
+   if err == "" then
+      ao.send(sendResponse(msg.From, "Viewed Provider Stake", stake))
+      return true
+   else
+      ao.send(sendResponse(msg.From, "Error", { message = "Failed to view provider stake: " .. err }))
       return false
    end
 end
@@ -483,6 +516,14 @@ wrapHandler(getProviderRandomBalanceHandler))
 Handlers.add('creditNotice',
 Handlers.utils.hasMatchingTag('Action', 'Credit-Notice'),
 wrapHandler(creditNoticeHandler))
+
+Handlers.add('unstake',
+Handlers.utils.hasMatchingTag('Action', 'Unstake'),
+wrapHandler(unstakeHandler))
+
+Handlers.add('viewProviderStake',
+Handlers.utils.hasMatchingTag('Action', 'View-Provider-Stake'),
+wrapHandler(viewProviderStakeHandler))
 
 Handlers.add('getOpenRandomRequests',
 Handlers.utils.hasMatchingTag('Action', 'Get-Open-Random-Requests'),

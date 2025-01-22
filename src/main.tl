@@ -51,6 +51,10 @@ global record GetOpenRandomRequestsData
   providerId: string
 end
 
+global record ViewProviderStakeData
+  providerId: string
+end
+
 global record GetRandomRequestsData
   requestIds: {string}
 end
@@ -128,12 +132,6 @@ local function wrapHandler(handlerFn: function(msg: Message)): function(msg: Mes
   end
 end
 
--- TODO Remove with staking
-local function createProvider(userid: string): boolean
-  local success, _ = providerManager.createProvider(userid, os.time())
-  return success
-end
-
 -- Handler to return the process info
 local function infoHandler(msg: Message)
     local verifiers = verifierManager.printAvailableVerifiers()
@@ -142,37 +140,15 @@ local function infoHandler(msg: Message)
 
 end
 
-local function isWhitelisted(userId): boolean
-  local isValid = false
-  for _, user in ipairs(TestNetProviders) do
-    if userId == user then
-      print("Success: User whitelisted: " .. tostring(userId))
-      isValid = true
-      return true
-    end
-  end
-
-  if not isValid then
-    print("Failure: User not whitelisted: " .. tostring(userId))
-    return false
-  end
-end
-
 -- Handler for updating providers balance
 global function updateProviderBalanceHandler(msg: Message): boolean
   print("entered updateProviderBalance")
   
   local userId = msg.From
-  print("Asserting whitelisted user: " .. userId)
-  assert(isWhitelisted(userId), "User not whitelisted")
+ 
+  local staked, _ = stakingManager.checkStake(userId)
 
-  -- Stubbed create provider as we have not implemented staking
-  createProvider(userId)
-  -- todo remove this all  
-  local staked, _ = stakingManager.checkStakeStubbed(userId)
-  -- local staked, _ = stakingManager.checkStake(userId)
-
-  -- Check if staked TODO remove stubbed
+  -- Check if staked
   if not staked then 
     ao.send(sendResponse(msg.From, "Error", {message = "Update failed: Provider not staked"}))
     return false
@@ -196,6 +172,14 @@ global function postVDFChallengeHandler(msg: Message): boolean
   print("entered postVDFChallenge")
   
   local userId = msg.From
+
+  local staked, _ = stakingManager.checkStake(userId)
+
+  -- Check if staked
+  if not staked then 
+    ao.send(sendResponse(msg.From, "Error", {message = "Post failed: Provider not staked"}))
+    return false
+  end
 
   local data = (json.decode(msg.Data as string) as PostVDFChallengeData)
   local requestId = data.requestId
@@ -227,6 +211,14 @@ global function postVDFOutputAndProofHandler(msg: Message): boolean
   print("entered postVDFOutputAndProof")
   
   local userId = msg.From
+
+  local staked, _ = stakingManager.checkStake(userId)
+
+  -- Check if staked
+  if not staked then 
+    ao.send(sendResponse(msg.From, "Error", {message = "Post failed: Provider not staked"}))
+    return false
+  end
 
   local data = (json.decode(msg.Data as string) as PostVDFOutputAndProofData)
   local output = data.output
@@ -332,7 +324,6 @@ global function creditNoticeHandler(msg: Message): boolean
     return true
   end
 
-
   local value = math.floor(tonumber(msg.Quantity))
   local callbackId = msg.Tags["X-CallbackId"] or nil
 
@@ -369,6 +360,36 @@ global function creditNoticeHandler(msg: Message): boolean
     return true
   else
     ao.send(sendResponse(userId, "Error", {message = "Failed to create new random request: " .. err}))
+    tokenManager.returnTokens(msg, err)
+    return false
+  end
+end
+
+-- Handler for unstaking requests
+global function unstakeHandler(msg: Message): boolean
+  print("entered unstake")
+  local userId = msg.From
+  local success, err = stakingManager.unstake(userId, msg.Timestamp)
+  if success then
+    ao.send(sendResponse(userId, "Unstaked", SuccessMessage))
+    return true
+  else
+    ao.send(sendResponse(userId, "Error", {message = "Failed to unstake: " .. err}))
+    return false
+  end
+end
+
+-- Handler for viewing a providers stake
+global function viewProviderStakeHandler(msg: Message): boolean
+  print("entered viewProviderStake")
+  local data = (json.decode(msg.Data as string) as ViewProviderStakeData)
+  local providerId = data.providerId
+  local stake, err = stakingManager.viewProviderStake(providerId)
+  if err == "" then
+    ao.send(sendResponse(msg.From, "Viewed Provider Stake", stake))
+    return true
+  else
+    ao.send(sendResponse(msg.From, "Error", {message = "Failed to view provider stake: " .. err}))
     return false
   end
 end
@@ -495,6 +516,14 @@ wrapHandler(getProviderRandomBalanceHandler))
 Handlers.add('creditNotice', 
 Handlers.utils.hasMatchingTag('Action', 'Credit-Notice'), 
 wrapHandler(creditNoticeHandler))
+
+Handlers.add('unstake', 
+Handlers.utils.hasMatchingTag('Action', 'Unstake'), 
+wrapHandler(unstakeHandler))
+
+Handlers.add('viewProviderStake',  
+Handlers.utils.hasMatchingTag('Action', 'View-Provider-Stake'), 
+wrapHandler(viewProviderStakeHandler))
 
 Handlers.add('getOpenRandomRequests', 
 Handlers.utils.hasMatchingTag('Action', 'Get-Open-Random-Requests'), 
