@@ -15,11 +15,6 @@ Stake = {}
 
 local stakingManager = {}
 
-function stakingManager.checkStakeStubbed(_userId)
-   print("entered stakingManager.checkStakeStubbed")
-   return true, ""
-end
-
 function stakingManager.checkStake(userId)
    print("entered stakingManager.checkStake")
 
@@ -33,6 +28,10 @@ function stakingManager.checkStake(userId)
 
    if decodedStake == nil then
       return false, "Stake not found"
+   end
+
+   if decodedStake.status == "inactive" then
+      return false, "Stake is inactive"
    end
 
    local requiredStake = StakeTokens[decodedStake.token].amount
@@ -103,26 +102,30 @@ function stakingManager.processStake(msg)
    local token = msg.From
    local amount = tonumber(msg.Quantity)
    local provider = msg.Sender
-
-   local _, providerErr = providerManager.getProvider(provider)
-
-   if providerErr ~= "" then
-      providerManager.createProvider(provider, msg.Timestamp)
-   end
+   print("Provider: " .. provider)
 
    if stakingManager.checkStake(provider) then
+      print("Stake already exists")
       tokenManager.returnTokens(msg, "Stake already exists")
       return false, "Stake already exists"
    end
 
    if not StakeTokens[token] then
+      print("Invalid Token")
       tokenManager.returnTokens(msg, "Invalid Token")
       return false, "Invalid Token"
    end
 
    if amount < StakeTokens[token].amount then
+      print("Stake is less than required")
       tokenManager.returnTokens(msg, "Stake is less than required")
       return false, "Stake is less than required"
+   end
+
+   local _, providerErr = providerManager.getProvider(provider)
+
+   if providerErr ~= "" then
+      providerManager.createProvider(provider, msg.Timestamp)
    end
 
    local ok, err = stakingManager.updateStake(provider, token, amount, "active", msg.Timestamp)
@@ -138,13 +141,13 @@ function stakingManager.unstake(userId, currentTimestamp)
    print("entered stakingManager.unstake")
 
    if stakingManager.checkStake(userId) == false then
-      return false, "User is not staked"
+      return false, "User is not staked", ""
    end
 
    local provider, err = providerManager.getProvider(userId)
 
    if err ~= "" then
-      return false, err
+      return false, err, ""
    end
 
    local decodedStake = json.decode(provider.stake)
@@ -156,19 +159,19 @@ function stakingManager.unstake(userId, currentTimestamp)
 
    if status == "unstaking" then
       if timestamp + UnstakePeriod > currentTimestamp then
-         return false, "Stake is not ready to be unstaked"
+         return false, "Stake is not ready to be unstaked", ""
       end
       stakingManager.updateStake(userId, "", 0, "inactive", currentTimestamp)
       tokenManager.sendTokens(token, userId, tostring(amount), "Unstaking tokens from Random Process")
-      return true, ""
+      return true, "", "Successfully unstaked tokens"
    end
 
    local ok, errMsg = stakingManager.updateStake(userId, token, amount, "unstaking", currentTimestamp)
    if not ok then
       return false, errMsg
    end
-
-   return true, ""
+   providerManager.updateProviderStatus(userId, false)
+   return true, "", "Successfully initiated unstaking of tokens"
 end
 
 return stakingManager

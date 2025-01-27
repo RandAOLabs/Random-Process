@@ -3,7 +3,6 @@ local json = require("json")
 local dbUtils = require("dbUtils")
 local providerManager = require("providerManager")
 local verifierManager = require("verifierManager")
-local stakingManager = require("stakingManager")
 
 
 ProviderVDFResult = {}
@@ -335,6 +334,10 @@ function randomManager.decrementRequestedInputs(requestId)
             providerManager.pushActiveRequests(providerList.provider_ids, requestId, false)
             randomManager.updateRandomRequestStatus(requestId, Status[2])
 
+            ActiveRequests.activeChallengeRequests.request_ids[requestId] = nil
+            ActiveRequests.activeOutputRequests.request_ids[requestId] = true
+
+
          elseif status == Status[2] then
             print("Random request finished collecting outputs")
             local providerList = randomManager.getRandomProviderList(requestId)
@@ -342,10 +345,16 @@ function randomManager.decrementRequestedInputs(requestId)
             randomManager.resetRandomRequestRequestedInputs(requestId, requestedValue)
             randomManager.updateRandomRequestStatus(requestId, Status[3])
 
+            ActiveRequests.activeOutputRequests.request_ids[requestId] = nil
+            ActiveRequests.activeVerificationRequests.request_ids[requestId] = true
+
+
          elseif status == Status[3] then
             print("Random request finished successfully")
             randomManager.deliverRandomResponse(requestId)
             randomManager.updateRandomRequestStatus(requestId, Status[5])
+
+            ActiveRequests.activeVerificationRequests.request_ids[requestId] = nil
          end
       else
          return false, err
@@ -393,8 +402,8 @@ function randomManager.createRandomRequest(userId, providers, callbackId, reques
    local staked = true
 
    for _, providerId in ipairs(providerList.provider_ids) do
-      local providerStaked, _ = stakingManager.checkStake(providerId)
-      if not providerStaked then
+      local activeProvider, _ = providerManager.isActiveProvider(providerId)
+      if not activeProvider then
          staked = false
          break
       end
@@ -430,6 +439,7 @@ function randomManager.createRandomRequest(userId, providers, callbackId, reques
    end
 
    providerManager.pushActiveRequests(providerList.provider_ids, requestId, true)
+   ActiveRequests.activeChallengeRequests.request_ids[requestId] = true
 
    print("Preparing SQL statement for random request creation")
    local stmt = DB:prepare([[

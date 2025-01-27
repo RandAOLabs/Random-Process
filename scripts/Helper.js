@@ -7,13 +7,12 @@ const availableRandomValues = 44
 const providerId    = "ld4ncW8yLSkckjia3cw6qO7silUdEe1nsdiEvMoLg-0"
 const providerId2   = "c8Iq4yunDnsJWGSz_wYwQU--O9qeODKHiRdUkQkW2p8"
 const providerId3   = "Sr3HVH0Nh6iZzbORLpoQFOEvmsuKjXsHswSWH760KAk"
-const processId     = "WYtVAlC2kXWPr8gM1tidWrl2e1PTIDjzQJrWlXC1KeY" // "QeVaQXBmIFfLuc29G5bXnylBIJXqON4naIbZrQTk8Iw"
-const randomTesting = "m3h7fUeAcR36tn2y13o4LjNum-mgwCCA8eGiH01AdEc"
-const tokenId       = "7enZBOhWsyU3A5oCt8HtMNNPHSxXYJVTlOGOetR9IDw"
+const processId     = "KbaY8P4h9wdHYKHlBSLbXN_yd-9gxUDxSgBackUxTiQ" // "QeVaQXBmIFfLuc29G5bXnylBIJXqON4naIbZrQTk8Iw"
+const randomTesting = "k1pGSzc7Uj2PaqH6jtbJp9Xg40IklrEwWyO6ipXO15g"
+const tokenId       = "5ZR9uegKoEhE9fJMbs-MvWLIztMNCVxgpzfeBVE3vqI"
 let providers = {
-    provider_ids: ["ld4ncW8yLSkckjia3cw6qO7silUdEe1nsdiEvMoLg-0"]
+    provider_ids: ["XUo8jZtUDBFLtp5okR12oLrqIZ4ewNlTpqnqmriihJE", "c8Iq4yunDnsJWGSz_wYwQU--O9qeODKHiRdUkQkW2p8"]
 }
-
 
 const requestInputs     = 1
 const requestId         = "972b012f-d0b0-4cb5-8f68-0ac73f917e93"
@@ -38,6 +37,42 @@ const proof             = JSON.stringify([
 ])
 
 const gameId = "1"
+
+async function deafult() {
+    let tags = [
+        { name: "Action", value: "DefaultInteraction" },
+    ]
+
+    let id = await message({
+        /*
+          The arweave TXID of the process, this will become the "target".
+          This is the process the message is ultimately sent to.
+        */
+        process: "GhNl98tr7ZQxIJHx4YcVdGh7WkT9dD7X4kmQOipvePQ",
+        // Tags that the process will use as input.
+        tags,
+        // A signer function used to build the message "signature"
+        signer: createDataItemSigner(wallet),
+        /*
+          The "data" portion of the message
+          If not specified a random string will be generated
+        */
+        data: JSON.stringify({ availableRandomValues }),
+    })
+
+    console.log(id)
+    const { Output, Messages } = await result({
+        message: id,
+        process: processId,
+    });
+    
+    if (Messages && Messages.length > 0) {
+        const data = JSON.parse(Messages[0].Data);
+        console.log("Status: ", data);
+    }
+    
+    return id;
+}
 
 async function updateBalance() {
     let tags = [
@@ -677,6 +712,12 @@ async function main() {
     } else if (inputArg == 16) {
         try {
             await unstake()
+        } catch (err) {
+            console.error("Error reading process IDs or sending messages:", err);
+        }
+    } else if (inputArg == 55) {
+        try {
+            await deafult()
         } catch (err) {
             console.error("Error reading process IDs or sending messages:", err);
         }

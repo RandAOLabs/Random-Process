@@ -25,6 +25,10 @@ UpdateProviderRandomBalanceData = {}
 
 
 
+UpdateProviderDetailsData = {}
+
+
+
 PostVDFChallengeData = {}
 
 
@@ -43,19 +47,11 @@ CheckpointResponseData = {}
 
 
 
-GetProviderRandomBalanceData = {}
-
-
-
-GetOpenRandomRequestsData = {}
-
-
-
-ViewProviderStakeData = {}
-
-
-
 GetRandomRequestsData = {}
+
+
+
+GetProviderData = {}
 
 
 
@@ -146,11 +142,11 @@ function updateProviderBalanceHandler(msg)
 
    local userId = msg.From
 
-   local staked, _ = stakingManager.checkStake(userId)
+   local stakedStatus, statusErr = stakingManager.getStatus(userId)
 
 
-   if not staked then
-      ao.send(sendResponse(msg.From, "Error", { message = "Update failed: Provider not staked" }))
+   if stakedStatus == 'inactive' or stakedStatus == 'unstaking' or statusErr ~= "" then
+      ao.send(sendResponse(msg.From, "Error", { message = "Update failed: Provider status is not active" }))
       return false
    end
 
@@ -168,16 +164,93 @@ function updateProviderBalanceHandler(msg)
 end
 
 
+function updateProviderDetailsHandler(msg)
+   print("entered updateProviderDetails")
+
+   local providerId = msg.From
+   local data = json.decode(msg.Data)
+   local success, err = providerManager.updateProviderDetails(providerId, data.details)
+   if success then
+      ao.send(sendResponse(msg.From, "Updated Provider Details", SuccessMessage))
+      return true
+   else
+      ao.send(sendResponse(msg.From, "Error", { message = "Failed to update provider details: " .. err }))
+      return false
+   end
+end
+
+
+function getProviderRandomBalanceHandler(msg)
+   print("entered getProviderRandomBalance")
+
+   local data = (json.decode(msg.Data))
+   local providerId = data.providerId
+   local providerInfo, err = providerManager.getProvider(providerId)
+   local randomBalance = providerInfo.random_balance
+   if err == "" then
+      local responseData = { providerId = providerId, availibleRandomValues = randomBalance }
+      ao.send(sendResponse(msg.From, "Get-Providers-Random-Balance-Response", responseData))
+      return true
+   else
+      ao.send(sendResponse(msg.From, "Error", { message = "Provider not found: " .. err }))
+      return false
+   end
+end
+
+
+function getProviderHandler(msg)
+   print("entered getProviderHandler")
+   local data = (json.decode(msg.Data))
+   local providerId = data.providerId
+   local providerInfo, err = providerManager.getProvider(providerId)
+   if err == "" then
+      ao.send(sendResponse(msg.From, "Get-Provider-Response", providerInfo))
+      return true
+   else
+      ao.send(sendResponse(msg.From, "Error", { message = "Provider not found: " .. err }))
+      return false
+   end
+end
+
+
+function getProviderStakeHandler(msg)
+   print("entered getProviderStake")
+   local data = (json.decode(msg.Data))
+   local providerId = data.providerId
+   local stake, err = stakingManager.viewProviderStake(providerId)
+   if err == "" then
+      ao.send(sendResponse(msg.From, "Viewed Provider Stake", stake))
+      return true
+   else
+      ao.send(sendResponse(msg.From, "Error", { message = "Failed to view provider stake: " .. err }))
+      return false
+   end
+end
+
+
+function unstakeHandler(msg)
+   print("entered unstake")
+   local userId = msg.From
+   local success, err, message = stakingManager.unstake(userId, msg.Timestamp)
+   if success then
+      ao.send(sendResponse(userId, "Unstake-Response", message))
+      return true
+   else
+      ao.send(sendResponse(userId, "Error", { message = "Failed to unstake: " .. err }))
+      return false
+   end
+end
+
+
 function postVDFChallengeHandler(msg)
    print("entered postVDFChallenge")
 
    local userId = msg.From
+   local active, _ = providerManager.isActiveProvider(userId)
 
-   local staked, _ = stakingManager.checkStake(userId)
 
-
-   if not staked then
-      ao.send(sendResponse(msg.From, "Error", { message = "Post failed: Provider not staked" }))
+   if not active then
+      ao.send(sendResponse(msg.From, "Error", { message = "Post failed: Provider not active" }))
       return false
    end
 
@@ -212,11 +285,11 @@ function postVDFOutputAndProofHandler(msg)
 
    local userId = msg.From
 
-   local staked, _ = stakingManager.checkStake(userId)
+   local active, _ = providerManager.isActiveProvider(userId)
 
 
-   if not staked then
-      ao.send(sendResponse(msg.From, "Error", { message = "Post failed: Provider not staked" }))
+   if not active then
+      ao.send(sendResponse(msg.From, "Error", { message = "Post failed: Provider not active" }))
       return false
    end
 
@@ -276,7 +349,7 @@ function postVerificationHandler(msg)
       return false
    end
 
-   local success, _err = verifierManager.processVerification(verifierId, requestId, segmentId, valid)
+   local success, _err = verifierManager.processVerification(verifierId, segmentId, valid)
 
    if success then
       randomManager.decrementRequestedInputs(requestId)
@@ -288,28 +361,11 @@ function postVerificationHandler(msg)
    end
 end
 
+
 function failedPostVerificationHandler(msg)
    print("entered failedPostVerification")
    local verifierId = msg.From
    verifierManager.markAvailable(verifierId)
-end
-
-
-function getProviderRandomBalanceHandler(msg)
-   print("entered getProviderRandomBalance")
-
-   local data = (json.decode(msg.Data))
-   local providerId = data.providerId
-   local providerInfo, err = providerManager.getProvider(providerId)
-   local randomBalance = providerInfo.random_balance
-   if err == "" then
-      local responseData = { providerId = providerId, availibleRandomValues = randomBalance }
-      ao.send(sendResponse(msg.From, "Get-Providers-Random-Balance-Response", responseData))
-      return true
-   else
-      ao.send(sendResponse(msg.From, "Error", { message = "Provider not found: " .. err }))
-      return false
-   end
 end
 
 
@@ -320,8 +376,13 @@ function creditNoticeHandler(msg)
 
 
    if xStake ~= nil then
-      stakingManager.processStake(msg)
-      return true
+      local success, err = stakingManager.processStake(msg)
+      if success then
+         return true
+      else
+         ao.send(sendResponse(msg.Sender, "Error", { message = err }))
+         return false
+      end
    end
 
    local value = math.floor(tonumber(msg.Quantity))
@@ -366,35 +427,6 @@ function creditNoticeHandler(msg)
 end
 
 
-function unstakeHandler(msg)
-   print("entered unstake")
-   local userId = msg.From
-   local success, err = stakingManager.unstake(userId, msg.Timestamp)
-   if success then
-      ao.send(sendResponse(userId, "Unstaked", SuccessMessage))
-      return true
-   else
-      ao.send(sendResponse(userId, "Error", { message = "Failed to unstake: " .. err }))
-      return false
-   end
-end
-
-
-function viewProviderStakeHandler(msg)
-   print("entered viewProviderStake")
-   local data = (json.decode(msg.Data))
-   local providerId = data.providerId
-   local stake, err = stakingManager.viewProviderStake(providerId)
-   if err == "" then
-      ao.send(sendResponse(msg.From, "Viewed Provider Stake", stake))
-      return true
-   else
-      ao.send(sendResponse(msg.From, "Error", { message = "Failed to view provider stake: " .. err }))
-      return false
-   end
-end
-
-
 function getOpenRandomRequestsHandler(msg)
    print("entered getOpenRandomRequests")
 
@@ -421,6 +453,8 @@ function getOpenRandomRequestsHandler(msg)
       local requestIds = json.decode(activeOutputRequests)
       responseData.activeOutputRequests = requestIds
    end
+
+   print("responseData: " .. json.encode(responseData))
 
    ao.send(sendResponse(msg.From, "Get-Open-Random-Requests-Response", responseData))
    return true
@@ -493,6 +527,26 @@ Handlers.add('updateProviderBalance',
 Handlers.utils.hasMatchingTag('Action', 'Update-Providers-Random-Balance'),
 wrapHandler(updateProviderBalanceHandler))
 
+Handlers.add('updateProviderDetails',
+Handlers.utils.hasMatchingTag('Action', 'Update-Provider-Details'),
+wrapHandler(updateProviderDetailsHandler))
+
+Handlers.add('getProviderRandomBalance',
+Handlers.utils.hasMatchingTag('Action', 'Get-Providers-Random-Balance'),
+wrapHandler(getProviderRandomBalanceHandler))
+
+Handlers.add('getProviderStake',
+Handlers.utils.hasMatchingTag('Action', 'Get-Provider-Stake'),
+wrapHandler(getProviderStakeHandler))
+
+Handlers.add('getProvider',
+Handlers.utils.hasMatchingTag('Action', 'Get-Provider'),
+wrapHandler(getProviderHandler))
+
+Handlers.add('getOpenRandomRequests',
+Handlers.utils.hasMatchingTag('Action', 'Get-Open-Random-Requests'),
+wrapHandler(getOpenRandomRequestsHandler))
+
 Handlers.add('postVDFChallenge',
 Handlers.utils.hasMatchingTag('Action', 'Post-VDF-Challenge'),
 wrapHandler(postVDFChallengeHandler))
@@ -509,10 +563,6 @@ Handlers.add('failedPostVerification',
 Handlers.utils.hasMatchingTag('Action', 'Failed-Post-Verification'),
 wrapHandler(failedPostVerificationHandler))
 
-Handlers.add('getProviderRandomBalance',
-Handlers.utils.hasMatchingTag('Action', 'Get-Providers-Random-Balance'),
-wrapHandler(getProviderRandomBalanceHandler))
-
 Handlers.add('creditNotice',
 Handlers.utils.hasMatchingTag('Action', 'Credit-Notice'),
 wrapHandler(creditNoticeHandler))
@@ -520,14 +570,6 @@ wrapHandler(creditNoticeHandler))
 Handlers.add('unstake',
 Handlers.utils.hasMatchingTag('Action', 'Unstake'),
 wrapHandler(unstakeHandler))
-
-Handlers.add('viewProviderStake',
-Handlers.utils.hasMatchingTag('Action', 'View-Provider-Stake'),
-wrapHandler(viewProviderStakeHandler))
-
-Handlers.add('getOpenRandomRequests',
-Handlers.utils.hasMatchingTag('Action', 'Get-Open-Random-Requests'),
-wrapHandler(getOpenRandomRequestsHandler))
 
 Handlers.add('getRandomRequests',
 Handlers.utils.hasMatchingTag('Action', 'Get-Random-Requests'),

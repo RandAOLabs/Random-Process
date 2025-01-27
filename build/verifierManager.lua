@@ -252,7 +252,7 @@ function verifierManager.markAvailable(verifierId)
 end
 
 
-function verifierManager.processVerification(verifierId, requestId, segmentId, result)
+function verifierManager.processVerification(verifierId, segmentId, result)
    print("Processing verification result for segment: " .. segmentId)
    if not DB then
       print("Database connection not initialized")
@@ -378,52 +378,6 @@ function verifierManager.updateSegmentStatus(segmentId, status, result)
 end
 
 
-function verifierManager.getProofSegments(proofId, expectedOutput)
-   if not DB then
-      print("Database connection not initialized")
-      return {}, "Database connection is not initialized"
-   end
-
-   local stmt = DB:prepare([[
-    SELECT * FROM VerifierSegments
-    WHERE proof_id = :pid
-  ]])
-
-   if not stmt then
-      print("Failed to prepare statement: " .. DB:errmsg())
-      return {}, "Failed to prepare statement: " .. DB:errmsg()
-   end
-
-   local ok = false
-   ok = pcall(function()
-      stmt:bind_names({ pid = proofId })
-   end)
-
-   if not ok then
-      print("Failed to bind parameters")
-      return {}, "Failed to bind parameters"
-   end
-
-   local rows = dbUtils.queryMany(stmt)
-   local segments = {}
-
-   for _, row in ipairs(rows) do
-      local segment = {
-         segment_id = tostring(row.segment_id),
-         proof_id = tostring(row.proof_id),
-         verifier_id = row.verifier_id and tostring(row.verifier_id) or "",
-         segment_data = tostring(row.segment_data),
-         status = tostring(row.status),
-         timestamp = tonumber(row.timestamp) or 0,
-         result = row.result and tostring(row.result) or "",
-      }
-      table.insert(segments, segment)
-   end
-
-   return segments, ""
-end
-
-
 function verifierManager.processProof(requestId, input, modulus, proofJson, providerId, modExpectedOutput)
 
    local proofArray = json.decode(proofJson)
@@ -452,9 +406,9 @@ function verifierManager.processProof(requestId, input, modulus, proofJson, prov
    local outputVerifierId = availableVerifiers[1]
    table.remove(availableVerifiers, 1)
 
-   local assigned, assignErr = verifierManager.assignSegment(outputVerifierId.process_id, outputSegmentId)
-   if not assigned then
-      print("Failed to assign segment: " .. assignErr)
+   local outputAssigned, outputAssignErr = verifierManager.assignSegment(outputVerifierId.process_id, outputSegmentId)
+   if not outputAssigned then
+      print("Failed to assign segment: " .. outputAssignErr)
    else
       local outputSegmentInput = proofArray[10]
       local segmentExpectedOutput = modExpectedOutput

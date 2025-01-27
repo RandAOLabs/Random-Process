@@ -252,7 +252,7 @@ function verifierManager.markAvailable(verifierId: string): boolean, string
 end
 
 -- Process verification result
-function verifierManager.processVerification(verifierId: string, requestId: string, segmentId: string, result: boolean): boolean, string
+function verifierManager.processVerification(verifierId: string, segmentId: string, result: boolean): boolean, string
   print("Processing verification result for segment: " .. segmentId)
   if not DB then
     print("Database connection not initialized")
@@ -377,52 +377,6 @@ function verifierManager.updateSegmentStatus(segmentId: string, status: string, 
   return true, ""
 end
 
--- Get segments for a proof
-function verifierManager.getProofSegments(proofId: string, expectedOutput: string): {VerifierSegment}, string
-  if not DB then
-    print("Database connection not initialized")
-    return {}, "Database connection is not initialized"
-  end
-  
-  local stmt = DB:prepare([[
-    SELECT * FROM VerifierSegments 
-    WHERE proof_id = :pid
-  ]])
-  
-  if not stmt then
-    print("Failed to prepare statement: " .. DB:errmsg())
-    return {}, "Failed to prepare statement: " .. DB:errmsg()
-  end
-  
-  local ok = false
-  ok = pcall(function()
-    stmt:bind_names({pid = proofId})
-  end)
-  
-  if not ok then
-    print("Failed to bind parameters")
-    return {}, "Failed to bind parameters"
-  end
-  
-  local rows = dbUtils.queryMany(stmt)
-  local segments: {VerifierSegment} = {}
-  
-  for _, row in ipairs(rows) do
-    local segment: VerifierSegment = {
-      segment_id = tostring(row.segment_id),
-      proof_id = tostring(row.proof_id),
-      verifier_id = row.verifier_id and tostring(row.verifier_id) or "",
-      segment_data = tostring(row.segment_data),
-      status = tostring(row.status),
-      timestamp = tonumber(row.timestamp) or 0,
-      result = row.result and tostring(row.result) or ""
-    }
-    table.insert(segments, segment)
-  end
-  
-  return segments, ""
-end
-
 -- Process VDF proofs
 function verifierManager.processProof(requestId: string, input: string, modulus: string, proofJson: string, providerId: string, modExpectedOutput: string): boolean, string  
   -- First decode the proofJson string since it's already JSON encoded
@@ -452,9 +406,9 @@ function verifierManager.processProof(requestId: string, input: string, modulus:
   local outputVerifierId = availableVerifiers[1]
   table.remove(availableVerifiers, 1)
 
-  local assigned, assignErr = verifierManager.assignSegment(outputVerifierId.process_id, outputSegmentId)
-  if not assigned then
-    print("Failed to assign segment: " .. assignErr)
+  local outputAssigned, outputAssignErr = verifierManager.assignSegment(outputVerifierId.process_id, outputSegmentId)
+  if not outputAssigned then
+    print("Failed to assign segment: " .. outputAssignErr)
   else
     local outputSegmentInput = proofArray[10]
     local segmentExpectedOutput = modExpectedOutput

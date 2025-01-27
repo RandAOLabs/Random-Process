@@ -12,7 +12,7 @@ Cost = 100
 
 TokenTest = "7enZBOhWsyU3A5oCt8HtMNNPHSxXYJVTlOGOetR9IDw"
 WrappedAR = "xU9zFkq3X2ZQ6olwNVvr1vUWIjc3kXTWr7xKQD6dh10"
-WrappedETH = ""
+WrappedETH = "0x0000000000000000000000000000000000000000"
 TokenInUse = TokenTest
 
 Decimals = 18
@@ -28,6 +28,20 @@ StakeTokens = {
    },
    [WrappedETH] = {
       amount = 100 * 10 ^ Decimals,
+   },
+}
+
+OverridePeriod = 50000
+
+ActiveRequests = {
+   activeChallengeRequests = {
+      request_ids = {},
+   },
+   activeOutputRequests = {
+      request_ids = {},
+   },
+   activeVerificationRequests = {
+      request_ids = {},
    },
 }
 

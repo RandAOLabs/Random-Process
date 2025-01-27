@@ -12,7 +12,7 @@ global Cost: number = 100
 
 global TokenTest: string = "7enZBOhWsyU3A5oCt8HtMNNPHSxXYJVTlOGOetR9IDw"
 global WrappedAR: string = "xU9zFkq3X2ZQ6olwNVvr1vUWIjc3kXTWr7xKQD6dh10"
-global WrappedETH: string = ""
+global WrappedETH: string = "0x0000000000000000000000000000000000000000"
 global TokenInUse: string = TokenTest
 
 global Decimals: integer = 18
@@ -28,6 +28,20 @@ global StakeTokens = {
     },
     [WrappedETH] = {
         amount  = 100 * 10^Decimals
+    }
+}
+
+global OverridePeriod: integer = 50000 -- 50 seconds
+
+global ActiveRequests = {
+    activeChallengeRequests = {
+        request_ids = {}
+    },
+    activeOutputRequests = {
+        request_ids = {}
+    },
+    activeVerificationRequests = {
+        request_ids = {}
     }
 }
 
