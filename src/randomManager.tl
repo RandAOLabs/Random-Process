@@ -399,6 +399,7 @@ function randomManager.createRandomRequest(userId: string, providers: string, ca
 
   -- Decode providers JSON
   local providerList = json.decode(providers) as ProviderList
+  
   local staked = true
 
   for _, providerId in ipairs(providerList.provider_ids) do

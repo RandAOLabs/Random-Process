@@ -219,7 +219,7 @@ global function getProviderStakeHandler(msg: Message): boolean
   local providerId = data.providerId
   local stake, err = stakingManager.getProviderStake(providerId)
   if err == "" then
-    ao.send(sendResponse(msg.From, "geted Provider Stake", stake))
+    ao.send(sendResponse(msg.From, "Get-Provider-Stake-Response", stake))
     return true
   else
     ao.send(sendResponse(msg.From, "Error", {message = "Failed to get provider stake: " .. err}))
@@ -542,8 +542,9 @@ global function cronTickHandler(_msg: Message): boolean
               randomManager.rerequestRandom(request_id)
             elseif category == "activeOutputRequests" then
             -- Move to cracking pool
-            randomManager.updateRandomRequestStatus(request_id, Status[1])
-            -- TODO
+            randomManager.updateRandomRequestStatus(request_id, Status[4])
+            ActiveRequests.activeOutputRequests.request_ids[request_id] = nil
+            RequestsToCrack[request_id] = true
             elseif category == "activeVerificationRequests" then
             -- Rerequest random from approved providers
               randomManager.rerequestRandom(request_id)

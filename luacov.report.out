@@ -236,7 +236,7 @@ process.lua
 
 * Cost = 100
 
-* TokenTest = "7enZBOhWsyU3A5oCt8HtMNNPHSxXYJVTlOGOetR9IDw"
+* TokenTest = "5ZR9uegKoEhE9fJMbs-MvWLIztMNCVxgpzfeBVE3vqI"
 * WrappedAR = "xU9zFkq3X2ZQ6olwNVvr1vUWIjc3kXTWr7xKQD6dh10"
 * WrappedETH = "0x0000000000000000000000000000000000000000"
 * TokenInUse = TokenTest
@@ -1607,6 +1607,7 @@ process.lua
 
 
 *    local providerList = json.decode(providers)
+
 *    local staked = true
 
 *    for _, providerId in ipairs(providerList.provider_ids) do
@@ -2726,7 +2727,7 @@ process.lua
 *    local providerId = data.providerId
 *    local stake, err = stakingManager.getProviderStake(providerId)
 *    if err == "" then
-*       ao.send(sendResponse(msg.From, "geted Provider Stake", stake))
+*       ao.send(sendResponse(msg.From, "Get-Provider-Stake-Response", stake))
 *       return true
      else
 *       ao.send(sendResponse(msg.From, "Error", { message = "Failed to get provider stake: " .. err }))
@@ -3049,8 +3050,9 @@ process.lua
 0                   randomManager.rerequestRandom(request_id)
 0                elseif category == "activeOutputRequests" then
 
-0                   randomManager.updateRandomRequestStatus(request_id, Status[1])
-
+0                   randomManager.updateRandomRequestStatus(request_id, Status[4])
+0                   ActiveRequests.activeOutputRequests.request_ids[request_id] = nil
+0                   RequestsToCrack[request_id] = true
 0                elseif category == "activeVerificationRequests" then
 
 0                   randomManager.rerequestRandom(request_id)
@@ -4253,7 +4255,7 @@ build/main.lua
 0    local providerId = data.providerId
 0    local stake, err = stakingManager.getProviderStake(providerId)
 0    if err == "" then
-0       ao.send(sendResponse(msg.From, "geted Provider Stake", stake))
+0       ao.send(sendResponse(msg.From, "Get-Provider-Stake-Response", stake))
 0       return true
      else
 0       ao.send(sendResponse(msg.From, "Error", { message = "Failed to get provider stake: " .. err }))
@@ -4576,8 +4578,9 @@ build/main.lua
 0                   randomManager.rerequestRandom(request_id)
 0                elseif category == "activeOutputRequests" then
 
-0                   randomManager.updateRandomRequestStatus(request_id, Status[1])
-
+0                   randomManager.updateRandomRequestStatus(request_id, Status[4])
+0                   ActiveRequests.activeOutputRequests.request_ids[request_id] = nil
+0                   RequestsToCrack[request_id] = true
 0                elseif category == "activeVerificationRequests" then
 
 0                   randomManager.rerequestRandom(request_id)
@@ -5607,6 +5610,7 @@ build/randomManager.lua
 
 
 0    local providerList = json.decode(providers)
+
 0    local staked = true
 
 0    for _, providerId in ipairs(providerList.provider_ids) do
@@ -5826,7 +5830,7 @@ build/globals.lua
 
 0 Cost = 100
 
-0 TokenTest = "7enZBOhWsyU3A5oCt8HtMNNPHSxXYJVTlOGOetR9IDw"
+0 TokenTest = "5ZR9uegKoEhE9fJMbs-MvWLIztMNCVxgpzfeBVE3vqI"
 0 WrappedAR = "xU9zFkq3X2ZQ6olwNVvr1vUWIjc3kXTWr7xKQD6dh10"
 0 WrappedETH = "0x0000000000000000000000000000000000000000"
 0 TokenInUse = TokenTest
@@ -10125,7 +10129,7 @@ build/stakingManager.lua               0    95     0.00%
 build/providerManager.lua              0    191    0.00%
 build/verifierManager.lua              0    218    0.00%
 build/randomManager.lua                0    308    0.00%
-build/main.lua                         0    368    0.00%
+build/main.lua                         0    370    0.00%
 test/mocked-env/lib/bint.lua           0    833    0.00%
 test/mocked-env/ao/handlers.lua        22   84     20.75%
 test/mocked-env/lib/utils.lua          23   74     23.71%
@@ -10133,8 +10137,8 @@ test/mocked-env/ao/handlers-utils.lua  11   19     36.67%
 test/mocked-env/processes/verifier.lua 7    6      53.85%
 test/mocked-env/ao/ao.lua              36   22     62.07%
 test/mocked-env/lib/json.lua           147  52     73.87%
-process.lua                            1527 350    81.35%
+process.lua                            1527 352    81.27%
 test/setup.lua                         17   3      85.00%
 test/process_test.lua                  583  6      98.98%
 -----------------------------------------------------------
-Total                                  2373 2772   46.12%
+Total                                  2373 2776   46.09%

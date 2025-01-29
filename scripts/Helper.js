@@ -15,11 +15,11 @@ let providers = {
 }
 
 const requestInputs     = 1
-const requestId         = "f03a73e5-5c18-4b3e-a333-7ad86061a2b3"
+const requestId         = "9c9dd50b-af70-4417-8c01-feab9ce0b737"
 const requestIds = [
     requestId
 ]
-const callbackId        = "e894ec35-057b-4db1-a8bc-2bfd75ebbdac"
+const callbackId        = "1a56419f-95cd-441a-bb91-7b807311ad84"
 const input             = "0xf8e3b0de92842f97fb47b393f45187f2"
 const modulus           = "0x40e77a538238e49424de6139311eaee7d7f1e31a0e87b2051e1f94bb4b0ad2d"
 const output            = "13497708056"
@@ -541,9 +541,9 @@ async function stake() {
     return id;
 }
 
-async function viewStake() {
+async function getStake() {
     let tags = [
-        { name: "Action", value: "View-Provider-Stake" },
+        { name: "Action", value: "Get-Provider-Stake" },
     ]
 
     let id = await message({
@@ -705,7 +705,7 @@ async function main() {
         }
     } else if (inputArg == 15) {
         try {
-            await viewStake()
+            await getStake()
         } catch (err) {
             console.error("Error reading process IDs or sending messages:", err);
         }

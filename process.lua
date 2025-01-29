@@ -211,7 +211,7 @@ Admin = "KLzn6IzhmML7M-XXFNSI29GVNd3xSHtH26zuKa1TWn8"
 
 Cost = 100
 
-TokenTest = "7enZBOhWsyU3A5oCt8HtMNNPHSxXYJVTlOGOetR9IDw"
+TokenTest = "5ZR9uegKoEhE9fJMbs-MvWLIztMNCVxgpzfeBVE3vqI"
 WrappedAR = "xU9zFkq3X2ZQ6olwNVvr1vUWIjc3kXTWr7xKQD6dh10"
 WrappedETH = "0x0000000000000000000000000000000000000000"
 TokenInUse = TokenTest
@@ -1582,6 +1582,7 @@ function randomManager.createRandomRequest(userId, providers, callbackId, reques
 
 
    local providerList = json.decode(providers)
+
    local staked = true
 
    for _, providerId in ipairs(providerList.provider_ids) do
@@ -2701,7 +2702,7 @@ function getProviderStakeHandler(msg)
    local providerId = data.providerId
    local stake, err = stakingManager.getProviderStake(providerId)
    if err == "" then
-      ao.send(sendResponse(msg.From, "geted Provider Stake", stake))
+      ao.send(sendResponse(msg.From, "Get-Provider-Stake-Response", stake))
       return true
    else
       ao.send(sendResponse(msg.From, "Error", { message = "Failed to get provider stake: " .. err }))
@@ -3024,8 +3025,9 @@ function cronTickHandler(_msg)
                   randomManager.rerequestRandom(request_id)
                elseif category == "activeOutputRequests" then
 
-                  randomManager.updateRandomRequestStatus(request_id, Status[1])
-
+                  randomManager.updateRandomRequestStatus(request_id, Status[4])
+                  ActiveRequests.activeOutputRequests.request_ids[request_id] = nil
+                  RequestsToCrack[request_id] = true
                elseif category == "activeVerificationRequests" then
 
                   randomManager.rerequestRandom(request_id)
