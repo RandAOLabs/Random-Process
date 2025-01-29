@@ -212,17 +212,17 @@ global function getProviderHandler(msg: Message): boolean
   end
 end
 
--- Handler for viewing a providers stake
+-- Handler for geting a providers stake
 global function getProviderStakeHandler(msg: Message): boolean
   print("entered getProviderStake")
   local data = (json.decode(msg.Data as string) as GetProviderData)
   local providerId = data.providerId
-  local stake, err = stakingManager.viewProviderStake(providerId)
+  local stake, err = stakingManager.getProviderStake(providerId)
   if err == "" then
-    ao.send(sendResponse(msg.From, "Viewed Provider Stake", stake))
+    ao.send(sendResponse(msg.From, "geted Provider Stake", stake))
     return true
   else
-    ao.send(sendResponse(msg.From, "Error", {message = "Failed to view provider stake: " .. err}))
+    ao.send(sendResponse(msg.From, "Error", {message = "Failed to get provider stake: " .. err}))
     return false
   end
 end
@@ -516,7 +516,52 @@ global function getRandomRequestViaCallbackIdHandler(msg: Message): boolean
   return true
 end
 
+-- Handler for getting active requests
+global function getActiveRequestsHandler(msg: Message): boolean
+  print("entered getActiveRequests")
+  sendResponse(msg.From, "Get-Active-Requests", ActiveRequests)
+end
 
+-- Handler for cron ticks that facilitate cracking and slashing
+global function cronTickHandler(_msg: Message): boolean
+  print("entered cronTick")
+  
+  -- Loop through each category of requests
+  for category, data in pairs(ActiveRequests as {string: RequestList}) do
+    -- Check if request_ids is a valid table (which it should be)
+    local request_ids = data.request_ids as {string: integer}
+    if type(request_ids) == "table" then
+        -- Loop through the request_ids using pairs (since it's a dictionary-like table)
+        for request_id, timestamp in pairs(request_ids) do
+          -- Do something with each request_id and timestamp
+          print("Category: " .. category .. ", Request ID: " .. request_id .. ", Timestamp: " .. timestamp)          
+          if timestamp + OverridePeriod < os.time() then
+            print("Request ID: " .. request_id .. " in category: " .. category .. " is overdue.")
+            if category == "activeChallengeRequests" then
+            -- Rerequest random from approved providers
+              randomManager.rerequestRandom(request_id)
+            elseif category == "activeOutputRequests" then
+            -- Move to cracking pool
+            randomManager.updateRandomRequestStatus(request_id, Status[1])
+            -- TODO
+            elseif category == "activeVerificationRequests" then
+            -- Rerequest random from approved providers
+              randomManager.rerequestRandom(request_id)
+            end
+          end
+        end
+    else
+        print("No valid request_ids in category: " .. category)
+    end
+  end
+  return true
+end
+
+global function getRequestsToCrackHandler(msg: Message): boolean
+  print("entered getRequestsToCrack")
+  sendResponse(msg.From, "Get-Requests-To-Crack", RequestsToCrack)
+  return true
+end
 
 -- Add handlers
 Handlers.add('info', 
@@ -538,6 +583,10 @@ wrapHandler(getProviderRandomBalanceHandler))
 Handlers.add('getProviderStake',  
 Handlers.utils.hasMatchingTag('Action', 'Get-Provider-Stake'), 
 wrapHandler(getProviderStakeHandler))
+
+Handlers.add('unstake', 
+Handlers.utils.hasMatchingTag('Action', 'Unstake'), 
+wrapHandler(unstakeHandler))
 
 Handlers.add('getProvider',
 Handlers.utils.hasMatchingTag('Action', 'Get-Provider'),
@@ -567,10 +616,6 @@ Handlers.add('creditNotice',
 Handlers.utils.hasMatchingTag('Action', 'Credit-Notice'), 
 wrapHandler(creditNoticeHandler))
 
-Handlers.add('unstake', 
-Handlers.utils.hasMatchingTag('Action', 'Unstake'), 
-wrapHandler(unstakeHandler))
-
 Handlers.add('getRandomRequests', 
 Handlers.utils.hasMatchingTag('Action', 'Get-Random-Requests'), 
 wrapHandler(getRandomRequestsHandler))
@@ -578,6 +623,18 @@ wrapHandler(getRandomRequestsHandler))
 Handlers.add('getRandomRequestViaCallbackId', 
 Handlers.utils.hasMatchingTag('Action', 'Get-Random-Request-Via-Callback-Id'), 
 wrapHandler(getRandomRequestViaCallbackIdHandler))
+
+Handlers.add('getActiveRequests', 
+Handlers.utils.hasMatchingTag('Action', 'Get-Active-Requests'), 
+wrapHandler(getActiveRequestsHandler))
+
+Handlers.add('getRequestsToCrack', 
+Handlers.utils.hasMatchingTag('Action', 'Get-Requests-To-Crack'), 
+wrapHandler(getRequestsToCrackHandler))
+
+Handlers.add('cronTick', 
+Handlers.utils.hasMatchingTag('Action', 'Cron'), 
+wrapHandler(cronTickHandler))
 
 -- Logging
 print("RandAO Process Initialized")

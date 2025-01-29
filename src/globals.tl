@@ -45,6 +45,10 @@ global ActiveRequests = {
     }
 }
 
+global RequestsToCrack = {}
+
+global FallbackProviders = "{\"provider_ids\":[\"XUo8jZtUDBFLtp5okR12oLrqIZ4ewNlTpqnqmriihJE\",\"c8Iq4yunDnsJWGSz_wYwQU--O9qeODKHiRdUkQkW2p8\"]}" -- "{\"provider_ids\":[\"XUo8jZtUDBFLtp5okR12oLrqIZ4ewNlTpqnqmriihJE\",\"c8Iq4yunDnsJWGSz_wYwQU--O9qeODKHiRdUkQkW2p8\"]}"
+
 global SuccessMessage: string = "200: Success"
 
 global Status = {

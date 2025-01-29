@@ -467,6 +467,11 @@ describe("requestRandom", function()
     assert(success, "Failure: failed to create random request")
   end)
 
+  it("should be able to view random request in activeRequests", function()
+    assert(ActiveRequests.activeChallengeRequests.request_ids["d6cce35c-487a-458f-bab2-9032c2621f38"], "Failure: random request not found in activeRequests")
+    cronTickHandler(nil) -- TODO: remove
+  end)
+
   it("should not be able to request random from no providers with correct balance and token", function()
     local userId = "Requester1"
     local providers = json.encode({provider_ids = {}})
@@ -650,6 +655,11 @@ describe("postVDFChallenge", function()
     assert(success, "Failure: unable to post VDF Challenge from requested provider")
   end)
 
+  it("should be able to view random request in activeRequests outputs after challenges have been posted", function()
+    assert(ActiveRequests.activeOutputRequests.request_ids["d6cce35c-487a-458f-bab2-9032c2621f38"], "Failure: random request not found in activeRequests")
+    cronTickHandler(nil) -- TODO: remove
+  end)
+
 end)
 
 describe("postVDFOutputAndProof", function()
@@ -776,6 +786,10 @@ describe("postVDFOutputAndProof", function()
     local success = postVDFOutputAndProofHandler(message)
     assert(success, "Failure: unable to post VDF output and proof from the second requested provider")
   end)
+
+  it("should be able to view random request in activeVerificationRequests", function()
+    assert(ActiveRequests.activeVerificationRequests.request_ids["d6cce35c-487a-458f-bab2-9032c2621f38"], "Failure: random request not found in activeRequests")
+  end)
 end)
 
 describe("getRandomRequests & getRandomRequestViaCallbackId", function()
@@ -826,7 +840,6 @@ describe("getRandomRequests & getRandomRequestViaCallbackId", function()
       Action = "Get-Random-Request-Via-Callback-Id",
       Data = json.encode({callbackId = callbackId}),
       reply = function (msg)
-        -- print("replied: " .. json.encode(msg))
       end
     }
 
@@ -845,11 +858,32 @@ describe("getRandomRequests & getRandomRequestViaCallbackId", function()
       Action = "Get-Random-Request-Via-Callback-Id",
       Data = json.encode({callbackId = callbackId}),
       reply = function (msg)
-        -- print("replied: " .. json.encode(msg))
       end
     }
 
     local success = getRandomRequestViaCallbackIdHandler(message)
     assert(success, "Failure: errors out on invalid callbackId")
+    cronTickHandler(nil) 
   end)
+
+  it("should not return a random request for a valid callbackId thats request has failed",
+  function()
+    local callbackId = "xxxx-xxxx-4xxx-xxxx"
+
+    local message = {
+      Target = ao.id,
+      From = "Provider1",
+      Action = "Get-Random-Request-Via-Callback-Id",
+      Data = json.encode({callbackId = callbackId}),
+      reply = function (msg)
+      end
+    }
+
+    local request, err = randomManager.getRandomRequestViaCallbackId(callbackId)
+    assert(request.request_id == "d6cce35c-487a-458f-bab2-9032c2621f38", "Failure: unable to get random request for a valid callbackId")
+    randomManager.rerequestRandom(request.request_id)
+    _, err = randomManager.getRandomRequestViaCallbackId(callbackId)
+    assert(err == "RandomRequest not found", "Failure: able to get random request for a valid callbackId that has failed")
+  end)
+
 end)

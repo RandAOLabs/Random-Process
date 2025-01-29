@@ -56,8 +56,8 @@ function stakingManager.getStatus(userId: string): string, string
   return decodedStake.status, ""
 end
 
-function stakingManager.viewProviderStake(userId: string): string, string
-  print("entered stakingManager.viewProviderStake")
+function stakingManager.getProviderStake(userId: string): string, string
+  print("entered stakingManager.getProviderStake")
 
   local provider, err = providerManager.getProvider(userId)
   

@@ -45,6 +45,10 @@ ActiveRequests = {
    },
 }
 
+RequestsToCrack = {}
+
+FallbackProviders = "{\"provider_ids\":[\"XUo8jZtUDBFLtp5okR12oLrqIZ4ewNlTpqnqmriihJE\",\"c8Iq4yunDnsJWGSz_wYwQU--O9qeODKHiRdUkQkW2p8\"]}"
+
 SuccessMessage = "200: Success"
 
 Status = {

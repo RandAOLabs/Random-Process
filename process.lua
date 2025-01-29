@@ -246,6 +246,10 @@ ActiveRequests = {
    },
 }
 
+RequestsToCrack = {}
+
+FallbackProviders = "{\"provider_ids\":[\"XUo8jZtUDBFLtp5okR12oLrqIZ4ewNlTpqnqmriihJE\",\"c8Iq4yunDnsJWGSz_wYwQU--O9qeODKHiRdUkQkW2p8\"]}"
+
 SuccessMessage = "200: Success"
 
 Status = {
@@ -1514,7 +1518,7 @@ function randomManager.decrementRequestedInputs(requestId)
             randomManager.updateRandomRequestStatus(requestId, Status[2])
 
             ActiveRequests.activeChallengeRequests.request_ids[requestId] = nil
-            ActiveRequests.activeOutputRequests.request_ids[requestId] = true
+            ActiveRequests.activeOutputRequests.request_ids[requestId] = os.time()
 
 
          elseif status == Status[2] then
@@ -1525,7 +1529,7 @@ function randomManager.decrementRequestedInputs(requestId)
             randomManager.updateRandomRequestStatus(requestId, Status[3])
 
             ActiveRequests.activeOutputRequests.request_ids[requestId] = nil
-            ActiveRequests.activeVerificationRequests.request_ids[requestId] = true
+            ActiveRequests.activeVerificationRequests.request_ids[requestId] = os.time()
 
 
          elseif status == Status[3] then
@@ -1547,7 +1551,7 @@ end
 function randomManager.getRandomRequestViaCallbackId(callbackId)
    print("entered randomManager.getRandomRequestViaCallbackId")
 
-   local stmt = DB:prepare("SELECT * FROM RandomRequests WHERE callback_id = :callback_id")
+   local stmt = DB:prepare("SELECT * FROM RandomRequests WHERE callback_id = :callback_id AND status != 'FAILED'")
    stmt:bind_names({ callback_id = callbackId })
    local result = dbUtils.queryOne(stmt)
    if result then
@@ -1618,7 +1622,7 @@ function randomManager.createRandomRequest(userId, providers, callbackId, reques
    end
 
    providerManager.pushActiveRequests(providerList.provider_ids, requestId, true)
-   ActiveRequests.activeChallengeRequests.request_ids[requestId] = true
+   ActiveRequests.activeChallengeRequests.request_ids[requestId] = timestamp
 
    print("Preparing SQL statement for random request creation")
    local stmt = DB:prepare([[
@@ -1655,6 +1659,27 @@ function randomManager.createRandomRequest(userId, providers, callbackId, reques
    end
 
    return execute_ok, execute_err
+end
+
+function randomManager.rerequestRandom(requestId)
+   print("entered randomManager.rerequestRandom")
+
+   local providerList = FallbackProviders
+
+   local initalRequest, requestErr = randomManager.getRandomRequest(requestId)
+   if requestErr ~= "" then
+      return false, requestErr
+   end
+
+
+   local success, err = randomManager.createRandomRequest(initalRequest.requester, json.encode(providerList), initalRequest.callback_id, "")
+   if not success then
+      return false, err
+   end
+
+   randomManager.updateRandomRequestStatus(requestId, Status[6])
+   ActiveRequests.activeChallengeRequests.request_ids[requestId] = nil
+   return true, ""
 end
 
 function randomManager.postVDFChallenge(userId, requestId, inputValue, modulusValue)
@@ -1824,8 +1849,8 @@ function stakingManager.getStatus(userId)
    return decodedStake.status, ""
 end
 
-function stakingManager.viewProviderStake(userId)
-   print("entered stakingManager.viewProviderStake")
+function stakingManager.getProviderStake(userId)
+   print("entered stakingManager.getProviderStake")
 
    local provider, err = providerManager.getProvider(userId)
 
@@ -2455,7 +2480,7 @@ return verifierManager
 end
 end
 
-local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local debug = _tl_compat and _tl_compat.debug or debug; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local math = _tl_compat and _tl_compat.math or math; local pcall = _tl_compat and _tl_compat.pcall or pcall; local table = _tl_compat and _tl_compat.table or table; local xpcall = _tl_compat and _tl_compat.xpcall or xpcall
+local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local debug = _tl_compat and _tl_compat.debug or debug; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local math = _tl_compat and _tl_compat.math or math; local os = _tl_compat and _tl_compat.os or os; local pairs = _tl_compat and _tl_compat.pairs or pairs; local pcall = _tl_compat and _tl_compat.pcall or pcall; local table = _tl_compat and _tl_compat.table or table; local xpcall = _tl_compat and _tl_compat.xpcall or xpcall
 require("globals")
 local json = require("json")
 local database = require("database")
@@ -2674,12 +2699,12 @@ function getProviderStakeHandler(msg)
    print("entered getProviderStake")
    local data = (json.decode(msg.Data))
    local providerId = data.providerId
-   local stake, err = stakingManager.viewProviderStake(providerId)
+   local stake, err = stakingManager.getProviderStake(providerId)
    if err == "" then
-      ao.send(sendResponse(msg.From, "Viewed Provider Stake", stake))
+      ao.send(sendResponse(msg.From, "geted Provider Stake", stake))
       return true
    else
-      ao.send(sendResponse(msg.From, "Error", { message = "Failed to view provider stake: " .. err }))
+      ao.send(sendResponse(msg.From, "Error", { message = "Failed to get provider stake: " .. err }))
       return false
    end
 end
@@ -2974,6 +2999,51 @@ function getRandomRequestViaCallbackIdHandler(msg)
 end
 
 
+function getActiveRequestsHandler(msg)
+   print("entered getActiveRequests")
+   sendResponse(msg.From, "Get-Active-Requests", ActiveRequests)
+end
+
+
+function cronTickHandler(_msg)
+   print("entered cronTick")
+
+
+   for category, data in pairs(ActiveRequests) do
+
+      local request_ids = data.request_ids
+      if type(request_ids) == "table" then
+
+         for request_id, timestamp in pairs(request_ids) do
+
+            print("Category: " .. category .. ", Request ID: " .. request_id .. ", Timestamp: " .. timestamp)
+            if timestamp + OverridePeriod < os.time() then
+               print("Request ID: " .. request_id .. " in category: " .. category .. " is overdue.")
+               if category == "activeChallengeRequests" then
+
+                  randomManager.rerequestRandom(request_id)
+               elseif category == "activeOutputRequests" then
+
+                  randomManager.updateRandomRequestStatus(request_id, Status[1])
+
+               elseif category == "activeVerificationRequests" then
+
+                  randomManager.rerequestRandom(request_id)
+               end
+            end
+         end
+      else
+         print("No valid request_ids in category: " .. category)
+      end
+   end
+   return true
+end
+
+function getRequestsToCrackHandler(msg)
+   print("entered getRequestsToCrack")
+   sendResponse(msg.From, "Get-Requests-To-Crack", RequestsToCrack)
+   return true
+end
 
 
 Handlers.add('info',
@@ -2995,6 +3065,10 @@ wrapHandler(getProviderRandomBalanceHandler))
 Handlers.add('getProviderStake',
 Handlers.utils.hasMatchingTag('Action', 'Get-Provider-Stake'),
 wrapHandler(getProviderStakeHandler))
+
+Handlers.add('unstake',
+Handlers.utils.hasMatchingTag('Action', 'Unstake'),
+wrapHandler(unstakeHandler))
 
 Handlers.add('getProvider',
 Handlers.utils.hasMatchingTag('Action', 'Get-Provider'),
@@ -3024,10 +3098,6 @@ Handlers.add('creditNotice',
 Handlers.utils.hasMatchingTag('Action', 'Credit-Notice'),
 wrapHandler(creditNoticeHandler))
 
-Handlers.add('unstake',
-Handlers.utils.hasMatchingTag('Action', 'Unstake'),
-wrapHandler(unstakeHandler))
-
 Handlers.add('getRandomRequests',
 Handlers.utils.hasMatchingTag('Action', 'Get-Random-Requests'),
 wrapHandler(getRandomRequestsHandler))
@@ -3035,6 +3105,18 @@ wrapHandler(getRandomRequestsHandler))
 Handlers.add('getRandomRequestViaCallbackId',
 Handlers.utils.hasMatchingTag('Action', 'Get-Random-Request-Via-Callback-Id'),
 wrapHandler(getRandomRequestViaCallbackIdHandler))
+
+Handlers.add('getActiveRequests',
+Handlers.utils.hasMatchingTag('Action', 'Get-Active-Requests'),
+wrapHandler(getActiveRequestsHandler))
+
+Handlers.add('getRequestsToCrack',
+Handlers.utils.hasMatchingTag('Action', 'Get-Requests-To-Crack'),
+wrapHandler(getRequestsToCrackHandler))
+
+Handlers.add('cronTick',
+Handlers.utils.hasMatchingTag('Action', 'Cron'),
+wrapHandler(cronTickHandler))
 
 
 print("RandAO Process Initialized")

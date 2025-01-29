@@ -335,7 +335,7 @@ function randomManager.decrementRequestedInputs(requestId: string): boolean, str
         randomManager.updateRandomRequestStatus(requestId, Status[2])
 
         ActiveRequests.activeChallengeRequests.request_ids[requestId] = nil
-        ActiveRequests.activeOutputRequests.request_ids[requestId] = true
+        ActiveRequests.activeOutputRequests.request_ids[requestId] = os.time()
 
       -- Finished collecting outputs update requested inputs start verifying
       elseif status == Status[2] then
@@ -346,7 +346,7 @@ function randomManager.decrementRequestedInputs(requestId: string): boolean, str
         randomManager.updateRandomRequestStatus(requestId, Status[3])
 
         ActiveRequests.activeOutputRequests.request_ids[requestId] = nil
-        ActiveRequests.activeVerificationRequests.request_ids[requestId] = true
+        ActiveRequests.activeVerificationRequests.request_ids[requestId] = os.time()
 
       -- Finished verifying send random response
       elseif status == Status[3] then
@@ -368,7 +368,7 @@ end
 function randomManager.getRandomRequestViaCallbackId(callbackId: string): RandomRequest, string
   print("entered randomManager.getRandomRequestViaCallbackId")
 
-  local stmt = DB:prepare("SELECT * FROM RandomRequests WHERE callback_id = :callback_id")
+  local stmt = DB:prepare("SELECT * FROM RandomRequests WHERE callback_id = :callback_id AND status != 'FAILED'")
   stmt:bind_names({callback_id = callbackId})  
   local result = dbUtils.queryOne(stmt)
   if result then
@@ -439,7 +439,7 @@ function randomManager.createRandomRequest(userId: string, providers: string, ca
   end
 
   providerManager.pushActiveRequests(providerList.provider_ids, requestId, true)
-  ActiveRequests.activeChallengeRequests.request_ids[requestId] = true
+  ActiveRequests.activeChallengeRequests.request_ids[requestId] = timestamp
 
   print("Preparing SQL statement for random request creation")
   local stmt = DB:prepare([[
@@ -476,6 +476,27 @@ function randomManager.createRandomRequest(userId: string, providers: string, ca
   end
 
   return execute_ok, execute_err
+end
+
+function randomManager.rerequestRandom(requestId: string): boolean, string
+  print("entered randomManager.rerequestRandom")
+
+  local providerList = FallbackProviders
+
+  local initalRequest, requestErr = randomManager.getRandomRequest(requestId)
+  if requestErr ~= "" then
+    return false, requestErr
+  end
+    
+  -- AFTER LUNCH TODO VERIFY BELOW THEN DECONFLICT WITH CALLBACKIDS
+  local success, err = randomManager.createRandomRequest(initalRequest.requester, json.encode(providerList), initalRequest.callback_id, "")
+  if not success then
+    return false, err
+  end
+
+  randomManager.updateRandomRequestStatus(requestId, Status[6])
+  ActiveRequests.activeChallengeRequests.request_ids[requestId] = nil
+  return true, ""
 end
 
 function randomManager.postVDFChallenge(userId: string, requestId: string, inputValue: string, modulusValue: string): boolean, string

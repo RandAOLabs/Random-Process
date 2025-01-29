@@ -271,6 +271,10 @@ process.lua
 *    },
 * }
 
+* RequestsToCrack = {}
+
+* FallbackProviders = "{\"provider_ids\":[\"XUo8jZtUDBFLtp5okR12oLrqIZ4ewNlTpqnqmriihJE\",\"c8Iq4yunDnsJWGSz_wYwQU--O9qeODKHiRdUkQkW2p8\"]}"
+
 * SuccessMessage = "200: Success"
 
 * Status = {
@@ -1539,7 +1543,7 @@ process.lua
 *             randomManager.updateRandomRequestStatus(requestId, Status[2])
 
 *             ActiveRequests.activeChallengeRequests.request_ids[requestId] = nil
-*             ActiveRequests.activeOutputRequests.request_ids[requestId] = true
+*             ActiveRequests.activeOutputRequests.request_ids[requestId] = os.time()
 
 
 *          elseif status == Status[2] then
@@ -1550,7 +1554,7 @@ process.lua
 *             randomManager.updateRandomRequestStatus(requestId, Status[3])
 
 *             ActiveRequests.activeOutputRequests.request_ids[requestId] = nil
-*             ActiveRequests.activeVerificationRequests.request_ids[requestId] = true
+*             ActiveRequests.activeVerificationRequests.request_ids[requestId] = os.time()
 
 
 0          elseif status == Status[3] then
@@ -1572,7 +1576,7 @@ process.lua
 * function randomManager.getRandomRequestViaCallbackId(callbackId)
 *    print("entered randomManager.getRandomRequestViaCallbackId")
 
-*    local stmt = DB:prepare("SELECT * FROM RandomRequests WHERE callback_id = :callback_id")
+*    local stmt = DB:prepare("SELECT * FROM RandomRequests WHERE callback_id = :callback_id AND status != 'FAILED'")
 *    stmt:bind_names({ callback_id = callbackId })
 *    local result = dbUtils.queryOne(stmt)
 *    if result then
@@ -1643,7 +1647,7 @@ process.lua
      end
 
 *    providerManager.pushActiveRequests(providerList.provider_ids, requestId, true)
-*    ActiveRequests.activeChallengeRequests.request_ids[requestId] = true
+*    ActiveRequests.activeChallengeRequests.request_ids[requestId] = timestamp
 
 *    print("Preparing SQL statement for random request creation")
 *    local stmt = DB:prepare([[
@@ -1680,6 +1684,27 @@ process.lua
      end
 
 *    return execute_ok, execute_err
+  end
+
+* function randomManager.rerequestRandom(requestId)
+*    print("entered randomManager.rerequestRandom")
+
+*    local providerList = FallbackProviders
+
+*    local initalRequest, requestErr = randomManager.getRandomRequest(requestId)
+*    if requestErr ~= "" then
+0       return false, requestErr
+     end
+
+
+*    local success, err = randomManager.createRandomRequest(initalRequest.requester, json.encode(providerList), initalRequest.callback_id, "")
+0    if not success then
+0       return false, err
+     end
+
+0    randomManager.updateRandomRequestStatus(requestId, Status[6])
+0    ActiveRequests.activeChallengeRequests.request_ids[requestId] = nil
+0    return true, ""
   end
 
 * function randomManager.postVDFChallenge(userId, requestId, inputValue, modulusValue)
@@ -1849,8 +1874,8 @@ process.lua
 *    return decodedStake.status, ""
   end
 
-* function stakingManager.viewProviderStake(userId)
-*    print("entered stakingManager.viewProviderStake")
+* function stakingManager.getProviderStake(userId)
+*    print("entered stakingManager.getProviderStake")
 
 *    local provider, err = providerManager.getProvider(userId)
 
@@ -2480,7 +2505,7 @@ process.lua
   end
   end
 
-* local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local debug = _tl_compat and _tl_compat.debug or debug; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local math = _tl_compat and _tl_compat.math or math; local pcall = _tl_compat and _tl_compat.pcall or pcall; local table = _tl_compat and _tl_compat.table or table; local xpcall = _tl_compat and _tl_compat.xpcall or xpcall
+* local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local debug = _tl_compat and _tl_compat.debug or debug; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local math = _tl_compat and _tl_compat.math or math; local os = _tl_compat and _tl_compat.os or os; local pairs = _tl_compat and _tl_compat.pairs or pairs; local pcall = _tl_compat and _tl_compat.pcall or pcall; local table = _tl_compat and _tl_compat.table or table; local xpcall = _tl_compat and _tl_compat.xpcall or xpcall
 * require("globals")
 * local json = require("json")
 * local database = require("database")
@@ -2699,12 +2724,12 @@ process.lua
 *    print("entered getProviderStake")
 *    local data = (json.decode(msg.Data))
 *    local providerId = data.providerId
-*    local stake, err = stakingManager.viewProviderStake(providerId)
+*    local stake, err = stakingManager.getProviderStake(providerId)
 *    if err == "" then
-*       ao.send(sendResponse(msg.From, "Viewed Provider Stake", stake))
+*       ao.send(sendResponse(msg.From, "geted Provider Stake", stake))
 *       return true
      else
-*       ao.send(sendResponse(msg.From, "Error", { message = "Failed to view provider stake: " .. err }))
+*       ao.send(sendResponse(msg.From, "Error", { message = "Failed to get provider stake: " .. err }))
 *       return false
      end
   end
@@ -2999,6 +3024,51 @@ process.lua
   end
 
 
+* function getActiveRequestsHandler(msg)
+0    print("entered getActiveRequests")
+0    sendResponse(msg.From, "Get-Active-Requests", ActiveRequests)
+  end
+
+
+* function cronTickHandler(_msg)
+*    print("entered cronTick")
+
+
+*    for category, data in pairs(ActiveRequests) do
+
+*       local request_ids = data.request_ids
+*       if type(request_ids) == "table" then
+
+*          for request_id, timestamp in pairs(request_ids) do
+
+*             print("Category: " .. category .. ", Request ID: " .. request_id .. ", Timestamp: " .. timestamp)
+*             if timestamp + OverridePeriod < os.time() then
+0                print("Request ID: " .. request_id .. " in category: " .. category .. " is overdue.")
+0                if category == "activeChallengeRequests" then
+
+0                   randomManager.rerequestRandom(request_id)
+0                elseif category == "activeOutputRequests" then
+
+0                   randomManager.updateRandomRequestStatus(request_id, Status[1])
+
+0                elseif category == "activeVerificationRequests" then
+
+0                   randomManager.rerequestRandom(request_id)
+                 end
+              end
+           end
+        else
+0          print("No valid request_ids in category: " .. category)
+        end
+     end
+*    return true
+  end
+
+* function getRequestsToCrackHandler(msg)
+0    print("entered getRequestsToCrack")
+0    sendResponse(msg.From, "Get-Requests-To-Crack", RequestsToCrack)
+0    return true
+  end
 
 
 * Handlers.add('info',
@@ -3020,6 +3090,10 @@ process.lua
 * Handlers.add('getProviderStake',
 * Handlers.utils.hasMatchingTag('Action', 'Get-Provider-Stake'),
 * wrapHandler(getProviderStakeHandler))
+
+* Handlers.add('unstake',
+* Handlers.utils.hasMatchingTag('Action', 'Unstake'),
+* wrapHandler(unstakeHandler))
 
 * Handlers.add('getProvider',
 * Handlers.utils.hasMatchingTag('Action', 'Get-Provider'),
@@ -3049,10 +3123,6 @@ process.lua
 * Handlers.utils.hasMatchingTag('Action', 'Credit-Notice'),
 * wrapHandler(creditNoticeHandler))
 
-* Handlers.add('unstake',
-* Handlers.utils.hasMatchingTag('Action', 'Unstake'),
-* wrapHandler(unstakeHandler))
-
 * Handlers.add('getRandomRequests',
 * Handlers.utils.hasMatchingTag('Action', 'Get-Random-Requests'),
 * wrapHandler(getRandomRequestsHandler))
@@ -3060,6 +3130,18 @@ process.lua
 * Handlers.add('getRandomRequestViaCallbackId',
 * Handlers.utils.hasMatchingTag('Action', 'Get-Random-Request-Via-Callback-Id'),
 * wrapHandler(getRandomRequestViaCallbackIdHandler))
+
+* Handlers.add('getActiveRequests',
+* Handlers.utils.hasMatchingTag('Action', 'Get-Active-Requests'),
+* wrapHandler(getActiveRequestsHandler))
+
+* Handlers.add('getRequestsToCrack',
+* Handlers.utils.hasMatchingTag('Action', 'Get-Requests-To-Crack'),
+* wrapHandler(getRequestsToCrackHandler))
+
+* Handlers.add('cronTick',
+* Handlers.utils.hasMatchingTag('Action', 'Cron'),
+* wrapHandler(cronTickHandler))
 
 
 * print("RandAO Process Initialized")
@@ -3427,8 +3509,8 @@ build/stakingManager.lua
 0    return decodedStake.status, ""
   end
 
-0 function stakingManager.viewProviderStake(userId)
-0    print("entered stakingManager.viewProviderStake")
+0 function stakingManager.getProviderStake(userId)
+0    print("entered stakingManager.getProviderStake")
 
 0    local provider, err = providerManager.getProvider(userId)
 
@@ -3950,7 +4032,7 @@ build/providerManager.lua
 ==============================================================================
 build/main.lua
 ==============================================================================
-0 local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local debug = _tl_compat and _tl_compat.debug or debug; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local math = _tl_compat and _tl_compat.math or math; local pcall = _tl_compat and _tl_compat.pcall or pcall; local table = _tl_compat and _tl_compat.table or table; local xpcall = _tl_compat and _tl_compat.xpcall or xpcall
+0 local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local debug = _tl_compat and _tl_compat.debug or debug; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local math = _tl_compat and _tl_compat.math or math; local os = _tl_compat and _tl_compat.os or os; local pairs = _tl_compat and _tl_compat.pairs or pairs; local pcall = _tl_compat and _tl_compat.pcall or pcall; local table = _tl_compat and _tl_compat.table or table; local xpcall = _tl_compat and _tl_compat.xpcall or xpcall
 0 require("globals")
 0 local json = require("json")
 0 local database = require("database")
@@ -4169,12 +4251,12 @@ build/main.lua
 0    print("entered getProviderStake")
 0    local data = (json.decode(msg.Data))
 0    local providerId = data.providerId
-0    local stake, err = stakingManager.viewProviderStake(providerId)
+0    local stake, err = stakingManager.getProviderStake(providerId)
 0    if err == "" then
-0       ao.send(sendResponse(msg.From, "Viewed Provider Stake", stake))
+0       ao.send(sendResponse(msg.From, "geted Provider Stake", stake))
 0       return true
      else
-0       ao.send(sendResponse(msg.From, "Error", { message = "Failed to view provider stake: " .. err }))
+0       ao.send(sendResponse(msg.From, "Error", { message = "Failed to get provider stake: " .. err }))
 0       return false
      end
   end
@@ -4469,6 +4551,51 @@ build/main.lua
   end
 
 
+0 function getActiveRequestsHandler(msg)
+0    print("entered getActiveRequests")
+0    sendResponse(msg.From, "Get-Active-Requests", ActiveRequests)
+  end
+
+
+0 function cronTickHandler(_msg)
+0    print("entered cronTick")
+
+
+0    for category, data in pairs(ActiveRequests) do
+
+0       local request_ids = data.request_ids
+0       if type(request_ids) == "table" then
+
+0          for request_id, timestamp in pairs(request_ids) do
+
+0             print("Category: " .. category .. ", Request ID: " .. request_id .. ", Timestamp: " .. timestamp)
+0             if timestamp + OverridePeriod < os.time() then
+0                print("Request ID: " .. request_id .. " in category: " .. category .. " is overdue.")
+0                if category == "activeChallengeRequests" then
+
+0                   randomManager.rerequestRandom(request_id)
+0                elseif category == "activeOutputRequests" then
+
+0                   randomManager.updateRandomRequestStatus(request_id, Status[1])
+
+0                elseif category == "activeVerificationRequests" then
+
+0                   randomManager.rerequestRandom(request_id)
+                 end
+              end
+           end
+        else
+0          print("No valid request_ids in category: " .. category)
+        end
+     end
+0    return true
+  end
+
+0 function getRequestsToCrackHandler(msg)
+0    print("entered getRequestsToCrack")
+0    sendResponse(msg.From, "Get-Requests-To-Crack", RequestsToCrack)
+0    return true
+  end
 
 
 0 Handlers.add('info',
@@ -4490,6 +4617,10 @@ build/main.lua
 0 Handlers.add('getProviderStake',
 0 Handlers.utils.hasMatchingTag('Action', 'Get-Provider-Stake'),
 0 wrapHandler(getProviderStakeHandler))
+
+0 Handlers.add('unstake',
+0 Handlers.utils.hasMatchingTag('Action', 'Unstake'),
+0 wrapHandler(unstakeHandler))
 
 0 Handlers.add('getProvider',
 0 Handlers.utils.hasMatchingTag('Action', 'Get-Provider'),
@@ -4519,10 +4650,6 @@ build/main.lua
 0 Handlers.utils.hasMatchingTag('Action', 'Credit-Notice'),
 0 wrapHandler(creditNoticeHandler))
 
-0 Handlers.add('unstake',
-0 Handlers.utils.hasMatchingTag('Action', 'Unstake'),
-0 wrapHandler(unstakeHandler))
-
 0 Handlers.add('getRandomRequests',
 0 Handlers.utils.hasMatchingTag('Action', 'Get-Random-Requests'),
 0 wrapHandler(getRandomRequestsHandler))
@@ -4530,6 +4657,18 @@ build/main.lua
 0 Handlers.add('getRandomRequestViaCallbackId',
 0 Handlers.utils.hasMatchingTag('Action', 'Get-Random-Request-Via-Callback-Id'),
 0 wrapHandler(getRandomRequestViaCallbackIdHandler))
+
+0 Handlers.add('getActiveRequests',
+0 Handlers.utils.hasMatchingTag('Action', 'Get-Active-Requests'),
+0 wrapHandler(getActiveRequestsHandler))
+
+0 Handlers.add('getRequestsToCrack',
+0 Handlers.utils.hasMatchingTag('Action', 'Get-Requests-To-Crack'),
+0 wrapHandler(getRequestsToCrackHandler))
+
+0 Handlers.add('cronTick',
+0 Handlers.utils.hasMatchingTag('Action', 'Cron'),
+0 wrapHandler(cronTickHandler))
 
 
 0 print("RandAO Process Initialized")
@@ -5404,7 +5543,7 @@ build/randomManager.lua
 0             randomManager.updateRandomRequestStatus(requestId, Status[2])
 
 0             ActiveRequests.activeChallengeRequests.request_ids[requestId] = nil
-0             ActiveRequests.activeOutputRequests.request_ids[requestId] = true
+0             ActiveRequests.activeOutputRequests.request_ids[requestId] = os.time()
 
 
 0          elseif status == Status[2] then
@@ -5415,7 +5554,7 @@ build/randomManager.lua
 0             randomManager.updateRandomRequestStatus(requestId, Status[3])
 
 0             ActiveRequests.activeOutputRequests.request_ids[requestId] = nil
-0             ActiveRequests.activeVerificationRequests.request_ids[requestId] = true
+0             ActiveRequests.activeVerificationRequests.request_ids[requestId] = os.time()
 
 
 0          elseif status == Status[3] then
@@ -5437,7 +5576,7 @@ build/randomManager.lua
 0 function randomManager.getRandomRequestViaCallbackId(callbackId)
 0    print("entered randomManager.getRandomRequestViaCallbackId")
 
-0    local stmt = DB:prepare("SELECT * FROM RandomRequests WHERE callback_id = :callback_id")
+0    local stmt = DB:prepare("SELECT * FROM RandomRequests WHERE callback_id = :callback_id AND status != 'FAILED'")
 0    stmt:bind_names({ callback_id = callbackId })
 0    local result = dbUtils.queryOne(stmt)
 0    if result then
@@ -5508,7 +5647,7 @@ build/randomManager.lua
      end
 
 0    providerManager.pushActiveRequests(providerList.provider_ids, requestId, true)
-0    ActiveRequests.activeChallengeRequests.request_ids[requestId] = true
+0    ActiveRequests.activeChallengeRequests.request_ids[requestId] = timestamp
 
 0    print("Preparing SQL statement for random request creation")
 0    local stmt = DB:prepare([[
@@ -5545,6 +5684,27 @@ build/randomManager.lua
      end
 
 0    return execute_ok, execute_err
+  end
+
+0 function randomManager.rerequestRandom(requestId)
+0    print("entered randomManager.rerequestRandom")
+
+0    local providerList = FallbackProviders
+
+0    local initalRequest, requestErr = randomManager.getRandomRequest(requestId)
+0    if requestErr ~= "" then
+0       return false, requestErr
+     end
+
+
+0    local success, err = randomManager.createRandomRequest(initalRequest.requester, json.encode(providerList), initalRequest.callback_id, "")
+0    if not success then
+0       return false, err
+     end
+
+0    randomManager.updateRandomRequestStatus(requestId, Status[6])
+0    ActiveRequests.activeChallengeRequests.request_ids[requestId] = nil
+0    return true, ""
   end
 
 0 function randomManager.postVDFChallenge(userId, requestId, inputValue, modulusValue)
@@ -5700,6 +5860,10 @@ build/globals.lua
         request_ids = {},
      },
   }
+
+0 RequestsToCrack = {}
+
+0 FallbackProviders = "{\"provider_ids\":[\"XUo8jZtUDBFLtp5okR12oLrqIZ4ewNlTpqnqmriihJE\",\"c8Iq4yunDnsJWGSz_wYwQU--O9qeODKHiRdUkQkW2p8\"]}"
 
 0 SuccessMessage = "200: Success"
 
@@ -6750,6 +6914,11 @@ test/process_test.lua
 *     assert(success, "Failure: failed to create random request")
     end)
 
+*   it("should be able to view random request in activeRequests", function()
+*     assert(ActiveRequests.activeChallengeRequests.request_ids["d6cce35c-487a-458f-bab2-9032c2621f38"], "Failure: random request not found in activeRequests")
+*     cronTickHandler(nil) -- TODO: remove
+    end)
+
 *   it("should not be able to request random from no providers with correct balance and token", function()
 *     local userId = "Requester1"
 *     local providers = json.encode({provider_ids = {}})
@@ -6933,6 +7102,11 @@ test/process_test.lua
 *     assert(success, "Failure: unable to post VDF Challenge from requested provider")
     end)
 
+*   it("should be able to view random request in activeRequests outputs after challenges have been posted", function()
+*     assert(ActiveRequests.activeOutputRequests.request_ids["d6cce35c-487a-458f-bab2-9032c2621f38"], "Failure: random request not found in activeRequests")
+*     cronTickHandler(nil) -- TODO: remove
+    end)
+
   end)
 
 * describe("postVDFOutputAndProof", function()
@@ -7059,6 +7233,10 @@ test/process_test.lua
 *     local success = postVDFOutputAndProofHandler(message)
 *     assert(success, "Failure: unable to post VDF output and proof from the second requested provider")
     end)
+
+*   it("should be able to view random request in activeVerificationRequests", function()
+*     assert(ActiveRequests.activeVerificationRequests.request_ids["d6cce35c-487a-458f-bab2-9032c2621f38"], "Failure: random request not found in activeRequests")
+    end)
   end)
 
 * describe("getRandomRequests & getRandomRequestViaCallbackId", function()
@@ -7109,7 +7287,6 @@ test/process_test.lua
 *       Action = "Get-Random-Request-Via-Callback-Id",
 *       Data = json.encode({callbackId = callbackId}),
         reply = function (msg)
-          -- print("replied: " .. json.encode(msg))
         end
       }
 
@@ -7128,13 +7305,34 @@ test/process_test.lua
 *       Action = "Get-Random-Request-Via-Callback-Id",
 *       Data = json.encode({callbackId = callbackId}),
         reply = function (msg)
-          -- print("replied: " .. json.encode(msg))
         end
       }
 
 *     local success = getRandomRequestViaCallbackIdHandler(message)
 *     assert(success, "Failure: errors out on invalid callbackId")
+*     cronTickHandler(nil) 
     end)
+
+*   it("should not return a random request for a valid callbackId thats request has failed",
+    function()
+*     local callbackId = "xxxx-xxxx-4xxx-xxxx"
+
+*     local message = {
+*       Target = ao.id,
+*       From = "Provider1",
+*       Action = "Get-Random-Request-Via-Callback-Id",
+*       Data = json.encode({callbackId = callbackId}),
+        reply = function (msg)
+        end
+      }
+
+*     local request, err = randomManager.getRandomRequestViaCallbackId(callbackId)
+*     assert(request.request_id == "d6cce35c-487a-458f-bab2-9032c2621f38", "Failure: unable to get random request for a valid callbackId")
+*     randomManager.rerequestRandom(request.request_id)
+0     _, err = randomManager.getRandomRequestViaCallbackId(callbackId)
+0     assert(err == "RandomRequest not found", "Failure: able to get random request for a valid callbackId that has failed")
+    end)
+
   end)
 
 ==============================================================================
@@ -9919,15 +10117,15 @@ File                                   Hits Missed Coverage
 tlconfig.lua                           0    2      0.00%
 build/tokenManager.lua                 0    6      0.00%
 test/mocked-env/processes/aocred.lua   0    9      0.00%
-build/globals.lua                      0    23     0.00%
 scripts/copy_lua_package.lua           0    24     0.00%
+build/globals.lua                      0    25     0.00%
 build/dbUtils.lua                      0    37     0.00%
 build/database.lua                     0    40     0.00%
 build/stakingManager.lua               0    95     0.00%
 build/providerManager.lua              0    191    0.00%
 build/verifierManager.lua              0    218    0.00%
-build/randomManager.lua                0    296    0.00%
-build/main.lua                         0    335    0.00%
+build/randomManager.lua                0    308    0.00%
+build/main.lua                         0    368    0.00%
 test/mocked-env/lib/bint.lua           0    833    0.00%
 test/mocked-env/ao/handlers.lua        22   84     20.75%
 test/mocked-env/lib/utils.lua          23   74     23.71%
@@ -9935,8 +10133,8 @@ test/mocked-env/ao/handlers-utils.lua  11   19     36.67%
 test/mocked-env/processes/verifier.lua 7    6      53.85%
 test/mocked-env/ao/ao.lua              36   22     62.07%
 test/mocked-env/lib/json.lua           147  52     73.87%
-process.lua                            1499 331    81.91%
+process.lua                            1527 350    81.35%
 test/setup.lua                         17   3      85.00%
-test/process_test.lua                  564  4      99.30%
+test/process_test.lua                  583  6      98.98%
 -----------------------------------------------------------
-Total                                  2326 2704   46.24%
+Total                                  2373 2772   46.12%
