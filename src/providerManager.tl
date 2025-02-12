@@ -19,6 +19,10 @@ global record ProviderList
   provider_ids: {string}
 end
 
+global record ProviderDetailsList
+  providers: {Provider}
+end
+
 global record RequestList
   request_ids: {string}
 end
@@ -81,9 +85,24 @@ function providerManager.getProvider(userId: string): Provider, string
   end
 end
 
+function providerManager.getAllProviders(): ProviderDetailsList, string
+  print("entered providerManager.getAllProviders")
+  
+  local stmt = DB:prepare("SELECT * FROM Providers")
+  local result = dbUtils.queryMany(stmt)
+
+  if result then
+    return result as ProviderDetailsList, ""
+  else
+    return {} as ProviderDetailsList, "Unable to retrieve providers"
+  end
+end
+
 function providerManager.updateProviderDetails(userId: string, details: string): boolean, string
   print("entered providerManager.updateProviderDetails")  
-
+  if details == nil then
+    return false, "Details cannot be nil"
+  end
   local _provider, err = providerManager.getProvider(userId)
   if err ~= "" then
     return false, err

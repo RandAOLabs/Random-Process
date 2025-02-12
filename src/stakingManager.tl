@@ -102,6 +102,12 @@ function stakingManager.processStake(msg: Message): boolean, string
   local token = msg.From
   local amount = tonumber(msg.Quantity)
   local provider = msg.Sender
+  local details = msg.Tags["X-ProviderDetails"] or nil
+
+  if details then
+    providerManager.updateProviderDetails(provider, details)
+  end
+  
   print("Provider: " .. provider)
 
   if stakingManager.checkStake(provider) then

@@ -39,25 +39,25 @@ function dbUtils.execute(stmt, statementHint)
    end
 
 
-   print("dbUtils.execute: Executing SQL statement")
+   --print("dbUtils.execute: Executing SQL statement")
 
    if stmt then
       local step_ok, step_err = pcall(function() stmt:step() end)
       if not step_ok then
-         print("dbUtils.execute: SQL execution failed: " .. tostring(step_err))
+         --print("dbUtils.execute: SQL execution failed: " .. tostring(step_err))
          return false, "dbUtils.execute: Failed to execute SQL statement StatementHint being: " .. tostring(step_err)
       end
 
       local finalize_result = stmt:finalize()
       if finalize_result ~= sqlite3.OK then
-         print("dbUtils.execute: SQL finalization failed: " .. DB:errmsg())
+         --print("dbUtils.execute: SQL finalization failed: " .. DB:errmsg())
          return false, "dbUtils.execute: Failed to finalize SQL statement StatementHint being: " .. DB:errmsg()
       end
 
-      print("dbUtils.execute: SQL execution successful")
+      --print("dbUtils.execute: SQL execution successful")
       return true, ""
    else
-      print("dbUtils.execute: Statement preparation failed: " .. DB:errmsg())
+      --print("dbUtils.execute: Statement preparation failed: " .. DB:errmsg())
       return false, "dbUtils.execute: Failed to prepare SQL statement StatementHint being:(" .. statementHint .. "): " .. DB:errmsg()
    end
 end

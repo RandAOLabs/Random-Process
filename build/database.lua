@@ -15,7 +15,7 @@ local function initializeDatabaseConnection()
          return sqlite3.open_memory()
       end)
       if not ok then
-         print("Failed to initialize database connection: " .. tostring(err))
+         --print("Failed to initialize database connection: " .. tostring(err))
          return false
       end
       DB = err
@@ -34,13 +34,13 @@ local function executeSQL(sql)
 end
 
 function database.initializeDatabase()
-   print("Initializing database")
+   --print("Initializing database")
    if not initializeDatabaseConnection() then
       return false
    end
 
    if not Configured then
-      print("Setting up database schema")
+      --print("Setting up database schema")
       local tables = {
 
          [[
@@ -106,7 +106,7 @@ function database.initializeDatabase()
       for _, sql in ipairs(tables) do
          local ok, err = executeSQL(sql)
          if not ok then
-            print("Database initialization failed: " .. err)
+            --print("Database initialization failed: " .. err)
             return false
          end
       end
@@ -114,7 +114,7 @@ function database.initializeDatabase()
       Configured = true
    end
 
-   print("Database initialization complete")
+   --print("Database initialization complete")
    return true
 end
 

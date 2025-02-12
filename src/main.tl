@@ -2,7 +2,6 @@
 require "globals"
 local json            = require "json"
 local database        = require "database"
-local dbUtils         = require "dbUtils"
 local providerManager = require "providerManager"
 local randomManager   = require "randomManager"
 local tokenManager    = require "tokenManager"
@@ -26,7 +25,7 @@ global record UpdateProviderRandomBalanceData
 end
 
 global record UpdateProviderDetailsData
-  details: string
+  providerDetails: string
 end
 
 global record PostVDFChallengeData
@@ -87,6 +86,9 @@ end
 
 -- Initialize the database
 database.initializeDatabase()
+
+-- Drop verifiers table
+verifierManager.dropVerifierTable()
 
 -- Initialize the verifier manager
 verifierManager.initializeVerifierManager()
@@ -169,12 +171,38 @@ global function updateProviderDetailsHandler(msg: Message): boolean
 
   local providerId = msg.From
   local data = json.decode(msg.Data as string) as UpdateProviderDetailsData
-  local success, err = providerManager.updateProviderDetails(providerId, data.details)
+  local success, err = providerManager.updateProviderDetails(providerId, data.providerDetails)
   if success then
     ao.send(sendResponse(msg.From, "Updated Provider Details", SuccessMessage))
     return true
   else
     ao.send(sendResponse(msg.From, "Error", {message = "Failed to update provider details: " .. err}))
+    return false
+  end
+end
+
+global function getProviderDetailsHandler(msg: Message): boolean
+  print("entered getProviderDetails")
+  local data = (json.decode(msg.Data as string) as GetProviderData)
+  local providerId = data.providerId
+  local providerDetails, err = providerManager.getProvider(providerId)
+  if err == "" then
+    ao.send(sendResponse(msg.From, "Get-Provider-Details-Response", providerDetails))
+    return true
+  else
+    ao.send(sendResponse(msg.From, "Error", {message = "Provider not found: " .. err}))
+    return false
+  end
+end
+
+global function getAllProvidersDetailsHandler(msg: Message): boolean
+  print("entered getAllProvidersDetails")
+  local providers, err = providerManager.getAllProviders()
+  if err == "" then
+    ao.send(sendResponse(msg.From, "Get-All-Providers-Details-Response", providers))
+    return true
+  else
+    ao.send(sendResponse(msg.From, "Error", {message = "Providers not found: " .. err}))
     return false
   end
 end
@@ -577,6 +605,14 @@ Handlers.add('updateProviderDetails',
 Handlers.utils.hasMatchingTag('Action', 'Update-Provider-Details'), 
 wrapHandler(updateProviderDetailsHandler))
 
+Handlers.add('getProviderDetails', 
+Handlers.utils.hasMatchingTag('Action', 'Get-Provider-Details'), 
+wrapHandler(getProviderDetailsHandler))
+
+Handlers.add('getAllProvidersDetails', 
+Handlers.utils.hasMatchingTag('Action', 'Get-All-Providers-Details'), 
+wrapHandler(getAllProvidersDetailsHandler))
+
 Handlers.add('getProviderRandomBalance', 
 Handlers.utils.hasMatchingTag('Action', 'Get-Providers-Random-Balance'), 
 wrapHandler(getProviderRandomBalanceHandler))
@@ -639,49 +675,3 @@ wrapHandler(cronTickHandler))
 
 -- Logging
 print("RandAO Process Initialized")
-
-
--- Remove a verifier from the database
-global function RemoveVerifier(processId: string): boolean, string
-  print("Removing verifier: " .. processId)
-  
-  if not DB then
-    print("Database connection not initialized")
-    return false, "Database connection is not initialized"
-  end
-  
-  local stmt = DB:prepare([[
-    DELETE FROM Verifiers 
-    WHERE process_id = :pid
-  ]])
-  
-  if not stmt then
-    print("Failed to prepare statement: " .. DB:errmsg())
-    return false, "Failed to prepare statement: " .. DB:errmsg()
-  end
-  
-  local ok = false
-  ok = pcall(function()
-    stmt:bind_names({pid = processId})
-  end)
-  
-  if not ok then
-    print("Failed to bind parameters")
-    return false, "Failed to bind parameters"
-  end
-  
-  local exec_ok, exec_err = dbUtils.execute(stmt, "Remove verifier")
-  if not exec_ok then
-    return false, exec_err
-  end
-  
-  return true, ""
-end
-
-global function helper() 
-  local value, err = verifierManager.getAvailableVerifiers()
-  print(json.encode(value))
-  RemoveVerifier("RG6r_xD_NZtbw7t2QcfrUXjrlZe3w3a9vK_Z4kTrZyc")
-  value, err = verifierManager.getAvailableVerifiers()
-  print(json.encode(value))
-end

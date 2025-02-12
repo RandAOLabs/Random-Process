@@ -356,7 +356,7 @@ describe("provider specific tests", function()
   it("should be able to update provider details", function()
     local providerId = "Provider1"
     local details = "details to test"
-    local message = { Target = ao.id, From = "Provider1", Action = "Update-Provider-Details", Data = json.encode({details = details}) }
+    local message = { Target = ao.id, From = "Provider1", Action = "Update-Provider-Details", Data = json.encode({providerDetails = details}) }
     local success = updateProviderDetailsHandler(message)
     assert(success, "Failure: Unable to update provider details")
     local provider, _ = providerManager.getProvider(providerId)

@@ -1,8 +1,7 @@
-local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local debug = _tl_compat and _tl_compat.debug or debug; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local math = _tl_compat and _tl_compat.math or math; local os = _tl_compat and _tl_compat.os or os; local pairs = _tl_compat and _tl_compat.pairs or pairs; local pcall = _tl_compat and _tl_compat.pcall or pcall; local table = _tl_compat and _tl_compat.table or table; local xpcall = _tl_compat and _tl_compat.xpcall or xpcall
+local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local debug = _tl_compat and _tl_compat.debug or debug; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local math = _tl_compat and _tl_compat.math or math; local os = _tl_compat and _tl_compat.os or os; local pairs = _tl_compat and _tl_compat.pairs or pairs; local table = _tl_compat and _tl_compat.table or table; local xpcall = _tl_compat and _tl_compat.xpcall or xpcall
 require("globals")
 local json = require("json")
 local database = require("database")
-local dbUtils = require("dbUtils")
 local providerManager = require("providerManager")
 local randomManager = require("randomManager")
 local tokenManager = require("tokenManager")
@@ -89,6 +88,9 @@ GetRandomRequestsResponse = {}
 database.initializeDatabase()
 
 
+verifierManager.dropVerifierTable()
+
+
 verifierManager.initializeVerifierManager()
 
 
@@ -110,8 +112,8 @@ end
 
 
 local function errorHandler(err)
-   print("Critical error occurred: " .. tostring(err))
-   print(debug.traceback())
+   --print("Critical error occurred: " .. tostring(err))
+   --print(debug.traceback())
 end
 
 
@@ -130,15 +132,15 @@ end
 
 
 local function infoHandler(msg)
-   local verifiers = verifierManager.printAvailableVerifiers()
-   print("Verifiers: " .. json.encode(verifiers))
+   local verifiers = verifierManager.--printAvailableVerifiers()
+   --print("Verifiers: " .. json.encode(verifiers))
    ao.send(sendResponse(msg.From, "Info", { json.encode(verifiers) }))
 
 end
 
 
 function updateProviderBalanceHandler(msg)
-   print("entered updateProviderBalance")
+   --print("entered updateProviderBalance")
 
    local userId = msg.From
 
@@ -165,11 +167,11 @@ end
 
 
 function updateProviderDetailsHandler(msg)
-   print("entered updateProviderDetails")
+   --print("entered updateProviderDetails")
 
    local providerId = msg.From
    local data = json.decode(msg.Data)
-   local success, err = providerManager.updateProviderDetails(providerId, data.details)
+   local success, err = providerManager.updateProviderDetails(providerId, data.providerDetails)
    if success then
       ao.send(sendResponse(msg.From, "Updated Provider Details", SuccessMessage))
       return true
@@ -179,9 +181,35 @@ function updateProviderDetailsHandler(msg)
    end
 end
 
+function getProviderDetailsHandler(msg)
+   --print("entered getProviderDetails")
+   local data = (json.decode(msg.Data))
+   local providerId = data.providerId
+   local providerDetails, err = providerManager.getProvider(providerId)
+   if err == "" then
+      ao.send(sendResponse(msg.From, "Get-Provider-Details-Response", providerDetails))
+      return true
+   else
+      ao.send(sendResponse(msg.From, "Error", { message = "Provider not found: " .. err }))
+      return false
+   end
+end
+
+function getAllProvidersDetailsHandler(msg)
+   --print("entered getAllProvidersDetails")
+   local providers, err = providerManager.getAllProviders()
+   if err == "" then
+      ao.send(sendResponse(msg.From, "Get-All-Providers-Details-Response", providers))
+      return true
+   else
+      ao.send(sendResponse(msg.From, "Error", { message = "Providers not found: " .. err }))
+      return false
+   end
+end
+
 
 function getProviderRandomBalanceHandler(msg)
-   print("entered getProviderRandomBalance")
+   --print("entered getProviderRandomBalance")
 
    local data = (json.decode(msg.Data))
    local providerId = data.providerId
@@ -199,7 +227,7 @@ end
 
 
 function getProviderHandler(msg)
-   print("entered getProviderHandler")
+   --print("entered getProviderHandler")
    local data = (json.decode(msg.Data))
    local providerId = data.providerId
    local providerInfo, err = providerManager.getProvider(providerId)
@@ -214,7 +242,7 @@ end
 
 
 function getProviderStakeHandler(msg)
-   print("entered getProviderStake")
+   --print("entered getProviderStake")
    local data = (json.decode(msg.Data))
    local providerId = data.providerId
    local stake, err = stakingManager.getProviderStake(providerId)
@@ -229,7 +257,7 @@ end
 
 
 function unstakeHandler(msg)
-   print("entered unstake")
+   --print("entered unstake")
    local userId = msg.From
    local success, err, message = stakingManager.unstake(userId, msg.Timestamp)
    if success then
@@ -243,7 +271,7 @@ end
 
 
 function postVDFChallengeHandler(msg)
-   print("entered postVDFChallenge")
+   --print("entered postVDFChallenge")
 
    local userId = msg.From
    local active, _ = providerManager.isActiveProvider(userId)
@@ -281,7 +309,7 @@ end
 
 
 function postVDFOutputAndProofHandler(msg)
-   print("entered postVDFOutputAndProof")
+   --print("entered postVDFOutputAndProof")
 
    local userId = msg.From
 
@@ -329,7 +357,7 @@ end
 
 
 function postVerificationHandler(msg)
-   print("entered postVerification")
+   --print("entered postVerification")
 
    local verifierId = msg.From
 
@@ -344,7 +372,7 @@ function postVerificationHandler(msg)
    end
 
    if valid == nil or segmentId == nil or requestId == nil or not validateVerificationInputs(valid, requestId, segmentId) then
-      print("Failed to post Verification: " .. "values not provided or malformed")
+      --print("Failed to post Verification: " .. "values not provided or malformed")
       ao.send(sendResponse(msg.From, "Error", { message = "Failed to post Verification: " .. "values not provided or malformed" }))
       return false
    end
@@ -363,14 +391,14 @@ end
 
 
 function failedPostVerificationHandler(msg)
-   print("entered failedPostVerification")
+   --print("entered failedPostVerification")
    local verifierId = msg.From
    verifierManager.markAvailable(verifierId)
 end
 
 
 function creditNoticeHandler(msg)
-   print("entered creditNotice")
+   --print("entered creditNotice")
 
    local xStake = msg.Tags["X-Stake"] or nil
 
@@ -390,21 +418,21 @@ function creditNoticeHandler(msg)
 
    if msg.From ~= TokenInUse then
       local err = "Invalid Token Sent: " .. msg.From
-      print(err)
+      --print(err)
       ao.send(sendResponse(msg.Sender, "Error", { message = err }))
       tokenManager.returnTokens(msg, err)
       return false
    end
    if value < Cost then
       local err = "Invalid Value Sent: " .. tostring(value)
-      print(err)
+      --print(err)
       ao.send(sendResponse(msg.Sender, "Error", { message = err }))
       tokenManager.returnTokens(msg, err)
       return false
    end
    if callbackId == nil then
       local err = "Failure: No Callback ID provided"
-      print(err)
+      --print(err)
       ao.send(sendResponse(msg.Sender, "Error", { message = err }))
       tokenManager.returnTokens(msg, err)
       return false
@@ -428,7 +456,7 @@ end
 
 
 function getOpenRandomRequestsHandler(msg)
-   print("entered getOpenRandomRequests")
+   --print("entered getOpenRandomRequests")
 
    local data = (json.decode(msg.Data))
    local providerId = data.providerId
@@ -454,7 +482,7 @@ function getOpenRandomRequestsHandler(msg)
       responseData.activeOutputRequests = requestIds
    end
 
-   print("responseData: " .. json.encode(responseData))
+   --print("responseData: " .. json.encode(responseData))
 
    ao.send(sendResponse(msg.From, "Get-Open-Random-Requests-Response", responseData))
    return true
@@ -462,7 +490,7 @@ end
 
 
 function getRandomRequestsHandler(msg)
-   print("entered getRandomRequests")
+   --print("entered getRandomRequests")
 
    local data = (json.decode(msg.Data))
    local responseData = { randomRequestResponses = {} }
@@ -489,7 +517,7 @@ end
 
 
 function getRandomRequestViaCallbackIdHandler(msg)
-   print("entered getRandomRequestViaCallbackId")
+   --print("entered getRandomRequestViaCallbackId")
 
    local data = (json.decode(msg.Data))
    local callback_id = data.callbackId
@@ -518,13 +546,13 @@ end
 
 
 function getActiveRequestsHandler(msg)
-   print("entered getActiveRequests")
+   --print("entered getActiveRequests")
    sendResponse(msg.From, "Get-Active-Requests", ActiveRequests)
 end
 
 
 function cronTickHandler(_msg)
-   print("entered cronTick")
+   --print("entered cronTick")
 
 
    for category, data in pairs(ActiveRequests) do
@@ -534,9 +562,9 @@ function cronTickHandler(_msg)
 
          for request_id, timestamp in pairs(request_ids) do
 
-            print("Category: " .. category .. ", Request ID: " .. request_id .. ", Timestamp: " .. timestamp)
+            --print("Category: " .. category .. ", Request ID: " .. request_id .. ", Timestamp: " .. timestamp)
             if timestamp + OverridePeriod < os.time() then
-               print("Request ID: " .. request_id .. " in category: " .. category .. " is overdue.")
+               --print("Request ID: " .. request_id .. " in category: " .. category .. " is overdue.")
                if category == "activeChallengeRequests" then
 
                   randomManager.rerequestRandom(request_id)
@@ -552,14 +580,14 @@ function cronTickHandler(_msg)
             end
          end
       else
-         print("No valid request_ids in category: " .. category)
+         --print("No valid request_ids in category: " .. category)
       end
    end
    return true
 end
 
 function getRequestsToCrackHandler(msg)
-   print("entered getRequestsToCrack")
+   --print("entered getRequestsToCrack")
    sendResponse(msg.From, "Get-Requests-To-Crack", RequestsToCrack)
    return true
 end
@@ -576,6 +604,14 @@ wrapHandler(updateProviderBalanceHandler))
 Handlers.add('updateProviderDetails',
 Handlers.utils.hasMatchingTag('Action', 'Update-Provider-Details'),
 wrapHandler(updateProviderDetailsHandler))
+
+Handlers.add('getProviderDetails',
+Handlers.utils.hasMatchingTag('Action', 'Get-Provider-Details'),
+wrapHandler(getProviderDetailsHandler))
+
+Handlers.add('getAllProvidersDetails',
+Handlers.utils.hasMatchingTag('Action', 'Get-All-Providers-Details'),
+wrapHandler(getAllProvidersDetailsHandler))
 
 Handlers.add('getProviderRandomBalance',
 Handlers.utils.hasMatchingTag('Action', 'Get-Providers-Random-Balance'),
@@ -638,50 +674,4 @@ Handlers.utils.hasMatchingTag('Action', 'Cron'),
 wrapHandler(cronTickHandler))
 
 
-print("RandAO Process Initialized")
-
-
-
-function RemoveVerifier(processId)
-   print("Removing verifier: " .. processId)
-
-   if not DB then
-      print("Database connection not initialized")
-      return false, "Database connection is not initialized"
-   end
-
-   local stmt = DB:prepare([[
-    DELETE FROM Verifiers
-    WHERE process_id = :pid
-  ]])
-
-   if not stmt then
-      print("Failed to prepare statement: " .. DB:errmsg())
-      return false, "Failed to prepare statement: " .. DB:errmsg()
-   end
-
-   local ok = false
-   ok = pcall(function()
-      stmt:bind_names({ pid = processId })
-   end)
-
-   if not ok then
-      print("Failed to bind parameters")
-      return false, "Failed to bind parameters"
-   end
-
-   local exec_ok, exec_err = dbUtils.execute(stmt, "Remove verifier")
-   if not exec_ok then
-      return false, exec_err
-   end
-
-   return true, ""
-end
-
-function helper()
-   local value, err = verifierManager.getAvailableVerifiers()
-   print(json.encode(value))
-   RemoveVerifier("RG6r_xD_NZtbw7t2QcfrUXjrlZe3w3a9vK_Z4kTrZyc")
-   value, err = verifierManager.getAvailableVerifiers()
-   print(json.encode(value))
-end
+--print("RandAO Process Initialized")
