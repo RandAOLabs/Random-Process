@@ -4,32 +4,20 @@ require "lsqlite3"
 global DB: db
 global Configured: boolean
 
-global Admin: string = "KLzn6IzhmML7M-XXFNSI29GVNd3xSHtH26zuKa1TWn8"
+global Info = {
+    name = "RandAO-Random-Process",
+    version = "1.0.0"
+}
 
-global CurrentRequestId: integer
+global Admin: string = "KLzn6IzhmML7M-XXFNSI29GVNd3xSHtH26zuKa1TWn8"
+global StakingProcess: string = "EIQJoqVWonlxsEe8xGpQZhh54wrmgE3q0tAsVIhKYQU"
 
 global Cost: number = 100
 
 global TokenTest: string = "5ZR9uegKoEhE9fJMbs-MvWLIztMNCVxgpzfeBVE3vqI"
-global WrappedAR: string = "xU9zFkq3X2ZQ6olwNVvr1vUWIjc3kXTWr7xKQD6dh10"
-global WrappedETH: string = "0x0000000000000000000000000000000000000000"
 global TokenInUse: string = TokenTest
 
 global Decimals: integer = 18
-
-global UnstakePeriod: integer = 50000 -- 50 seconds -- 1209600000 -- 14 days
-
-global StakeTokens = {
-    [TokenTest] = {
-        amount  = 100 * 10^Decimals
-    },
-    [WrappedAR] = {
-        amount  = 100 * 10^Decimals
-    },
-    [WrappedETH] = {
-        amount  = 100 * 10^Decimals
-    }
-}
 
 global OverridePeriod: integer = 50000 -- 50 seconds
 
@@ -58,15 +46,6 @@ global Status = {
     "CRACKING",
     "FINALIZED",
     "FAILED"
-}
-
-global TestNetProviders = {
-    "ld4ncW8yLSkckjia3cw6qO7silUdEe1nsdiEvMoLg-0",
-    "XUo8jZtUDBFLtp5okR12oLrqIZ4ewNlTpqnqmriihJE",
-    "N90q65iT59dCo01-gtZRUlLMX0w6_ylFHv2uHaSUFNk",
-    "c8Iq4yunDnsJWGSz_wYwQU--O9qeODKHiRdUkQkW2p8",
-    "Sr3HVH0Nh6iZzbORLpoQFOEvmsuKjXsHswSWH760KAk",
-    "1zlA7nKecUGevGNAEbjim_SlbioOI6daNNn2luDEHb0"
 }
 
 global VerifierProcesses = {

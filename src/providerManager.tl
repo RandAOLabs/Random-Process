@@ -6,9 +6,8 @@ local json = require "json"
 -- Type definitions
 global record Provider
   provider_id: string
-  details: string
-  stake: string
   active: integer
+  staked: integer
   active_challenge_requests: string
   active_output_requests: string
   random_balance: integer
@@ -29,7 +28,7 @@ end
 
 local providerManager = {}
 
-function providerManager.createProvider(userId: string, timestamp: number): boolean, string
+function providerManager.createProvider(providerId: string, staked: number, timestamp: number): boolean, string
   print("entered providerManager.createProvider")
     
   if not DB then
@@ -39,8 +38,8 @@ function providerManager.createProvider(userId: string, timestamp: number): bool
   
   print("Preparing SQL statement for provider creation")
   local stmt = DB:prepare([[
-    INSERT OR IGNORE INTO Providers (provider_id, random_balance, created_at)
-    VALUES (:provider_id, :random_balance, :created_at);
+    INSERT OR IGNORE INTO Providers (provider_id, active, staked, random_balance, created_at)
+    VALUES (:provider_id, 0, :staked, :random_balance, :created_at);
   ]])
   
   if not stmt then
@@ -50,7 +49,7 @@ function providerManager.createProvider(userId: string, timestamp: number): bool
   
   print("Binding parameters for provider creation")
   local bind_ok, bind_err = pcall(function(): string
-    stmt:bind_names({provider_id = userId, random_balance = 0, created_at = timestamp})
+    stmt:bind_names({provider_id = providerId, staked = staked, random_balance = 0, created_at = timestamp})
   end)
   
   if not bind_ok then
@@ -71,11 +70,11 @@ function providerManager.createProvider(userId: string, timestamp: number): bool
   return execute_ok, execute_err
 end
 
-function providerManager.getProvider(userId: string): Provider, string
+function providerManager.getProvider(providerId: string): Provider, string
   print("entered providerManager.getProvider")
   
   local stmt = DB:prepare("SELECT * FROM Providers WHERE provider_id = :provider_id")
-  stmt:bind_names({provider_id = userId})  
+  stmt:bind_names({provider_id = providerId})  
   local result = dbUtils.queryOne(stmt)
 
   if result then
@@ -95,34 +94,6 @@ function providerManager.getAllProviders(): ProviderDetailsList, string
     return result as ProviderDetailsList, ""
   else
     return {} as ProviderDetailsList, "Unable to retrieve providers"
-  end
-end
-
-function providerManager.updateProviderDetails(userId: string, details: string): boolean, string
-  print("entered providerManager.updateProviderDetails")  
-  if details == nil then
-    return false, "Details cannot be nil"
-  end
-  local _provider, err = providerManager.getProvider(userId)
-  if err ~= "" then
-    return false, err
-  end
-
-  local stmt = DB:prepare[[
-    UPDATE Providers
-    SET provider_details = :details
-    WHERE provider_id = :provider_id;
-  ]]
-  stmt:bind_names({provider_id = userId, details = details})
-
-  local ok = pcall(function()
-    dbUtils.execute(stmt, "Failed to update provider details")
-  end)
-  
-  if ok then
-    return true, ""
-  else
-    return false, "Failed to update provider details"
   end
 end
 
@@ -334,11 +305,11 @@ function providerManager.hasActiveRequest(userId: string, requestId: string, cha
   end
 end
 
-function providerManager.updateProviderStatus(userId: string, active: boolean): boolean, string
+function providerManager.updateProviderStatus(providerId: string, status: string): boolean, string
   print("entered providerManager.updateProviderStatus")
 
   local stmt: statement 
-  local status: integer = active and 1 or 0
+  local active: integer = status == "active" and 1 or 0
 
   stmt = DB:prepare[[
     UPDATE Providers
@@ -346,7 +317,7 @@ function providerManager.updateProviderStatus(userId: string, active: boolean): 
     WHERE provider_id = :provider_id;
   ]]
   
-  stmt:bind_names({provider_id = userId, active = status})
+  stmt:bind_names({provider_id = providerId, active = active})
   
   local ok = pcall(function()
   dbUtils.execute(stmt, "Failed to update Provider status")
@@ -356,22 +327,6 @@ function providerManager.updateProviderStatus(userId: string, active: boolean): 
     return true, ""
   else
     return false, "Failed to update Provider status"
-  end
-end
-
-function providerManager.isActiveProvider(userId: string): boolean, string
-  print("entered providerManager.isActiveProvider")
-
-  local provider, err = providerManager.getProvider(userId)
-
-  if err ~= "" then
-    return false, err
-  end
-
-  if provider.active == 1 then
-    return true, ""
-  else
-    return false, ""
   end
 end
 
@@ -398,11 +353,11 @@ function providerManager.updateProviderBalance(userId: string, balance: integer)
   end)
 
   if balance == 0 then 
-    providerManager.updateProviderStatus(userId, false)
+    providerManager.updateProviderStatus(userId, "inactive")
   end
 
   if previousBalance == 0 and balance > 0 then
-    providerManager.updateProviderStatus(userId, true)
+    providerManager.updateProviderStatus(userId, "active")
   end
 
   if ok then
@@ -411,5 +366,73 @@ function providerManager.updateProviderBalance(userId: string, balance: integer)
     return false, "Failed to update provider balance"
   end
 end
+
+function providerManager.updateProviderStakedStatus(providerId: string, status: string, timestamp: number): boolean, string
+  print("entered providerManager.updateProviderStakedStatus")
+
+  local stmt: statement 
+  local staked: integer = status == "active" and 1 or 0
+
+  local _, err = providerManager.getProvider(providerId)
+  if err ~= "" then
+    providerManager.createProvider(providerId, 1, timestamp)
+    return true, ""
+  end
+
+  stmt = DB:prepare[[
+    UPDATE Providers
+    SET staked = :staked
+    WHERE provider_id = :provider_id;
+  ]]
+  
+  stmt:bind_names({provider_id = providerId, staked = staked})
+  
+  local ok = pcall(function()
+  dbUtils.execute(stmt, "Failed to update Provider staked status")
+  end)
+
+  if ok then
+    if staked == 0 then
+      providerManager.updateProviderBalance(providerId, 0)
+    end
+    return true, ""
+  else
+    return false, "Failed to update Provider staked status"
+  end
+end
+
+function providerManager.isActiveProvider(userId: string): boolean, string
+  print("entered providerManager.isActiveProvider")
+
+  local provider, err = providerManager.getProvider(userId)
+
+  if err ~= "" then
+    return false, err
+  end
+
+  if provider.active == 1 then
+    return true, ""
+  else
+    return false, ""
+  end
+end
+
+
+function providerManager.isStakedProvider(userId: string): boolean, string
+  print("entered providerManager.isStakedProvider")
+
+  local provider, err = providerManager.getProvider(userId)
+
+  if err ~= "" then
+    return false, err
+  end
+
+  if provider.staked == 1 then
+    return true, ""
+  else
+    return false, ""
+  end
+end
+
 
 return providerManager

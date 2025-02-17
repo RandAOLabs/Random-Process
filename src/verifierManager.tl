@@ -116,46 +116,6 @@ function verifierManager.getAvailableVerifiers(): {VerifierProcess}, string
   return verifiers, ""
 end
 
--- Function to print out the available verifiers
-function verifierManager.printAvailableVerifiers(): any
-  print("entered available Verifiers")
-  local availableVerifiers, _ = verifierManager.getAvailableVerifiers()
-  return availableVerifiers
-end
-
--- Get verifier statistics
-function verifierManager.getStats(): VerifierStats
-  local stats: VerifierStats = {
-    total_available = 0,
-    total_busy = 0
-  }
-  
-  if not DB then
-    print("Database connection not initialized")
-    return stats
-  end
-  
-  local stmt = DB:prepare([[
-    SELECT 
-      COUNT(CASE WHEN status = 'available' THEN 1 END) as available,
-      COUNT(CASE WHEN status = 'busy' THEN 1 END) as busy
-    FROM Verifiers
-  ]])
-  
-  if not stmt then
-    print("Failed to prepare statement: " .. DB:errmsg())
-    return stats
-  end
-  
-  local row = dbUtils.queryOne(stmt)
-  if row then
-    stats.total_available = tonumber(row.available) or 0
-    stats.total_busy = tonumber(row.busy) or 0
-  end
-  
-  return stats
-end
-
 function verifierManager.requestVerification(processId: string, data: VDFRequestData, checkpoint: boolean)
   print("Sending verification request to process: " .. processId)
   
@@ -220,6 +180,15 @@ function verifierManager.markAvailable(verifierId: string): boolean, string
   if not DB then
     print("Database connection not initialized")
     return false, "Database connection is not initialized"
+  end
+
+  local check_stmt = DB:prepare("SELECT * FROM Verifiers WHERE process_id = :process_id")
+  check_stmt:bind_names({process_id = verifierId})  
+  local result = dbUtils.queryOne(check_stmt)
+
+  if not result or result.status ~= 'busy' then
+    print("Verifier not found: " .. verifierId)
+    return false, "Verifier not found"
   end
   
   local stmt = DB:prepare([[
@@ -288,8 +257,11 @@ function verifierManager.processVerification(verifierId: string, segmentId: stri
     return false, exec_err
   end
 
-  verifierManager.markAvailable(verifierId)
-  
+  local markOk, markErr = verifierManager.markAvailable(verifierId)
+  if not markOk then
+    return false, markErr
+  end
+
   return true, ""
 end
 
@@ -335,46 +307,6 @@ function verifierManager.createSegment(proofId: string, segmentCount: string, se
   end
   
   return segmentId, ""
-end
-
--- Update segment status
-function verifierManager.updateSegmentStatus(segmentId: string, status: string, result: string): boolean, string
-  if not DB then
-    print("Database connection not initialized")
-    return false, "Database connection is not initialized"
-  end
-  
-  local stmt = DB:prepare([[
-    UPDATE VerifierSegments 
-    SET status = :status, result = :result
-    WHERE segment_id = :sid
-  ]])
-  
-  if not stmt then
-    print("Failed to prepare statement: " .. DB:errmsg())
-    return false, "Failed to prepare statement: " .. DB:errmsg()
-  end
-  
-  local ok = false
-  ok = pcall(function()
-    stmt:bind_names({
-      sid = segmentId,
-      status = status,
-      result = result
-    })
-  end)
-  
-  if not ok then
-    print("Failed to bind parameters")
-    return false, "Failed to bind parameters"
-  end
-  
-  local exec_ok, exec_err = dbUtils.execute(stmt, "Update segment status")
-  if not exec_ok then
-    return false, exec_err
-  end
-  
-  return true, ""
 end
 
 -- Process VDF proofs
