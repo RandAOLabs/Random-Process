@@ -1,25 +1,34 @@
 import { readFileSync } from "node:fs";
 import { message, result, createDataItemSigner, spawn } from "@permaweb/aoconnect";
+import { get } from "node:http";
 
 // Load the wallet file
 const wallet = JSON.parse(readFileSync("./hera.json").toString(),);
 const availableRandomValues = 44
-const providerId    = "ld4ncW8yLSkckjia3cw6qO7silUdEe1nsdiEvMoLg-0"
+
+const providerId    = "XUo8jZtUDBFLtp5okR12oLrqIZ4ewNlTpqnqmriihJE"
 const providerId2   = "c8Iq4yunDnsJWGSz_wYwQU--O9qeODKHiRdUkQkW2p8"
 const providerId3   = "Sr3HVH0Nh6iZzbORLpoQFOEvmsuKjXsHswSWH760KAk"
-const processId     = "KbaY8P4h9wdHYKHlBSLbXN_yd-9gxUDxSgBackUxTiQ" // "QeVaQXBmIFfLuc29G5bXnylBIJXqON4naIbZrQTk8Iw"
-const randomTesting = "m3h7fUeAcR36tn2y13o4LjNum-mgwCCA8eGiH01AdEc"
-const tokenId       = "7enZBOhWsyU3A5oCt8HtMNNPHSxXYJVTlOGOetR9IDw"
+const providerId4   = "ld4ncW8yLSkckjia3cw6qO7silUdEe1nsdiEvMoLg-0"
+const providerId5   = "N90q65iT59dCo01-gtZRUlLMX0w6_ylFHv2uHaSUFNk"
+const providerDetails = JSON.stringify({
+    "I LIKE ICECREAM": "NOOOO",
+})
+const processId     = "4ZfqKFOyhSYVDyc1H_qcbaHpPGUekAp4fGO5LaqNzeI" // "Uun6Qm_eX8wGZ-MoHe-RAWVL_BNThI9Br50N6mzJvfU" // "QeVaQXBmIFfLuc29G5bXnylBIJXqON4naIbZrQTk8Iw"
+const randomTesting = "k1pGSzc7Uj2PaqH6jtbJp9Xg40IklrEwWyO6ipXO15g"
+const tokenId       = "5ZR9uegKoEhE9fJMbs-MvWLIztMNCVxgpzfeBVE3vqI"
+const tokenId2      = "hqkQC3X-UfFeHRNc83OYORbsB_9v6uW0A-hDRVTH1mU"
+const wAR           = "xU9zFkq3X2ZQ6olwNVvr1vUWIjc3kXTWr7xKQD6dh10"
 let providers = {
-    provider_ids: ["ld4ncW8yLSkckjia3cw6qO7silUdEe1nsdiEvMoLg-0"]
+    provider_ids: [providerId4]
 }
-const requestIds = [
-    "706f393e-d1e6-479e-a64d-1003850e3bd0"
-]
 
 const requestInputs     = 1
-const requestId         = "8dd33fdf-4f05-4aad-8c18-ec3ff1d9c90d"
-const callbackId        = "e894ec35-057b-4db1-a8bc-2bfd75ebbdac"
+const requestId         = "6154e869-a186-4904-bef2-41e35856b34c"
+const requestIds = [
+    requestId
+]
+const callbackId        = "1a56419f-95cd-441a-bb91-7b807311ad84"
 const input             = "0xf8e3b0de92842f97fb47b393f45187f2"
 const modulus           = "0x40e77a538238e49424de6139311eaee7d7f1e31a0e87b2051e1f94bb4b0ad2d"
 const output            = "13497708056"
@@ -37,6 +46,90 @@ const proof             = JSON.stringify([
 ])
 
 const gameId = "1"
+
+
+async function deafult3() {
+    let tags = [
+        { name: "Action", value: "Increment-Zone" },
+        { name: "Zone", value: "3" },
+    ]   
+
+    let id = await message({
+        /*
+          The arweave TXID of the process, this will become the "target".
+          This is the process the message is ultimately sent to.
+        */
+        process: "Gq7ZccZYOi2eFjcSqy5ZCIZyBdcartFgJosp_B6KC9g",
+        // Tags that the process will use as input.
+        tags,
+        // A signer function used to build the message "signature"
+        signer: createDataItemSigner(wallet),
+        /*
+          The "data" portion of the message
+          If not specified a random string will be generated
+        */
+    })
+
+    console.log(id)
+    return id;
+}
+
+
+async function deafult() {
+    let tags = [
+        { name: "Action", value: "Transfer" },
+        { name: "Quantity", value: "200000000000" },
+        { name: "Recipient", value: "Gq7ZccZYOi2eFjcSqy5ZCIZyBdcartFgJosp_B6KC9g" },
+        { name: "X-Lucky-Draw", value: "true" },
+    ]   
+
+    let id = await message({
+        /*
+          The arweave TXID of the process, this will become the "target".
+          This is the process the message is ultimately sent to.
+        */
+        process: tokenId2,
+        // Tags that the process will use as input.
+        tags,
+        // A signer function used to build the message "signature"
+        signer: createDataItemSigner(wallet),
+        /*
+          The "data" portion of the message
+          If not specified a random string will be generated
+        */
+    })
+
+    console.log(id)
+    return id;
+}
+
+
+async function deafult2() {
+    let tags = [
+        { name: "Action", value: "Transfer" },
+        { name: "Quantity", value: "1000000000000" },
+        { name: "Recipient", value: "Gq7ZccZYOi2eFjcSqy5ZCIZyBdcartFgJosp_B6KC9g" },
+    ]   
+
+    let id = await message({
+        /*
+          The arweave TXID of the process, this will become the "target".
+          This is the process the message is ultimately sent to.
+        */
+        process: wAR,
+        // Tags that the process will use as input.
+        tags,
+        // A signer function used to build the message "signature"
+        signer: createDataItemSigner(wallet),
+        /*
+          The "data" portion of the message
+          If not specified a random string will be generated
+        */
+    })
+
+    console.log(id)
+    return id;
+}
 
 async function updateBalance() {
     let tags = [
@@ -93,7 +186,7 @@ async function getStatus() {
           The "data" portion of the message
           If not specified a random string will be generated
         */
-        data: JSON.stringify({ providerId: providerId3 }),
+        data: JSON.stringify({ providerId: providerId }),
 
     })
 
@@ -162,7 +255,7 @@ async function getActiveRequests() {
           The "data" portion of the message
           If not specified a random string will be generated
         */
-        data: JSON.stringify({ providerId: providerId3 }),
+        data: JSON.stringify({ providerId: providerId2 }),
 
     })
 
@@ -439,6 +532,322 @@ async function highLow() {
     return id;
 }
 
+async function viewGame() {
+    let tags = [
+        { name: "Action", value: "View-Game" },
+        { name: "GameId", value: gameId }
+    ]
+
+    let id = await message({
+        /*
+          The arweave TXID of the process, this will become the "target".
+          This is the process the message is ultimately sent to.
+        */
+        process: processId,
+        // Tags that the process will use as input.
+        tags,
+        // A signer function used to build the message "signature"
+        signer: createDataItemSigner(wallet),
+        /*
+          The "data" portion of the message
+          If not specified a random string will be generated
+        */
+        data: JSON.stringify({ providerId }),
+
+    })
+
+    //console.log(id)
+    const { Output, Messages } = await result({
+        message: id,
+        process: processId,
+    });
+    
+    if (Messages && Messages.length > 0) {
+        const data = JSON.parse(Messages[0].Data);
+        console.log("Random Requests: ", data);
+    }
+    
+    return id;
+}
+
+async function stake() {
+    let tags = [
+        { name: "Action", value: "Transfer" },
+        { name: "Quantity", value: "100000000000000000000" },
+        { name: "Recipient", value: processId },
+        { name: "X-Stake", value: "true" },
+        { name: "X-ProviderDetails", value: JSON.stringify(providerDetails) },
+    ]   
+
+    let id = await message({
+        /*
+          The arweave TXID of the process, this will become the "target".
+          This is the process the message is ultimately sent to.
+        */
+        process: tokenId,
+        // Tags that the process will use as input.
+        tags,
+        // A signer function used to build the message "signature"
+        signer: createDataItemSigner(wallet),
+        /*
+          The "data" portion of the message
+          If not specified a random string will be generated
+        */
+    })
+
+    console.log(id)
+    return id;
+}
+
+async function getStake() {
+    let tags = [
+        { name: "Action", value: "Get-Provider-Stake" },
+    ]
+
+    let id = await message({
+        /*
+          The arweave TXID of the process, this will become the "target".
+          This is the process the message is ultimately sent to.
+        */
+        process: processId,
+        // Tags that the process will use as input.
+        tags,
+        // A signer function used to build the message "signature"
+        signer: createDataItemSigner(wallet),
+        /*
+          The "data" portion of the message
+          If not specified a random string will be generated
+        */
+        data: JSON.stringify({ providerId: providerId4 }),
+
+    })
+
+    //console.log(id)
+    const { Output, Messages } = await result({
+        message: id,
+        process: processId,
+    });
+    
+    if (Messages && Messages.length > 0) {
+        const data = JSON.parse(Messages[0].Data);
+        console.log("Status: ", data);
+    }
+    
+    return id;
+}
+
+async function unstake() {
+    let tags = [
+        { name: "Action", value: "Unstake" },
+    ]
+
+    let id = await message({
+        /*
+          The arweave TXID of the process, this will become the "target".
+          This is the process the message is ultimately sent to.
+        */
+        process: processId,
+        // Tags that the process will use as input.
+        tags,
+        // A signer function used to build the message "signature"
+        signer: createDataItemSigner(wallet),
+        /*
+          The "data" portion of the message
+          If not specified a random string will be generated
+        */
+        data: JSON.stringify({ providerId: providerId }),
+
+    })
+
+    //console.log(id)
+    const { Output, Messages } = await result({
+        message: id,
+        process: processId,
+    });
+    
+    if (Messages && Messages.length > 0) {
+        const data = JSON.parse(Messages[0].Data);
+        console.log("Status: ", data);
+    }
+    
+    return id;
+}
+
+async function updateDetails() {
+    let tags = [
+        { name: "Action", value: "Update-Provider-Details" },
+    ]   
+
+    let id = await message({
+        /*
+          The arweave TXID of the process, this will become the "target".
+          This is the process the message is ultimately sent to.
+        */
+        process: processId,
+        // Tags that the process will use as input.
+        tags,
+        // A signer function used to build the message "signature"
+        signer: createDataItemSigner(wallet),
+        /*
+          The "data" portion of the message
+          If not specified a random string will be generated
+        */
+        data: JSON.stringify({ providerDetails: providerDetails }),
+
+    })
+
+    console.log(id)
+    return id;
+}
+
+async function getAllProvidersDetails() {
+    let tags = [
+        { name: "Action", value: "Get-All-Providers-Details" },
+    ]
+
+    let id = await message({
+        /*
+          The arweave TXID of the process, this will become the "target".
+          This is the process the message is ultimately sent to.
+        */
+        process: processId,
+        // Tags that the process will use as input.
+        tags,
+        // A signer function used to build the message "signature"
+        signer: createDataItemSigner(wallet)
+        /*
+          The "data" portion of the message
+          If not specified a random string will be generated
+        */
+    })
+
+    //console.log(id)
+    const { Output, Messages } = await result({
+        message: id,
+        process: processId,
+    });
+    
+    if (Messages && Messages.length > 0) {
+        const data = JSON.parse(Messages[0].Data);
+        console.log("Status: ", data);
+    }
+    
+    return id;
+}
+
+async function requestRandomTester() {
+    let tags = [
+        { name: "Action", value: "High-or-Low" },
+    ]
+
+    let id = await message({
+        /*
+          The arweave TXID of the process, this will become the "target".
+          This is the process the message is ultimately sent to.
+        */
+        process: randomTesting,
+        // Tags that the process will use as input.
+        tags,
+        // A signer function used to build the message "signature"
+        signer: createDataItemSigner(wallet),
+        /*
+          The "data" portion of the message
+          If not specified a random string will be generated
+        */
+        })
+
+    return id;
+}
+
+async function simulateResponse() {
+    let tags = [
+        { name: "Action", value: "Simulate-Response" },
+    ]
+
+    let id = await message({
+        /*
+          The arweave TXID of the process, this will become the "target".
+          This is the process the message is ultimately sent to.
+        */
+        process: processId,
+        // Tags that the process will use as input.
+        tags,
+        // A signer function used to build the message "signature"
+        signer: createDataItemSigner(wallet),
+        /*
+          The "data" portion of the message
+          If not specified a random string will be generated
+        */
+        data: JSON.stringify({ providerId }),
+
+    })
+
+    //console.log(id)
+    const { Output, Messages } = await result({
+        message: id,
+        process: processId,
+    });
+    
+    if (Messages && Messages.length > 0) {
+        const data = JSON.parse(Messages[0].Data);
+        console.log("Random Requests: ", data);
+    }
+    
+    return id;
+}
+
+async function sendQuery() {
+    let tags = [
+        { name: "Action", value: "Check-Status-Via-Callback" },
+    ]
+
+    let id = await message({
+        /*
+          The arweave TXID of the process, this will become the "target".
+          This is the process the message is ultimately sent to.
+        */
+        process: randomTesting,
+        // Tags that the process will use as input.
+        tags,
+        // A signer function used to build the message "signature"
+        signer: createDataItemSigner(wallet),
+        /*
+          The "data" portion of the message
+          If not specified a random string will be generated
+        */
+
+    })
+
+    return id;
+}
+
+async function highLow() {
+    let tags = [
+        { name: "Action", value: "High-or-Low" },
+        { name: "Guess", value: "Higher" }
+    ]
+
+    let id = await message({
+        /*
+          The arweave TXID of the process, this will become the "target".
+          This is the process the message is ultimately sent to.
+        */
+        process: randomTesting,
+        // Tags that the process will use as input.
+        tags,
+        // A signer function used to build the message "signature"
+        signer: createDataItemSigner(wallet),
+        /*
+          The "data" portion of the message
+          If not specified a random string will be generated
+        */
+
+    })
+    console.log(id)
+
+    return id;
+}
+
 
 async function viewGame() {
     let tags = [
@@ -557,6 +966,54 @@ async function main() {
     } else if (inputArg == 13) {
         try {
             await viewGame()
+        } catch (err) {
+            console.error("Error reading process IDs or sending messages:", err);
+        }
+    } else if (inputArg == 14) {
+        try {
+            await stake()
+        } catch (err) {
+            console.error("Error reading process IDs or sending messages:", err);
+        }
+    } else if (inputArg == 15) {
+        try {
+            await getStake()
+        } catch (err) {
+            console.error("Error reading process IDs or sending messages:", err);
+        }
+    } else if (inputArg == 16) {
+        try {
+            await unstake()
+        } catch (err) {
+            console.error("Error reading process IDs or sending messages:", err);
+        }
+    } else if (inputArg == 17) {
+        try {
+            await getAllProvidersDetails()
+        } catch (err) {
+            console.error("Error reading process IDs or sending messages:", err);
+        }
+    } else if (inputArg == 18) {
+        try {
+            await updateDetails()
+        } catch (err) {
+            console.error("Error reading process IDs or sending messages:", err);
+        }
+    } else if (inputArg == 55) {
+        try {
+            await deafult()
+        } catch (err) {
+            console.error("Error reading process IDs or sending messages:", err);
+        }
+    } else if (inputArg == 56) {
+        try {
+            await deafult2()
+        } catch (err) {
+            console.error("Error reading process IDs or sending messages:", err);
+        }
+    } else if (inputArg == 57) {
+        try {
+            await deafult3()
         } catch (err) {
             console.error("Error reading process IDs or sending messages:", err);
         }

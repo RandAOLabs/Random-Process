@@ -32,7 +32,7 @@ local function mockedRequire(moduleName)
   end
 
   if moduleName == "lsqlite3" then
-    return originalRequire("lsqlite3complete")
+    return originalRequire("lsqlite3")
   end
 
   return originalRequire(moduleName)

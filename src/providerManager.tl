@@ -6,6 +6,7 @@ local json = require "json"
 -- Type definitions
 global record Provider
   provider_id: string
+  details: string
   stake: string
   active: integer
   active_challenge_requests: string
@@ -18,17 +19,19 @@ global record ProviderList
   provider_ids: {string}
 end
 
+global record ProviderDetailsList
+  providers: {Provider}
+end
+
 global record RequestList
   request_ids: {string}
 end
 
 local providerManager = {}
 
-function providerManager.createProvider(userId: string): boolean, string
+function providerManager.createProvider(userId: string, timestamp: number): boolean, string
   print("entered providerManager.createProvider")
-  
-  local timestamp = os.time()
-  
+    
   if not DB then
     print("Database connection not initialized")
     return false, "Database connection is not initialized"
@@ -36,8 +39,8 @@ function providerManager.createProvider(userId: string): boolean, string
   
   print("Preparing SQL statement for provider creation")
   local stmt = DB:prepare([[
-    INSERT OR IGNORE INTO Providers (provider_id, created_at)
-    VALUES (:provider_id, :created_at);
+    INSERT OR IGNORE INTO Providers (provider_id, random_balance, created_at)
+    VALUES (:provider_id, :random_balance, :created_at);
   ]])
   
   if not stmt then
@@ -47,7 +50,7 @@ function providerManager.createProvider(userId: string): boolean, string
   
   print("Binding parameters for provider creation")
   local bind_ok, bind_err = pcall(function(): string
-    stmt:bind_names({provider_id = userId, created_at = timestamp})
+    stmt:bind_names({provider_id = userId, random_balance = 0, created_at = timestamp})
   end)
   
   if not bind_ok then
@@ -78,7 +81,48 @@ function providerManager.getProvider(userId: string): Provider, string
   if result then
     return result as Provider, ""
   else
-    return {} as Provider, "Unable to create provider"
+    return {} as Provider, "Unable to retrieve provider"
+  end
+end
+
+function providerManager.getAllProviders(): ProviderDetailsList, string
+  print("entered providerManager.getAllProviders")
+  
+  local stmt = DB:prepare("SELECT * FROM Providers")
+  local result = dbUtils.queryMany(stmt)
+
+  if result then
+    return result as ProviderDetailsList, ""
+  else
+    return {} as ProviderDetailsList, "Unable to retrieve providers"
+  end
+end
+
+function providerManager.updateProviderDetails(userId: string, details: string): boolean, string
+  print("entered providerManager.updateProviderDetails")  
+  if details == nil then
+    return false, "Details cannot be nil"
+  end
+  local _provider, err = providerManager.getProvider(userId)
+  if err ~= "" then
+    return false, err
+  end
+
+  local stmt = DB:prepare[[
+    UPDATE Providers
+    SET provider_details = :details
+    WHERE provider_id = :provider_id;
+  ]]
+  stmt:bind_names({provider_id = userId, details = details})
+
+  local ok = pcall(function()
+    dbUtils.execute(stmt, "Failed to update provider details")
+  end)
+  
+  if ok then
+    return true, ""
+  else
+    return false, "Failed to update provider details"
   end
 end
 
@@ -290,27 +334,6 @@ function providerManager.hasActiveRequest(userId: string, requestId: string, cha
   end
 end
 
-function providerManager.updateProviderBalance(userId: string, balance: integer): boolean, string
-  print("entered providerManager.updateProviderBalance")
-
-  local stmt = DB:prepare[[
-    UPDATE Providers
-    SET random_balance = :balance
-    WHERE provider_id = :provider_id;
-  ]]
-  stmt:bind_names({provider_id = userId, balance = balance})
-
-  local ok = pcall(function()
-  dbUtils.execute(stmt, "Failed to update provider balance")
-  end)
-
-  if ok then
-    return true, ""
-  else
-    return false, "Failed to update provider balance"
-  end
-end
-
 function providerManager.updateProviderStatus(userId: string, active: boolean): boolean, string
   print("entered providerManager.updateProviderStatus")
 
@@ -333,6 +356,59 @@ function providerManager.updateProviderStatus(userId: string, active: boolean): 
     return true, ""
   else
     return false, "Failed to update Provider status"
+  end
+end
+
+function providerManager.isActiveProvider(userId: string): boolean, string
+  print("entered providerManager.isActiveProvider")
+
+  local provider, err = providerManager.getProvider(userId)
+
+  if err ~= "" then
+    return false, err
+  end
+
+  if provider.active == 1 then
+    return true, ""
+  else
+    return false, ""
+  end
+end
+
+function providerManager.updateProviderBalance(userId: string, balance: integer): boolean, string
+  print("entered providerManager.updateProviderBalance")
+
+  local provider, err = providerManager.getProvider(userId)
+
+  if err ~= "" then
+    return false, err
+  end
+
+  local previousBalance = provider.random_balance
+
+  local stmt = DB:prepare[[
+    UPDATE Providers
+    SET random_balance = :balance
+    WHERE provider_id = :provider_id;
+  ]]
+  stmt:bind_names({provider_id = userId, balance = balance})
+
+  local ok = pcall(function()
+  dbUtils.execute(stmt, "Failed to update provider balance")
+  end)
+
+  if balance == 0 then 
+    providerManager.updateProviderStatus(userId, false)
+  end
+
+  if previousBalance == 0 and balance > 0 then
+    providerManager.updateProviderStatus(userId, true)
+  end
+
+  if ok then
+    return true, ""
+  else
+    return false, "Failed to update provider balance"
   end
 end
 

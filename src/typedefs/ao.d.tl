@@ -60,6 +60,7 @@ global record Message
   Quantity: string
   Tags: { string: string }
   Data: string
+  Timestamp: number
   Owner: string
   Cron: boolean
   reply: function(input: string | {string: string}): nil
