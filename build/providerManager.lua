@@ -30,49 +30,49 @@ RequestList = {}
 local providerManager = {}
 
 function providerManager.createProvider(userId, timestamp)
-   --print("entered providerManager.createProvider")
+   print("entered providerManager.createProvider")
 
    if not DB then
-      --print("Database connection not initialized")
+      print("Database connection not initialized")
       return false, "Database connection is not initialized"
    end
 
-   --print("Preparing SQL statement for provider creation")
+   print("Preparing SQL statement for provider creation")
    local stmt = DB:prepare([[
     INSERT OR IGNORE INTO Providers (provider_id, random_balance, created_at)
     VALUES (:provider_id, :random_balance, :created_at);
   ]])
 
    if not stmt then
-      --print("Failed to prepare statement: " .. DB:errmsg())
+      print("Failed to prepare statement: " .. DB:errmsg())
       return false, "Failed to prepare statement: " .. DB:errmsg()
    end
 
-   --print("Binding parameters for provider creation")
+   print("Binding parameters for provider creation")
    local bind_ok, bind_err = pcall(function()
       stmt:bind_names({ provider_id = userId, random_balance = 0, created_at = timestamp })
    end)
 
    if not bind_ok then
-      --print("Failed to bind parameters: " .. tostring(bind_err))
+      print("Failed to bind parameters: " .. tostring(bind_err))
       stmt:finalize()
       return false, "Failed to bind parameters: " .. tostring(bind_err)
    end
 
-   --print("Executing provider creation statement")
+   print("Executing provider creation statement")
    local execute_ok, execute_err = dbUtils.execute(stmt, "Create provider")
 
    if not execute_ok then
-      --print("Provider creation failed: " .. execute_err)
+      print("Provider creation failed: " .. execute_err)
    else
-      --print("Provider created successfully")
+      print("Provider created successfully")
    end
 
    return execute_ok, execute_err
 end
 
 function providerManager.getProvider(userId)
-   --print("entered providerManager.getProvider")
+   print("entered providerManager.getProvider")
 
    local stmt = DB:prepare("SELECT * FROM Providers WHERE provider_id = :provider_id")
    stmt:bind_names({ provider_id = userId })
@@ -86,7 +86,7 @@ function providerManager.getProvider(userId)
 end
 
 function providerManager.getAllProviders()
-   --print("entered providerManager.getAllProviders")
+   print("entered providerManager.getAllProviders")
 
    local stmt = DB:prepare("SELECT * FROM Providers")
    local result = dbUtils.queryMany(stmt)
@@ -99,7 +99,7 @@ function providerManager.getAllProviders()
 end
 
 function providerManager.updateProviderDetails(userId, details)
-   --print("entered providerManager.updateProviderDetails")
+   print("entered providerManager.updateProviderDetails")
    if details == nil then
       return false, "Details cannot be nil"
    end
@@ -127,7 +127,7 @@ function providerManager.updateProviderDetails(userId, details)
 end
 
 function providerManager.pushActiveRequests(providerIds, requestId, challenge)
-   --print("entered providerManager.pushActiveRequests")
+   print("entered providerManager.pushActiveRequests")
    local success = true
    local err = ""
 
@@ -135,7 +135,7 @@ function providerManager.pushActiveRequests(providerIds, requestId, challenge)
       local provider = providerManager.getProvider(value)
 
       if not provider then
-         --print("Provider with ID " .. value .. " not found.")
+         print("Provider with ID " .. value .. " not found.")
          success = false
          err = err .. " " .. value
          return success, err
@@ -169,13 +169,13 @@ function providerManager.pushActiveRequests(providerIds, requestId, challenge)
          end)
 
          if not ok then
-            --print("Failed to update provider active challenge requests for provider ID " .. provider.provider_id)
+            print("Failed to update provider active challenge requests for provider ID " .. provider.provider_id)
             success = false
             err = err .. " " .. provider.provider_id
             return success, err
          end
       else
-         --print("made here")
+         print("made here")
          local active_output_requests
          if provider.active_output_requests then
 
@@ -203,7 +203,7 @@ function providerManager.pushActiveRequests(providerIds, requestId, challenge)
          end)
 
          if not ok then
-            --print("Failed to update provider active output requests for provider ID " .. provider.provider_id)
+            print("Failed to update provider active output requests for provider ID " .. provider.provider_id)
             success = false
             err = err .. " " .. provider.provider_id
             return success, err
@@ -213,12 +213,12 @@ function providerManager.pushActiveRequests(providerIds, requestId, challenge)
 end
 
 function providerManager.removeActiveRequest(provider_id, requestId, challenge)
-   --print("entered providerManager.removeActiveRequest")
+   print("entered providerManager.removeActiveRequest")
 
 
    local provider = providerManager.getProvider(provider_id)
    if not provider then
-      --print("Provider with ID " .. provider_id .. " not found.")
+      print("Provider with ID " .. provider_id .. " not found.")
       return false, "Provider not found"
    end
 
@@ -255,7 +255,7 @@ function providerManager.removeActiveRequest(provider_id, requestId, challenge)
       end)
 
       if not ok then
-         --print("Failed to update provider active challenge requests for provider ID " .. provider_id)
+         print("Failed to update provider active challenge requests for provider ID " .. provider_id)
          return false, "Failed to update provider active challenge requests"
       end
    else
@@ -291,7 +291,7 @@ function providerManager.removeActiveRequest(provider_id, requestId, challenge)
       end)
 
       if not ok then
-         --print("Failed to update provider active output requests for provider ID " .. provider_id)
+         print("Failed to update provider active output requests for provider ID " .. provider_id)
          return false, "Failed to update provider active output requests"
       end
    end
@@ -300,7 +300,7 @@ function providerManager.removeActiveRequest(provider_id, requestId, challenge)
 end
 
 function providerManager.getActiveRequests(userId, challenge)
-   --print("entered providerManager.getActiveRequests")
+   print("entered providerManager.getActiveRequests")
    local provider = providerManager.getProvider(userId)
    if challenge then
       if provider.active_challenge_requests then
@@ -318,7 +318,7 @@ function providerManager.getActiveRequests(userId, challenge)
 end
 
 function providerManager.hasActiveRequest(userId, requestId, challenge)
-   --print("entered providerManager.hasActiveRequest")
+   print("entered providerManager.hasActiveRequest")
 
    local activeRequests, err = providerManager.getActiveRequests(userId, challenge)
    if err == "" then
@@ -335,7 +335,7 @@ function providerManager.hasActiveRequest(userId, requestId, challenge)
 end
 
 function providerManager.updateProviderStatus(userId, active)
-   --print("entered providerManager.updateProviderStatus")
+   print("entered providerManager.updateProviderStatus")
 
    local stmt
    local status = active and 1 or 0
@@ -360,7 +360,7 @@ function providerManager.updateProviderStatus(userId, active)
 end
 
 function providerManager.isActiveProvider(userId)
-   --print("entered providerManager.isActiveProvider")
+   print("entered providerManager.isActiveProvider")
 
    local provider, err = providerManager.getProvider(userId)
 
@@ -376,7 +376,7 @@ function providerManager.isActiveProvider(userId)
 end
 
 function providerManager.updateProviderBalance(userId, balance)
-   --print("entered providerManager.updateProviderBalance")
+   print("entered providerManager.updateProviderBalance")
 
    local provider, err = providerManager.getProvider(userId)
 

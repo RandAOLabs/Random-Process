@@ -5,23 +5,26 @@ import { get } from "node:http";
 // Load the wallet file
 const wallet = JSON.parse(readFileSync("./hera.json").toString(),);
 const availableRandomValues = 44
-const providerId    = "ld4ncW8yLSkckjia3cw6qO7silUdEe1nsdiEvMoLg-0"
+
+const providerId    = "XUo8jZtUDBFLtp5okR12oLrqIZ4ewNlTpqnqmriihJE"
 const providerId2   = "c8Iq4yunDnsJWGSz_wYwQU--O9qeODKHiRdUkQkW2p8"
 const providerId3   = "Sr3HVH0Nh6iZzbORLpoQFOEvmsuKjXsHswSWH760KAk"
+const providerId4   = "ld4ncW8yLSkckjia3cw6qO7silUdEe1nsdiEvMoLg-0"
+const providerId5   = "N90q65iT59dCo01-gtZRUlLMX0w6_ylFHv2uHaSUFNk"
 const providerDetails = JSON.stringify({
     "I LIKE ICECREAM": "NOOOO",
 })
-const processId     = "Uun6Qm_eX8wGZ-MoHe-RAWVL_BNThI9Br50N6mzJvfU" // "QeVaQXBmIFfLuc29G5bXnylBIJXqON4naIbZrQTk8Iw"
+const processId     = "4ZfqKFOyhSYVDyc1H_qcbaHpPGUekAp4fGO5LaqNzeI" // "Uun6Qm_eX8wGZ-MoHe-RAWVL_BNThI9Br50N6mzJvfU" // "QeVaQXBmIFfLuc29G5bXnylBIJXqON4naIbZrQTk8Iw"
 const randomTesting = "k1pGSzc7Uj2PaqH6jtbJp9Xg40IklrEwWyO6ipXO15g"
 const tokenId       = "5ZR9uegKoEhE9fJMbs-MvWLIztMNCVxgpzfeBVE3vqI"
 const tokenId2      = "hqkQC3X-UfFeHRNc83OYORbsB_9v6uW0A-hDRVTH1mU"
 const wAR           = "xU9zFkq3X2ZQ6olwNVvr1vUWIjc3kXTWr7xKQD6dh10"
 let providers = {
-    provider_ids: ["XUo8jZtUDBFLtp5okR12oLrqIZ4ewNlTpqnqmriihJE"]
+    provider_ids: [providerId4]
 }
 
 const requestInputs     = 1
-const requestId         = "c3f14b43-8668-4e51-b81d-43897ab96238"
+const requestId         = "6154e869-a186-4904-bef2-41e35856b34c"
 const requestIds = [
     requestId
 ]
@@ -615,7 +618,7 @@ async function getStake() {
           The "data" portion of the message
           If not specified a random string will be generated
         */
-        data: JSON.stringify({ providerId: providerId }),
+        data: JSON.stringify({ providerId: providerId4 }),
 
     })
 

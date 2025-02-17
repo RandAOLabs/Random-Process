@@ -50,7 +50,7 @@ RandomResponseResponse = {}
 local randomManager = {}
 
 function randomManager.generateUUID()
-   --print("entered randomManager.generateUUID")
+   print("entered randomManager.generateUUID")
 
    local template = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'
    return (string.gsub(template, '[xy]', function(c)
@@ -60,7 +60,7 @@ function randomManager.generateUUID()
 end
 
 function randomManager.getRandomProviderList(requestId)
-   --print("entered randomManager.getRandomProviders")
+   print("entered randomManager.getRandomProviders")
 
    local stmt = DB:prepare("SELECT providers FROM RandomRequests WHERE request_id = :request_id")
    stmt:bind_names({ request_id = requestId })
@@ -74,7 +74,7 @@ function randomManager.getRandomProviderList(requestId)
 end
 
 function randomManager.updateRandomRequestStatus(requestId, newStatus)
-   --print("Entered randomManager.updateRandomRequestStatus")
+   print("Entered randomManager.updateRandomRequestStatus")
 
 
    local validStatus = false
@@ -110,12 +110,12 @@ function randomManager.updateRandomRequestStatus(requestId, newStatus)
       return false, "Failed to update random request status: " .. tostring(execute_err)
    end
 
-   --print("Random request status updated successfully to: " .. newStatus)
+   print("Random request status updated successfully to: " .. newStatus)
    return true, ""
 end
 
 function randomManager.getRandomRequestedInputs(requestId)
-   --print("entered randomManager.getRandomRequestedInputs")
+   print("entered randomManager.getRandomRequestedInputs")
 
    local stmt = DB:prepare("SELECT requested_inputs FROM RandomRequests WHERE request_id = :request_id")
    stmt:bind_names({ request_id = requestId })
@@ -128,7 +128,7 @@ function randomManager.getRandomRequestedInputs(requestId)
 end
 
 function randomManager.getRandomStatus(requestId)
-   --print("entered randomManager.getRandomStatus")
+   print("entered randomManager.getRandomStatus")
 
    local stmt = DB:prepare("SELECT status FROM RandomRequests WHERE request_id = :request_id")
    stmt:bind_names({ request_id = requestId })
@@ -141,7 +141,7 @@ function randomManager.getRandomStatus(requestId)
 end
 
 function randomManager.resetRandomRequestRequestedInputs(requestId, newRequestedInputs)
-   --print("Entered randomManager.resetRandomRequestRequestedInputs")
+   print("Entered randomManager.resetRandomRequestRequestedInputs")
 
 
    local stmt = DB:prepare([[
@@ -163,18 +163,18 @@ function randomManager.resetRandomRequestRequestedInputs(requestId, newRequested
       return false, "Failed to update random request requested inputs: " .. tostring(execute_err)
    end
 
-   --print("Random request requested inputs updated successfully to: " .. newRequestedInputs)
+   print("Random request requested inputs updated successfully to: " .. newRequestedInputs)
    return true, ""
 end
 
 function randomManager.getVDFResults(requestId)
-   --print("entered randomManager.getVDFResults")
+   print("entered randomManager.getVDFResults")
 
    local stmt = DB:prepare("SELECT * FROM ProviderVDFResults WHERE request_id = :request_id")
    stmt:bind_names({ request_id = requestId })
    local queryResult = dbUtils.queryMany(stmt)
-   --print(json.encode(queryResult))
-   --print(json.encode(queryResult[1]))
+   print(json.encode(queryResult))
+   print(json.encode(queryResult[1]))
    local result = {
       requestResponses = {},
    }
@@ -183,7 +183,7 @@ function randomManager.getVDFResults(requestId)
       table.insert(result.requestResponses, response)
    end
 
-   --print(json.encode(result))
+   print(json.encode(result))
 
    if result then
       return result, ""
@@ -193,7 +193,7 @@ function randomManager.getVDFResults(requestId)
 end
 
 function randomManager.getRandomRequest(requestId)
-   --print("entered randomManager.getRandomRequest")
+   print("entered randomManager.getRandomRequest")
 
    local stmt = DB:prepare("SELECT * FROM RandomRequests WHERE request_id = :request_id")
    stmt:bind_names({ request_id = requestId })
@@ -207,11 +207,11 @@ end
 
 
 function randomManager.processEntropy(requestId)
-   --print("entered randomManager.processEntropy")
+   print("entered randomManager.processEntropy")
 
    local results, err = randomManager.getVDFResults(requestId)
    if err ~= "" then
-      --print("Failed to get VDF results: " .. err)
+      print("Failed to get VDF results: " .. err)
       return "", err
    end
 
@@ -224,7 +224,7 @@ function randomManager.processEntropy(requestId)
    for i = 2, #results.requestResponses do
       local value = tonumber(results.requestResponses[i].output_value)
       if not value then
-         --print("Invalid output_value at index " .. i .. ": " .. tostring(results.requestResponses[i].output_value))
+         print("Invalid output_value at index " .. i .. ": " .. tostring(results.requestResponses[i].output_value))
          return "", "Invalid output_value in requestResponses"
       end
 
@@ -234,7 +234,7 @@ function randomManager.processEntropy(requestId)
    end
 
    local entropy = tostring(math.floor(mixed))
-   --print("Request " .. requestId .. " entropy: " .. entropy)
+   print("Request " .. requestId .. " entropy: " .. entropy)
 
 
 
@@ -251,7 +251,7 @@ function randomManager.processEntropy(requestId)
    local execute_ok, execute_err = dbUtils.execute(stmt, "Update random request entropy")
 
    if not execute_ok then
-      --print("Failed to update random request entropy: " .. tostring(execute_err))
+      print("Failed to update random request entropy: " .. tostring(execute_err))
    end
 
    print("Random request entropy updated successfully to: " .. entropy)
@@ -260,12 +260,12 @@ function randomManager.processEntropy(requestId)
 end
 
 function randomManager.deliverRandomResponse(requestId)
-   --print("entered deliverRandomResponse")
+   print("entered deliverRandomResponse")
 
    local randomRequest, err = randomManager.getRandomRequest(requestId)
 
    if err ~= "" then
-      --print("Failed to get random request: " .. err)
+      print("Failed to get random request: " .. err)
       return false
    end
 
@@ -290,7 +290,7 @@ function randomManager.deliverRandomResponse(requestId)
 end
 
 function randomManager.decrementRequestedInputs(requestId)
-   --print("Entered randomManager.decrementRequestedInputs")
+   print("Entered randomManager.decrementRequestedInputs")
 
    local requested, _ = randomManager.getRandomRequestedInputs(requestId)
 
@@ -298,7 +298,7 @@ function randomManager.decrementRequestedInputs(requestId)
       return false, "Failure: can not decrement needed below 0"
    end
 
-   --print("Requested: " .. requested)
+   print("Requested: " .. requested)
 
    requested = requested - 1
 
@@ -328,7 +328,7 @@ function randomManager.decrementRequestedInputs(requestId)
       if err == "" then
 
          if status == Status[1] then
-            --print("Random request finished collecting inputs")
+            print("Random request finished collecting inputs")
             local providerList = randomManager.getRandomProviderList(requestId)
             randomManager.resetRandomRequestRequestedInputs(requestId, #providerList.provider_ids)
             providerManager.pushActiveRequests(providerList.provider_ids, requestId, false)
@@ -339,7 +339,7 @@ function randomManager.decrementRequestedInputs(requestId)
 
 
          elseif status == Status[2] then
-            --print("Random request finished collecting outputs")
+            print("Random request finished collecting outputs")
             local providerList = randomManager.getRandomProviderList(requestId)
             local requestedValue = #providerList.provider_ids * 11
             randomManager.resetRandomRequestRequestedInputs(requestId, requestedValue)
@@ -350,7 +350,7 @@ function randomManager.decrementRequestedInputs(requestId)
 
 
          elseif status == Status[3] then
-            --print("Random request finished successfully")
+            print("Random request finished successfully")
             randomManager.deliverRandomResponse(requestId)
             randomManager.updateRandomRequestStatus(requestId, Status[5])
 
@@ -361,12 +361,12 @@ function randomManager.decrementRequestedInputs(requestId)
       end
    end
 
-   --print("Random request requested_inputs updated successfully to: " .. requested)
+   print("Random request requested_inputs updated successfully to: " .. requested)
    return true, ""
 end
 
 function randomManager.getRandomRequestViaCallbackId(callbackId)
-   --print("entered randomManager.getRandomRequestViaCallbackId")
+   print("entered randomManager.getRandomRequestViaCallbackId")
 
    local stmt = DB:prepare("SELECT * FROM RandomRequests WHERE callback_id = :callback_id AND status != 'FAILED'")
    stmt:bind_names({ callback_id = callbackId })
@@ -379,7 +379,7 @@ function randomManager.getRandomRequestViaCallbackId(callbackId)
 end
 
 function randomManager.getVDFResult(requestId, providerId)
-   --print("entered randomManager.getVDFResult")
+   print("entered randomManager.getVDFResult")
 
    local stmt = DB:prepare("SELECT * FROM ProviderVDFResults WHERE request_id = :request_id AND provider_id = :provider_id")
    stmt:bind_names({ request_id = requestId, provider_id = providerId })
@@ -392,13 +392,14 @@ function randomManager.getVDFResult(requestId, providerId)
 end
 
 function randomManager.createRandomRequest(userId, providers, callbackId, requestedInputs)
-   --print("entered randomManager.createRandomRequest")
+   print("entered randomManager.createRandomRequest")
 
    local timestamp = os.time()
    local requestId = randomManager.generateUUID()
 
 
    local providerList = json.decode(providers)
+   print("providerList: " .. providers)
 
    local staked = true
 
@@ -423,7 +424,7 @@ function randomManager.createRandomRequest(userId, providers, callbackId, reques
       if result and type(result) == "table" then
          decodedRequestList = result
       else
-         --print("Failed to decode requestedInputs. Invalid JSON or structure.")
+         print("Failed to decode requestedInputs. Invalid JSON or structure.")
          return false, "Invalid requestedInputs JSON"
       end
    else
@@ -435,52 +436,52 @@ function randomManager.createRandomRequest(userId, providers, callbackId, reques
    local requestedValue = math.min(decodedRequestList.requested_inputs or #providerList.provider_ids, #providerList.provider_ids)
 
    if not DB then
-      --print("Database connection not initialized")
+      print("Database connection not initialized")
       return false, "Database connection is not initialized"
    end
 
    providerManager.pushActiveRequests(providerList.provider_ids, requestId, true)
    ActiveRequests.activeChallengeRequests.request_ids[requestId] = timestamp
 
-   --print("Preparing SQL statement for random request creation")
+   print("Preparing SQL statement for random request creation")
    local stmt = DB:prepare([[
     INSERT OR IGNORE INTO RandomRequests (request_id, requester, callback_id, providers, requested_inputs, status, created_at)
     VALUES (:request_id, :requester, :callback_id, :providers, :requested_inputs, :status, :created_at);
   ]])
 
    if not stmt then
-      --print("Failed to prepare statement: " .. DB:errmsg())
+      print("Failed to prepare statement: " .. DB:errmsg())
       return false, "Failed to prepare statement: " .. DB:errmsg()
    end
 
    local status = Status[1]
 
-   --print("Binding parameters for random request creation")
+   print("Binding parameters for random request creation")
    local bind_ok, bind_err = pcall(function()
       stmt:bind_names({ request_id = requestId, requester = userId, callback_id = callbackId, providers = providers, requested_inputs = requestedValue, status = status, created_at = timestamp })
    end)
 
    if not bind_ok then
-      --print("Failed to bind parameters: " .. tostring(bind_err))
+      print("Failed to bind parameters: " .. tostring(bind_err))
       stmt:finalize()
       return false, "Failed to bind parameters: " .. tostring(bind_err)
    end
 
-   --print("Executing random request creation statement")
+   print("Executing random request creation statement")
    local execute_ok, execute_err = dbUtils.execute(stmt, "Create random request")
 
    if not execute_ok then
-      --print("Random Request creation failed: " .. execute_err)
+      print("Random Request creation failed: " .. execute_err)
    else
-      --print("Random Request created successfully")
-      --print("New RequestId: " .. requestId)
+      print("Random Request created successfully")
+      print("New RequestId: " .. requestId)
    end
 
    return execute_ok, execute_err
 end
 
 function randomManager.rerequestRandom(requestId)
-   --print("entered randomManager.rerequestRandom")
+   print("entered randomManager.rerequestRandom")
 
    local providerList = FallbackProviders
 
@@ -490,7 +491,7 @@ function randomManager.rerequestRandom(requestId)
    end
 
 
-   local success, err = randomManager.createRandomRequest(initalRequest.requester, json.encode(providerList), initalRequest.callback_id, "")
+   local success, err = randomManager.createRandomRequest(initalRequest.requester, providerList, initalRequest.callback_id, "")
    if not success then
       return false, err
    end
@@ -501,58 +502,58 @@ function randomManager.rerequestRandom(requestId)
 end
 
 function randomManager.postVDFChallenge(userId, requestId, inputValue, modulusValue)
-   --print("entered randomManager.postVDFChallenge")
+   print("entered randomManager.postVDFChallenge")
 
    local timestamp = os.time()
 
    if not DB then
-      --print("Database connection not initialized")
+      print("Database connection not initialized")
       return false, "Database connection is not initialized"
    end
 
-   --print("Preparing SQL statement for provider request response creation")
+   print("Preparing SQL statement for provider request response creation")
    local stmt = DB:prepare([[
     INSERT OR IGNORE INTO ProviderVDFResults (request_id, provider_id, input_value, modulus_value, created_at)
     VALUES (:request_id, :provider_id, :input_value, :modulus_value, :created_at);
   ]])
 
    if not stmt then
-      --print("Failed to prepare statement: " .. DB:errmsg())
+      print("Failed to prepare statement: " .. DB:errmsg())
       return false, "Failed to prepare statement: " .. DB:errmsg()
    end
 
-   --print("Binding parameters for provider request response creation")
+   print("Binding parameters for provider request response creation")
    local bind_ok, bind_err = pcall(function()
       stmt:bind_names({ request_id = requestId, provider_id = userId, input_value = inputValue, modulus_value = modulusValue, created_at = timestamp })
    end)
 
    if not bind_ok then
-      --print("Failed to bind parameters: " .. tostring(bind_err))
+      print("Failed to bind parameters: " .. tostring(bind_err))
       stmt:finalize()
       return false, "Failed to bind parameters: " .. tostring(bind_err)
    end
 
-   --print("Executing provider request response creation statement")
+   print("Executing provider request response creation statement")
    local execute_ok, execute_err = dbUtils.execute(stmt, "Create provider request response")
 
    if not execute_ok then
-      --print("Provider Request Response creation failed: " .. execute_err)
+      print("Provider Request Response creation failed: " .. execute_err)
    else
-      --print("Provider Request Response created successfully")
+      print("Provider Request Response created successfully")
    end
 
    return execute_ok, execute_err
 end
 
 function randomManager.postVDFOutputAndProof(userId, requestId, outputValue, proof)
-   --print("entered randomManager.postVDFOutputAndProof")
+   print("entered randomManager.postVDFOutputAndProof")
 
    if not DB then
-      --print("Database connection not initialized")
+      print("Database connection not initialized")
       return false, "Database connection is not initialized"
    end
 
-   --print("Preparing SQL statement for provider request response creation")
+   print("Preparing SQL statement for provider request response creation")
    local stmt = DB:prepare([[
     UPDATE ProviderVDFResults
     SET output_value = :output_value, proof = :proof
@@ -560,28 +561,28 @@ function randomManager.postVDFOutputAndProof(userId, requestId, outputValue, pro
   ]])
 
    if not stmt then
-      --print("Failed to prepare statement: " .. DB:errmsg())
+      print("Failed to prepare statement: " .. DB:errmsg())
       return false, "Failed to prepare statement: " .. DB:errmsg()
    end
 
-   --print("Binding parameters for provider request response creation")
+   print("Binding parameters for provider request response creation")
    local bind_ok, bind_err = pcall(function()
       stmt:bind_names({ request_id = requestId, provider_id = userId, output_value = outputValue, proof = proof })
    end)
 
    if not bind_ok then
-      --print("Failed to bind parameters: " .. tostring(bind_err))
+      print("Failed to bind parameters: " .. tostring(bind_err))
       stmt:finalize()
       return false, "Failed to bind parameters: " .. tostring(bind_err)
    end
 
-   --print("Executing post vdf output and proof statement")
+   print("Executing post vdf output and proof statement")
    local execute_ok, execute_err = dbUtils.execute(stmt, "Post vdf output and proof")
 
    if not execute_ok then
-      --print("Post VDF Output and Proof failed: " .. execute_err)
+      print("Post VDF Output and Proof failed: " .. execute_err)
    else
-      --print("VDF Output and Proof posted successfully")
+      print("VDF Output and Proof posted successfully")
 
 
       local vdfRequest = randomManager.getVDFResult(requestId, userId)
@@ -591,10 +592,10 @@ function randomManager.postVDFOutputAndProof(userId, requestId, outputValue, pro
 
       local processResult, processError = verifierManager.processProof(requestId, input, modulus, proof, userId, outputValue)
       if not processResult then
-         --print("Processing proof failed: " .. tostring(processError))
+         print("Processing proof failed: " .. tostring(processError))
          return false, "Processing proof failed: " .. tostring(processError)
       else
-         --print("Proof processed successfully")
+         print("Proof processed successfully")
       end
 
    end

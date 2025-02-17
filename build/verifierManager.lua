@@ -48,10 +48,10 @@ local verifierManager = {}
 
 
 function verifierManager.registerVerifier(processId)
-   --print("Registering verifier: " .. processId)
+   print("Registering verifier: " .. processId)
 
    if not DB then
-      --print("Database connection not initialized")
+      print("Database connection not initialized")
       return false, "Database connection is not initialized"
    end
 
@@ -62,7 +62,7 @@ function verifierManager.registerVerifier(processId)
   ]])
 
    if not stmt then
-      --print("Failed to prepare statement: " .. DB:errmsg())
+      print("Failed to prepare statement: " .. DB:errmsg())
       return false, "Failed to prepare statement: " .. DB:errmsg()
    end
 
@@ -72,7 +72,7 @@ function verifierManager.registerVerifier(processId)
    end)
 
    if not ok then
-      --print("Failed to bind parameters")
+      print("Failed to bind parameters")
       return false, "Failed to bind parameters"
    end
 
@@ -87,7 +87,7 @@ end
 
 function verifierManager.getAvailableVerifiers()
    if not DB then
-      --print("Database connection not initialized")
+      print("Database connection not initialized")
       return {}, "Database connection is not initialized"
    end
 
@@ -97,7 +97,7 @@ function verifierManager.getAvailableVerifiers()
   ]])
 
    if not stmt then
-      --print("Failed to prepare statement: " .. DB:errmsg())
+      print("Failed to prepare statement: " .. DB:errmsg())
       return {}, "Failed to prepare statement: " .. DB:errmsg()
    end
 
@@ -118,7 +118,7 @@ end
 
 
 function verifierManager.printAvailableVerifiers()
-   --print("entered available Verifiers")
+   print("entered available Verifiers")
    local availableVerifiers, _ = verifierManager.getAvailableVerifiers()
    return availableVerifiers
 end
@@ -131,7 +131,7 @@ function verifierManager.getStats()
    }
 
    if not DB then
-      --print("Database connection not initialized")
+      print("Database connection not initialized")
       return stats
    end
 
@@ -143,7 +143,7 @@ function verifierManager.getStats()
   ]])
 
    if not stmt then
-      --print("Failed to prepare statement: " .. DB:errmsg())
+      print("Failed to prepare statement: " .. DB:errmsg())
       return stats
    end
 
@@ -157,7 +157,7 @@ function verifierManager.getStats()
 end
 
 function verifierManager.requestVerification(processId, data, checkpoint)
-   --print("Sending verification request to process: " .. processId)
+   print("Sending verification request to process: " .. processId)
 
    if checkpoint then
       local _ = ao.send({
@@ -178,7 +178,7 @@ end
 
 function verifierManager.assignSegment(verifierId, segmentId)
    if not DB then
-      --print("Database connection not initialized")
+      print("Database connection not initialized")
       return false, "Database connection is not initialized"
    end
 
@@ -189,7 +189,7 @@ function verifierManager.assignSegment(verifierId, segmentId)
   ]])
 
    if not stmt then
-      --print("Failed to prepare statement: " .. DB:errmsg())
+      print("Failed to prepare statement: " .. DB:errmsg())
       return false, "Failed to prepare statement: " .. DB:errmsg()
    end
 
@@ -202,7 +202,7 @@ function verifierManager.assignSegment(verifierId, segmentId)
    end)
 
    if not ok then
-      --print("Failed to bind parameters")
+      print("Failed to bind parameters")
       return false, "Failed to bind parameters"
    end
 
@@ -216,9 +216,9 @@ end
 
 
 function verifierManager.markAvailable(verifierId)
-   --print("Marking verifier as available: " .. verifierId)
+   print("Marking verifier as available: " .. verifierId)
    if not DB then
-      --print("Database connection not initialized")
+      print("Database connection not initialized")
       return false, "Database connection is not initialized"
    end
 
@@ -229,7 +229,7 @@ function verifierManager.markAvailable(verifierId)
   ]])
 
    if not stmt then
-      --print("Failed to prepare statement: " .. DB:errmsg())
+      print("Failed to prepare statement: " .. DB:errmsg())
       return false, "Failed to prepare statement: " .. DB:errmsg()
    end
 
@@ -239,7 +239,7 @@ function verifierManager.markAvailable(verifierId)
    end)
 
    if not ok then
-      --print("Failed to bind parameters")
+      print("Failed to bind parameters")
       return false, "Failed to bind parameters"
    end
 
@@ -253,9 +253,9 @@ end
 
 
 function verifierManager.processVerification(verifierId, segmentId, result)
-   --print("Processing verification result for segment: " .. segmentId)
+   print("Processing verification result for segment: " .. segmentId)
    if not DB then
-      --print("Database connection not initialized")
+      print("Database connection not initialized")
       return false, "Database connection is not initialized"
    end
 
@@ -266,7 +266,7 @@ function verifierManager.processVerification(verifierId, segmentId, result)
   ]])
 
    if not stmt then
-      --print("Failed to prepare statement: " .. DB:errmsg())
+      print("Failed to prepare statement: " .. DB:errmsg())
       return false, "Failed to prepare statement: " .. DB:errmsg()
    end
 
@@ -279,7 +279,7 @@ function verifierManager.processVerification(verifierId, segmentId, result)
    end)
 
    if not ok then
-      --print("Failed to bind parameters")
+      print("Failed to bind parameters")
       return false, "Failed to bind parameters"
    end
 
@@ -296,7 +296,7 @@ end
 
 function verifierManager.createSegment(proofId, segmentCount, segmentData)
    if not DB then
-      --print("Database connection not initialized")
+      print("Database connection not initialized")
       return "", "Database connection is not initialized"
    end
 
@@ -310,7 +310,7 @@ function verifierManager.createSegment(proofId, segmentCount, segmentData)
   ]])
 
    if not stmt then
-      --print("Failed to prepare statement: " .. DB:errmsg())
+      print("Failed to prepare statement: " .. DB:errmsg())
       return "", "Failed to prepare statement: " .. DB:errmsg()
    end
 
@@ -325,7 +325,7 @@ function verifierManager.createSegment(proofId, segmentCount, segmentData)
    end)
 
    if not ok then
-      --print("Failed to bind parameters")
+      print("Failed to bind parameters")
       return "", "Failed to bind parameters"
    end
 
@@ -340,7 +340,7 @@ end
 
 function verifierManager.updateSegmentStatus(segmentId, status, result)
    if not DB then
-      --print("Database connection not initialized")
+      print("Database connection not initialized")
       return false, "Database connection is not initialized"
    end
 
@@ -351,7 +351,7 @@ function verifierManager.updateSegmentStatus(segmentId, status, result)
   ]])
 
    if not stmt then
-      --print("Failed to prepare statement: " .. DB:errmsg())
+      print("Failed to prepare statement: " .. DB:errmsg())
       return false, "Failed to prepare statement: " .. DB:errmsg()
    end
 
@@ -365,7 +365,7 @@ function verifierManager.updateSegmentStatus(segmentId, status, result)
    end)
 
    if not ok then
-      --print("Failed to bind parameters")
+      print("Failed to bind parameters")
       return false, "Failed to bind parameters"
    end
 
@@ -408,7 +408,7 @@ function verifierManager.processProof(requestId, input, modulus, proofJson, prov
 
    local outputAssigned, outputAssignErr = verifierManager.assignSegment(outputVerifierId.process_id, outputSegmentId)
    if not outputAssigned then
-      --print("Failed to assign segment: " .. outputAssignErr)
+      print("Failed to assign segment: " .. outputAssignErr)
    else
       local outputSegmentInput = proofArray[10]
       local segmentExpectedOutput = modExpectedOutput
@@ -427,7 +427,7 @@ function verifierManager.processProof(requestId, input, modulus, proofJson, prov
 
    local segmentCount = 1
    for _, segment in ipairs(proof.proof) do
-      --print("Processing segment: " .. segment .. " count: " .. segmentCount)
+      print("Processing segment: " .. segment .. " count: " .. segmentCount)
 
       local segmentId, createErr = verifierManager.createSegment(proofId, tostring(segmentCount), segment)
       segmentCount = segmentCount + 1
@@ -442,7 +442,7 @@ function verifierManager.processProof(requestId, input, modulus, proofJson, prov
 
          local assigned, assignErr = verifierManager.assignSegment(verifierId.process_id, segmentId)
          if not assigned then
-            --print("Failed to assign segment: " .. assignErr)
+            print("Failed to assign segment: " .. assignErr)
          else
             local segmentInput = input
             local segmentExpectedOutput = proofArray[segmentCount - 1]
@@ -462,7 +462,7 @@ function verifierManager.processProof(requestId, input, modulus, proofJson, prov
             verifierManager.requestVerification(verifierId.process_id, requestData, true)
          end
       else
-         --print("No verifiers available for segment: " .. segmentId)
+         print("No verifiers available for segment: " .. segmentId)
       end
 
    end
@@ -474,12 +474,12 @@ function verifierManager.initializeVerifierManager()
    for _, verifier in ipairs(VerifierProcesses) do
       verifierManager.registerVerifier(verifier)
    end
-   --print("Verifier manager and processes initialized")
+   print("Verifier manager and processes initialized")
 end
 
 function verifierManager.dropVerifierTable()
    if not DB then
-      --print("Database connection not initialized")
+      print("Database connection not initialized")
    end
 
    local stmt = DB:prepare([[
@@ -487,21 +487,21 @@ function verifierManager.dropVerifierTable()
   ]])
 
    if not stmt then
-      --print("Failed to prepare statement: " .. DB:errmsg())
+      print("Failed to prepare statement: " .. DB:errmsg())
    end
 
    local exec_ok, exec_err = dbUtils.execute(stmt, "Drop verifier table")
    if not exec_ok then
-      --print("Failed to execute drop table statement: " .. exec_err)
+      print("Failed to execute drop table statement: " .. exec_err)
    end
 end
 
 
 function verifierManager.removeVerifier(processId)
-   --print("Removing verifier: " .. processId)
+   print("Removing verifier: " .. processId)
 
    if not DB then
-      --print("Database connection not initialized")
+      print("Database connection not initialized")
       return false, "Database connection is not initialized"
    end
 
@@ -511,7 +511,7 @@ function verifierManager.removeVerifier(processId)
   ]])
 
    if not stmt then
-      --print("Failed to prepare statement: " .. DB:errmsg())
+      print("Failed to prepare statement: " .. DB:errmsg())
       return false, "Failed to prepare statement: " .. DB:errmsg()
    end
 
@@ -521,7 +521,7 @@ function verifierManager.removeVerifier(processId)
    end)
 
    if not ok then
-      --print("Failed to bind parameters")
+      print("Failed to bind parameters")
       return false, "Failed to bind parameters"
    end
 

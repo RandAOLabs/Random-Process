@@ -248,7 +248,7 @@ ActiveRequests = {
 
 RequestsToCrack = {}
 
-FallbackProviders = "{\"provider_ids\":[\"XUo8jZtUDBFLtp5okR12oLrqIZ4ewNlTpqnqmriihJE\",\"c8Iq4yunDnsJWGSz_wYwQU--O9qeODKHiRdUkQkW2p8\"]}"
+FallbackProviders = '{"provider_ids":["XUo8jZtUDBFLtp5okR12oLrqIZ4ewNlTpqnqmriihJE"]}'
 
 SuccessMessage = "200: Success"
 
@@ -3102,6 +3102,7 @@ function randomManager.createRandomRequest(userId, providers, callbackId, reques
 
 
    local providerList = json.decode(providers)
+   print("providerList: " .. providers)
 
    local staked = true
 
@@ -3193,7 +3194,7 @@ function randomManager.rerequestRandom(requestId)
    end
 
 
-   local success, err = randomManager.createRandomRequest(initalRequest.requester, json.encode(providerList), initalRequest.callback_id, "")
+   local success, err = randomManager.createRandomRequest(initalRequest.requester, providerList, initalRequest.callback_id, "")
    if not success then
       return false, err
    end
@@ -4623,23 +4624,31 @@ function cronTickHandler(_msg)
    for category, data in pairs(ActiveRequests) do
 
       local request_ids = data.request_ids
+
       if type(request_ids) == "table" then
+
 
          for request_id, timestamp in pairs(request_ids) do
 
             print("Category: " .. category .. ", Request ID: " .. request_id .. ", Timestamp: " .. timestamp)
+
             if timestamp + OverridePeriod < os.time() then
                print("Request ID: " .. request_id .. " in category: " .. category .. " is overdue.")
                if category == "activeChallengeRequests" then
 
+                  print("Rerequesting random from approved providers for request_id: " .. request_id)
                   randomManager.rerequestRandom(request_id)
+
                elseif category == "activeOutputRequests" then
 
+                  print("Moving to cracking pool for request_id: " .. request_id)
                   randomManager.updateRandomRequestStatus(request_id, Status[4])
                   ActiveRequests.activeOutputRequests.request_ids[request_id] = nil
                   RequestsToCrack[request_id] = true
+
                elseif category == "activeVerificationRequests" then
 
+                  print("Rerequesting random from approved providers for request_id: " .. request_id)
                   randomManager.rerequestRandom(request_id)
                end
             end

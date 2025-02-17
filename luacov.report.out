@@ -1,427 +1,4 @@
 ==============================================================================
-swag.lua
-==============================================================================
-
-  do
-0     local _ENV = _ENV
-0     package.preload[ "providerManager" ] = function( ... ) local arg = _G.arg;
-0     local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local pcall = _tl_compat and _tl_compat.pcall or pcall; local table = _tl_compat and _tl_compat.table or table; require("globals")
-      
-0     local dbUtils = require("dbUtils")
-0     local json = require("json")
-      
-      
-0     Provider = {}
-      
-      
-      
-      
-      
-      
-      
-      
-      
-      
-0     ProviderList = {}
-      
-      
-      
-0     ProviderDetailsList = {}
-      
-      
-      
-0     RequestList = {}
-      
-      
-      
-0     local providerManager = {}
-      
-0     function providerManager.createProvider(userId, timestamp)
-0        print("entered providerManager.createProvider")
-      
-0        if not DB then
-0           print("Database connection not initialized")
-0           return false, "Database connection is not initialized"
-         end
-      
-0        print("Preparing SQL statement for provider creation")
-0        local stmt = DB:prepare([[
-          INSERT OR IGNORE INTO Providers (provider_id, random_balance, created_at)
-          VALUES (:provider_id, :random_balance, :created_at);
-0       ]])
-      
-0        if not stmt then
-0           print("Failed to prepare statement: " .. DB:errmsg())
-0           return false, "Failed to prepare statement: " .. DB:errmsg()
-         end
-      
-0        print("Binding parameters for provider creation")
-0        local bind_ok, bind_err = pcall(function()
-0           stmt:bind_names({ provider_id = userId, random_balance = 0, created_at = timestamp })
-         end)
-      
-0        if not bind_ok then
-0           print("Failed to bind parameters: " .. tostring(bind_err))
-0           stmt:finalize()
-0           return false, "Failed to bind parameters: " .. tostring(bind_err)
-         end
-      
-0        print("Executing provider creation statement")
-0        local execute_ok, execute_err = dbUtils.execute(stmt, "Create provider")
-      
-0        if not execute_ok then
-0           print("Provider creation failed: " .. execute_err)
-         else
-0           print("Provider created successfully")
-         end
-      
-0        return execute_ok, execute_err
-      end
-      
-0     function providerManager.getProvider(userId)
-0        print("entered providerManager.getProvider")
-      
-0        local stmt = DB:prepare("SELECT * FROM Providers WHERE provider_id = :provider_id")
-0        stmt:bind_names({ provider_id = userId })
-0        local result = dbUtils.queryOne(stmt)
-      
-0        if result then
-0           return result, ""
-         else
-0           return {}, "Unable to retrieve provider"
-         end
-      end
-      
-0     function providerManager.getAllProviders()
-0        print("entered providerManager.getAllProviders")
-      
-0        local stmt = DB:prepare("SELECT * FROM Providers")
-0        local result = dbUtils.queryMany(stmt)
-      
-0        if result then
-0           return result, ""
-         else
-0           return {}, "Unable to retrieve providers"
-         end
-      end
-      
-0     function providerManager.updateProviderDetails(userId, details)
-0        print("entered providerManager.updateProviderDetails")
-      
-0        local _provider, err = providerManager.getProvider(userId)
-0        if err ~= "" then
-0           return false, err
-         end
-      
-0        local stmt = DB:prepare([[
-          UPDATE Providers
-          SET provider_details = :details
-          WHERE provider_id = :provider_id;
-0       ]])
-0        stmt:bind_names({ provider_id = userId, details = details })
-      
-0        local ok = pcall(function()
-0           dbUtils.execute(stmt, "Failed to update provider details")
-         end)
-      
-0        if ok then
-0           return true, ""
-         else
-0           return false, "Failed to update provider details"
-         end
-      end
-      
-0     function providerManager.pushActiveRequests(providerIds, requestId, challenge)
-0        print("entered providerManager.pushActiveRequests")
-0        local success = true
-0        local err = ""
-      
-0        for _, value in ipairs(providerIds) do
-0           local provider = providerManager.getProvider(value)
-      
-0           if not provider then
-0              print("Provider with ID " .. value .. " not found.")
-0              success = false
-0              err = err .. " " .. value
-0              return success, err
-            end
-      
-0           if challenge == true then
-               local active_challenge_requests
-0              if provider.active_challenge_requests then
-      
-0                 active_challenge_requests = json.decode(provider.active_challenge_requests)
-               else
-      
-0                 active_challenge_requests = { request_ids = {} }
-               end
-      
-      
-0              table.insert(active_challenge_requests.request_ids, requestId)
-      
-      
-0              local stringified_requests = json.encode(active_challenge_requests)
-      
-0              local stmt = DB:prepare([[
-              UPDATE Providers
-              SET active_challenge_requests = :active_challenge_requests
-              WHERE provider_id = :provider_id;
-0           ]])
-0              stmt:bind_names({ provider_id = provider.provider_id, active_challenge_requests = stringified_requests })
-      
-0              local ok = pcall(function()
-0                 dbUtils.execute(stmt, "Failed to update provider active challenge requests")
-               end)
-      
-0              if not ok then
-0                 print("Failed to update provider active challenge requests for provider ID " .. provider.provider_id)
-0                 success = false
-0                 err = err .. " " .. provider.provider_id
-0                 return success, err
-               end
-            else
-0              print("made here")
-               local active_output_requests
-0              if provider.active_output_requests then
-      
-0                 active_output_requests = json.decode(provider.active_output_requests)
-               else
-      
-0                 active_output_requests = { request_ids = {} }
-               end
-      
-      
-0              table.insert(active_output_requests.request_ids, requestId)
-      
-      
-0              local stringified_requests = json.encode(active_output_requests)
-      
-0              local stmt = DB:prepare([[
-              UPDATE Providers
-              SET active_output_requests = :active_output_requests
-              WHERE provider_id = :provider_id;
-0           ]])
-0              stmt:bind_names({ provider_id = provider.provider_id, active_output_requests = stringified_requests })
-      
-0              local ok = pcall(function()
-0                 dbUtils.execute(stmt, "Failed to update provider active output requests")
-               end)
-      
-0              if not ok then
-0                 print("Failed to update provider active output requests for provider ID " .. provider.provider_id)
-0                 success = false
-0                 err = err .. " " .. provider.provider_id
-0                 return success, err
-               end
-            end
-         end
-      end
-      
-0     function providerManager.removeActiveRequest(provider_id, requestId, challenge)
-0        print("entered providerManager.removeActiveRequest")
-      
-      
-0        local provider = providerManager.getProvider(provider_id)
-0        if not provider then
-0           print("Provider with ID " .. provider_id .. " not found.")
-0           return false, "Provider not found"
-         end
-      
-0        if challenge then
-      
-            local active_challenge_requests
-0           if provider.active_challenge_requests then
-0              active_challenge_requests = json.decode(provider.active_challenge_requests)
-            else
-0              active_challenge_requests = { request_ids = {} }
-            end
-      
-      
-0           for i, id in ipairs(active_challenge_requests.request_ids) do
-0              if id == requestId then
-0                 table.remove(active_challenge_requests.request_ids, i)
-                  break
-               end
-            end
-      
-      
-0           local stringified_requests = json.encode(active_challenge_requests)
-      
-      
-0           local stmt = DB:prepare([[
-              UPDATE Providers
-              SET active_challenge_requests = :active_challenge_requests
-              WHERE provider_id = :provider_id;
-0         ]])
-0           stmt:bind_names({ provider_id = provider_id, active_challenge_requests = stringified_requests })
-      
-0           local ok = pcall(function()
-0              dbUtils.execute(stmt, "Failed to update provider active challenge requests")
-            end)
-      
-0           if not ok then
-0              print("Failed to update provider active challenge requests for provider ID " .. provider_id)
-0              return false, "Failed to update provider active challenge requests"
-            end
-         else
-      
-            local active_output_requests
-0           if provider.active_output_requests then
-0              active_output_requests = json.decode(provider.active_output_requests)
-            else
-0              active_output_requests = { request_ids = {} }
-            end
-      
-      
-0           for i, id in ipairs(active_output_requests.request_ids) do
-0              if id == requestId then
-0                 table.remove(active_output_requests.request_ids, i)
-                  break
-               end
-            end
-      
-      
-0           local stringified_requests = json.encode(active_output_requests)
-      
-      
-0           local stmt = DB:prepare([[
-              UPDATE Providers
-              SET active_output_requests = :active_output_requests
-              WHERE provider_id = :provider_id;
-0         ]])
-0           stmt:bind_names({ provider_id = provider_id, active_output_requests = stringified_requests })
-      
-0           local ok = pcall(function()
-0              dbUtils.execute(stmt, "Failed to update provider active output requests")
-            end)
-      
-0           if not ok then
-0              print("Failed to update provider active output requests for provider ID " .. provider_id)
-0              return false, "Failed to update provider active output requests"
-            end
-         end
-      
-0        return true, "Request ID removed successfully"
-      end
-      
-0     function providerManager.getActiveRequests(userId, challenge)
-0        print("entered providerManager.getActiveRequests")
-0        local provider = providerManager.getProvider(userId)
-0        if challenge then
-0           if provider.active_challenge_requests then
-0              return provider.active_challenge_requests, ""
-            else
-0              return "", "No active challenge requests found"
-            end
-         else
-0           if provider.active_output_requests then
-0              return provider.active_output_requests, ""
-            else
-0              return "", "No active output requests found"
-            end
-         end
-      end
-      
-0     function providerManager.hasActiveRequest(userId, requestId, challenge)
-0        print("entered providerManager.hasActiveRequest")
-      
-0        local activeRequests, err = providerManager.getActiveRequests(userId, challenge)
-0        if err == "" then
-0           local requestIds = json.decode(activeRequests)
-0           for _, request_id in ipairs(requestIds.request_ids) do
-0              if request_id == requestId then
-0                 return true
-               end
-            end
-0           return false
-         else
-0           return false
-         end
-      end
-      
-0     function providerManager.updateProviderStatus(userId, active)
-0        print("entered providerManager.updateProviderStatus")
-      
-         local stmt
-0        local status = active and 1 or 0
-      
-0        stmt = DB:prepare([[
-          UPDATE Providers
-          SET active = :active
-          WHERE provider_id = :provider_id;
-0       ]])
-      
-0        stmt:bind_names({ provider_id = userId, active = status })
-      
-0        local ok = pcall(function()
-0           dbUtils.execute(stmt, "Failed to update Provider status")
-         end)
-      
-0        if ok then
-0           return true, ""
-         else
-0           return false, "Failed to update Provider status"
-         end
-      end
-      
-0     function providerManager.isActiveProvider(userId)
-0        print("entered providerManager.isActiveProvider")
-      
-0        local provider, err = providerManager.getProvider(userId)
-      
-0        if err ~= "" then
-0           return false, err
-         end
-      
-0        if provider.active == 1 then
-0           return true, ""
-         else
-0           return false, ""
-         end
-      end
-      
-0     function providerManager.updateProviderBalance(userId, balance)
-0        print("entered providerManager.updateProviderBalance")
-      
-0        local provider, err = providerManager.getProvider(userId)
-      
-0        if err ~= "" then
-0           return false, err
-         end
-      
-0        local previousBalance = provider.random_balance
-      
-0        local stmt = DB:prepare([[
-          UPDATE Providers
-          SET random_balance = :balance
-          WHERE provider_id = :provider_id;
-0       ]])
-0        stmt:bind_names({ provider_id = userId, balance = balance })
-      
-0        local ok = pcall(function()
-0           dbUtils.execute(stmt, "Failed to update provider balance")
-         end)
-      
-0        if balance == 0 then
-0           providerManager.updateProviderStatus(userId, false)
-         end
-      
-0        if previousBalance == 0 and balance > 0 then
-0           providerManager.updateProviderStatus(userId, true)
-         end
-      
-0        if ok then
-0           return true, ""
-         else
-0           return false, "Failed to update provider balance"
-         end
-      end
-      
-0     return providerManager
-      end
-      end
-
-==============================================================================
 tlconfig.lua
 ==============================================================================
 0 return {
@@ -696,7 +273,7 @@ process.lua
 
 * RequestsToCrack = {}
 
-* FallbackProviders = "{\"provider_ids\":[\"XUo8jZtUDBFLtp5okR12oLrqIZ4ewNlTpqnqmriihJE\",\"c8Iq4yunDnsJWGSz_wYwQU--O9qeODKHiRdUkQkW2p8\"]}"
+* FallbackProviders = '{"provider_ids":["XUo8jZtUDBFLtp5okR12oLrqIZ4ewNlTpqnqmriihJE"]}'
 
 * SuccessMessage = "200: Success"
 
@@ -3095,7 +2672,7 @@ process.lua
 *    local provider, err = providerManager.getProvider(userId)
 
 *    if err ~= "" then
-0       return false, err
+*       return false, err
      end
 
 *    if provider.active == 1 then
@@ -3550,13 +3127,14 @@ process.lua
 
 
 *    local providerList = json.decode(providers)
+*    print("providerList: " .. providers)
 
 *    local staked = true
 
 *    for _, providerId in ipairs(providerList.provider_ids) do
 *       local activeProvider, _ = providerManager.isActiveProvider(providerId)
 *       if not activeProvider then
-0          staked = false
+*          staked = false
            break
         end
      end
@@ -3641,9 +3219,9 @@ process.lua
      end
 
 
-*    local success, err = randomManager.createRandomRequest(initalRequest.requester, json.encode(providerList), initalRequest.callback_id, "")
-0    if not success then
-0       return false, err
+*    local success, err = randomManager.createRandomRequest(initalRequest.requester, providerList, initalRequest.callback_id, "")
+*    if not success then
+*       return false, err
      end
 
 0    randomManager.updateRandomRequestStatus(requestId, Status[6])
@@ -5071,23 +4649,31 @@ process.lua
 *    for category, data in pairs(ActiveRequests) do
 
 *       local request_ids = data.request_ids
+
 *       if type(request_ids) == "table" then
+
 
 *          for request_id, timestamp in pairs(request_ids) do
 
 *             print("Category: " .. category .. ", Request ID: " .. request_id .. ", Timestamp: " .. timestamp)
+
 *             if timestamp + OverridePeriod < os.time() then
 0                print("Request ID: " .. request_id .. " in category: " .. category .. " is overdue.")
 0                if category == "activeChallengeRequests" then
 
+0                   print("Rerequesting random from approved providers for request_id: " .. request_id)
 0                   randomManager.rerequestRandom(request_id)
+
 0                elseif category == "activeOutputRequests" then
 
+0                   print("Moving to cracking pool for request_id: " .. request_id)
 0                   randomManager.updateRandomRequestStatus(request_id, Status[4])
 0                   ActiveRequests.activeOutputRequests.request_ids[request_id] = nil
 0                   RequestsToCrack[request_id] = true
+
 0                elseif category == "activeVerificationRequests" then
 
+0                   print("Rerequesting random from approved providers for request_id: " .. request_id)
 0                   randomManager.rerequestRandom(request_id)
                  end
               end
@@ -6614,23 +6200,31 @@ build/main.lua
 0    for category, data in pairs(ActiveRequests) do
 
 0       local request_ids = data.request_ids
+
 0       if type(request_ids) == "table" then
+
 
 0          for request_id, timestamp in pairs(request_ids) do
 
 0             print("Category: " .. category .. ", Request ID: " .. request_id .. ", Timestamp: " .. timestamp)
+
 0             if timestamp + OverridePeriod < os.time() then
 0                print("Request ID: " .. request_id .. " in category: " .. category .. " is overdue.")
 0                if category == "activeChallengeRequests" then
 
+0                   print("Rerequesting random from approved providers for request_id: " .. request_id)
 0                   randomManager.rerequestRandom(request_id)
+
 0                elseif category == "activeOutputRequests" then
 
+0                   print("Moving to cracking pool for request_id: " .. request_id)
 0                   randomManager.updateRandomRequestStatus(request_id, Status[4])
 0                   ActiveRequests.activeOutputRequests.request_ids[request_id] = nil
 0                   RequestsToCrack[request_id] = true
+
 0                elseif category == "activeVerificationRequests" then
 
+0                   print("Rerequesting random from approved providers for request_id: " .. request_id)
 0                   randomManager.rerequestRandom(request_id)
                  end
               end
@@ -7676,6 +7270,7 @@ build/randomManager.lua
 
 
 0    local providerList = json.decode(providers)
+0    print("providerList: " .. providers)
 
 0    local staked = true
 
@@ -7767,7 +7362,7 @@ build/randomManager.lua
      end
 
 
-0    local success, err = randomManager.createRandomRequest(initalRequest.requester, json.encode(providerList), initalRequest.callback_id, "")
+0    local success, err = randomManager.createRandomRequest(initalRequest.requester, providerList, initalRequest.callback_id, "")
 0    if not success then
 0       return false, err
      end
@@ -7933,7 +7528,7 @@ build/globals.lua
 
 0 RequestsToCrack = {}
 
-0 FallbackProviders = "{\"provider_ids\":[\"XUo8jZtUDBFLtp5okR12oLrqIZ4ewNlTpqnqmriihJE\",\"c8Iq4yunDnsJWGSz_wYwQU--O9qeODKHiRdUkQkW2p8\"]}"
+0 FallbackProviders = '{"provider_ids":["XUo8jZtUDBFLtp5okR12oLrqIZ4ewNlTpqnqmriihJE"]}'
 
 0 SuccessMessage = "200: Success"
 
@@ -10900,8 +10495,8 @@ test/process_test.lua
 *     local request, err = randomManager.getRandomRequestViaCallbackId(callbackId)
 *     assert(request.request_id == "d6cce35c-487a-458f-bab2-9032c2621f38", "Failure: unable to get random request for a valid callbackId")
 *     randomManager.rerequestRandom(request.request_id)
-0     _, err = randomManager.getRandomRequestViaCallbackId(callbackId)
-0     assert(err == "RandomRequest not found", "Failure: able to get random request for a valid callbackId that has failed")
+*     _, err = randomManager.getRandomRequestViaCallbackId(callbackId)
+*     assert(err == "RandomRequest not found", "Failure: able to get random request for a valid callbackId that has failed")
     end)
 
   end)
@@ -13694,10 +13289,9 @@ build/dbUtils.lua                      0    37     0.00%
 build/database.lua                     0    40     0.00%
 build/stakingManager.lua               0    98     0.00%
 build/providerManager.lua              0    201    0.00%
-swag.lua                               0    201    0.00%
 build/verifierManager.lua              0    248    0.00%
-build/randomManager.lua                0    308    0.00%
-build/main.lua                         0    368    0.00%
+build/randomManager.lua                0    309    0.00%
+build/main.lua                         0    371    0.00%
 test/mocked-env/lib/bint.lua           0    833    0.00%
 test/mocked-env/ao/handlers.lua        22   84     20.75%
 test/mocked-env/lib/utils.lua          23   74     23.71%
@@ -13706,7 +13300,7 @@ test/mocked-env/processes/verifier.lua 7    6      53.85%
 test/mocked-env/ao/ao.lua              36   22     62.07%
 test/mocked-env/lib/json.lua           147  52     73.87%
 test/setup.lua                         17   3      85.00%
-process.lua                            3047 374    89.07%
-test/process_test.lua                  583  6      98.98%
+process.lua                            3052 373    89.11%
+test/process_test.lua                  585  4      99.32%
 -----------------------------------------------------------
-Total                                  3893 3040   56.15%
+Total                                  3900 2840   57.86%

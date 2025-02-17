@@ -399,7 +399,8 @@ function randomManager.createRandomRequest(userId: string, providers: string, ca
 
   -- Decode providers JSON
   local providerList = json.decode(providers) as ProviderList
-  
+  print("providerList: " .. providers)
+
   local staked = true
 
   for _, providerId in ipairs(providerList.provider_ids) do
@@ -490,7 +491,7 @@ function randomManager.rerequestRandom(requestId: string): boolean, string
   end
     
   -- AFTER LUNCH TODO VERIFY BELOW THEN DECONFLICT WITH CALLBACKIDS
-  local success, err = randomManager.createRandomRequest(initalRequest.requester, json.encode(providerList), initalRequest.callback_id, "")
+  local success, err = randomManager.createRandomRequest(initalRequest.requester, providerList, initalRequest.callback_id, "")
   if not success then
     return false, err
   end

@@ -558,23 +558,31 @@ global function cronTickHandler(_msg: Message): boolean
   for category, data in pairs(ActiveRequests as {string: RequestList}) do
     -- Check if request_ids is a valid table (which it should be)
     local request_ids = data.request_ids as {string: integer}
+
     if type(request_ids) == "table" then
+
         -- Loop through the request_ids using pairs (since it's a dictionary-like table)
         for request_id, timestamp in pairs(request_ids) do
           -- Do something with each request_id and timestamp
-          print("Category: " .. category .. ", Request ID: " .. request_id .. ", Timestamp: " .. timestamp)          
+          print("Category: " .. category .. ", Request ID: " .. request_id .. ", Timestamp: " .. timestamp)         
+
           if timestamp + OverridePeriod < os.time() then
             print("Request ID: " .. request_id .. " in category: " .. category .. " is overdue.")
             if category == "activeChallengeRequests" then
-            -- Rerequest random from approved providers
+              -- Rerequest random from approved providers
+              print("Rerequesting random from approved providers for request_id: " .. request_id)
               randomManager.rerequestRandom(request_id)
+              
             elseif category == "activeOutputRequests" then
-            -- Move to cracking pool
-            randomManager.updateRandomRequestStatus(request_id, Status[4])
-            ActiveRequests.activeOutputRequests.request_ids[request_id] = nil
-            RequestsToCrack[request_id] = true
+              -- Move to cracking pool
+              print("Moving to cracking pool for request_id: " .. request_id)
+              randomManager.updateRandomRequestStatus(request_id, Status[4])
+              ActiveRequests.activeOutputRequests.request_ids[request_id] = nil
+              RequestsToCrack[request_id] = true
+
             elseif category == "activeVerificationRequests" then
-            -- Rerequest random from approved providers
+              -- Rerequest random from approved providers
+              print("Rerequesting random from approved providers for request_id: " .. request_id)
               randomManager.rerequestRandom(request_id)
             end
           end

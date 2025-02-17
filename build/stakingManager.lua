@@ -16,7 +16,7 @@ Stake = {}
 local stakingManager = {}
 
 function stakingManager.checkStake(userId)
-   --print("entered stakingManager.checkStake")
+   print("entered stakingManager.checkStake")
 
    local provider, err = providerManager.getProvider(userId)
 
@@ -43,7 +43,7 @@ function stakingManager.checkStake(userId)
 end
 
 function stakingManager.getStatus(userId)
-   --print("entered stakingManager.getStatus")
+   print("entered stakingManager.getStatus")
 
    local provider, err = providerManager.getProvider(userId)
 
@@ -57,7 +57,7 @@ function stakingManager.getStatus(userId)
 end
 
 function stakingManager.getProviderStake(userId)
-   --print("entered stakingManager.getProviderStake")
+   print("entered stakingManager.getProviderStake")
 
    local provider, err = providerManager.getProvider(userId)
 
@@ -68,7 +68,7 @@ function stakingManager.getProviderStake(userId)
 end
 
 function stakingManager.updateStake(userId, token, amount, status, timestamp)
-   --print("entered stakingManager.updateStake")
+   print("entered stakingManager.updateStake")
 
    local stake = {
       provider_id = userId,
@@ -97,7 +97,7 @@ function stakingManager.updateStake(userId, token, amount, status, timestamp)
 end
 
 function stakingManager.processStake(msg)
-   --print("entered stakingManager.processStake")
+   print("entered stakingManager.processStake")
 
    local token = msg.From
    local amount = tonumber(msg.Quantity)
@@ -108,22 +108,22 @@ function stakingManager.processStake(msg)
       providerManager.updateProviderDetails(provider, details)
    end
 
-   --print("Provider: " .. provider)
+   print("Provider: " .. provider)
 
    if stakingManager.checkStake(provider) then
-      --print("Stake already exists")
+      print("Stake already exists")
       tokenManager.returnTokens(msg, "Stake already exists")
       return false, "Stake already exists"
    end
 
    if not StakeTokens[token] then
-      --print("Invalid Token")
+      print("Invalid Token")
       tokenManager.returnTokens(msg, "Invalid Token")
       return false, "Invalid Token"
    end
 
    if amount < StakeTokens[token].amount then
-      --print("Stake is less than required")
+      print("Stake is less than required")
       tokenManager.returnTokens(msg, "Stake is less than required")
       return false, "Stake is less than required"
    end
@@ -144,7 +144,7 @@ function stakingManager.processStake(msg)
 end
 
 function stakingManager.unstake(userId, currentTimestamp)
-   --print("entered stakingManager.unstake")
+   print("entered stakingManager.unstake")
 
    if stakingManager.checkStake(userId) == false then
       return false, "User is not staked", ""
