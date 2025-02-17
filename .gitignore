@@ -1,14 +1,15 @@
 node_modules
 wallet.json
 package-lock
-# luacov.report.out
+luacov.conf
+luacov.report.out
 luacov.report.out.index
 luacov.stats.out
-# build/
+build/
 build-lua/
 package-lock.json
 constants.txt
-# process.lua
+process.lua
 examples/
 hera.json
 demo.json
