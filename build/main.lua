@@ -1,7 +1,8 @@
-local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local debug = _tl_compat and _tl_compat.debug or debug; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local math = _tl_compat and _tl_compat.math or math; local os = _tl_compat and _tl_compat.os or os; local pairs = _tl_compat and _tl_compat.pairs or pairs; local table = _tl_compat and _tl_compat.table or table; local xpcall = _tl_compat and _tl_compat.xpcall or xpcall
+local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local debug = _tl_compat and _tl_compat.debug or debug; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local math = _tl_compat and _tl_compat.math or math; local os = _tl_compat and _tl_compat.os or os; local pairs = _tl_compat and _tl_compat.pairs or pairs; local pcall = _tl_compat and _tl_compat.pcall or pcall; local table = _tl_compat and _tl_compat.table or table; local xpcall = _tl_compat and _tl_compat.xpcall or xpcall
 require("globals")
 local json = require("json")
 local database = require("database")
+local dbUtils = require("dbUtils")
 local providerManager = require("providerManager")
 local randomManager = require("randomManager")
 local tokenManager = require("tokenManager")
@@ -601,6 +602,8 @@ function getRequestsToCrackHandler(msg)
 end
 
 
+
+
 Handlers.add('info',
 Handlers.utils.hasMatchingTag('Action', 'Info'),
 wrapHandler(infoHandler))
@@ -683,3 +686,49 @@ wrapHandler(cronTickHandler))
 
 
 print("RandAO Process Initialized")
+
+
+
+function RemoveVerifier(processId)
+   print("Removing verifier: " .. processId)
+
+   if not DB then
+      print("Database connection not initialized")
+      return false, "Database connection is not initialized"
+   end
+
+   local stmt = DB:prepare([[
+    DELETE FROM Verifiers
+    WHERE process_id = :pid
+  ]])
+
+   if not stmt then
+      print("Failed to prepare statement: " .. DB:errmsg())
+      return false, "Failed to prepare statement: " .. DB:errmsg()
+   end
+
+   local ok = false
+   ok = pcall(function()
+      stmt:bind_names({ pid = processId })
+   end)
+
+   if not ok then
+      print("Failed to bind parameters")
+      return false, "Failed to bind parameters"
+   end
+
+   local exec_ok, exec_err = dbUtils.execute(stmt, "Remove verifier")
+   if not exec_ok then
+      return false, exec_err
+   end
+
+   return true, ""
+end
+
+function helper()
+   local value, err = verifierManager.getAvailableVerifiers()
+   print(json.encode(value))
+   RemoveVerifier("RG6r_xD_NZtbw7t2QcfrUXjrlZe3w3a9vK_Z4kTrZyc")
+   value, err = verifierManager.getAvailableVerifiers()
+   print(json.encode(value))
+end

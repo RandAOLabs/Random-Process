@@ -2296,6 +2296,7 @@ Provider = {}
 
 
 
+
 ProviderList = {}
 
 
@@ -4063,7 +4064,7 @@ return verifierManager
 end
 end
 
-local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local debug = _tl_compat and _tl_compat.debug or debug; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local math = _tl_compat and _tl_compat.math or math; local os = _tl_compat and _tl_compat.os or os; local pairs = _tl_compat and _tl_compat.pairs or pairs; local table = _tl_compat and _tl_compat.table or table; local xpcall = _tl_compat and _tl_compat.xpcall or xpcall
+local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local debug = _tl_compat and _tl_compat.debug or debug; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local math = _tl_compat and _tl_compat.math or math; local os = _tl_compat and _tl_compat.os or os; local pairs = _tl_compat and _tl_compat.pairs or pairs; local pcall = _tl_compat and _tl_compat.pcall or pcall; local table = _tl_compat and _tl_compat.table or table; local xpcall = _tl_compat and _tl_compat.xpcall or xpcall
 require("globals")
 local json = require("json")
 local database = require("database")
@@ -4209,9 +4210,6 @@ function updateProviderBalanceHandler(msg)
    print("entered updateProviderBalance")
 
    local userId = msg.From
-   print("Asserting whitelisted user: " .. userId)
-   assert(isWhitelisted(userId), "User not whitelisted")
-
 
    local stakedStatus, statusErr = stakingManager.getStatus(userId)
 
@@ -4274,46 +4272,6 @@ function getAllProvidersDetailsHandler(msg)
       ao.send(sendResponse(msg.From, "Error", { message = "Providers not found: " .. err }))
       return false
    end
-end
-
-
-function postVerificationHandler(msg)
-   print("entered postVerification")
-
-   local verifierId = msg.From
-
-   local data = (json.decode(msg.Data))
-
-   local valid = data.valid
-   local requestId = data.request_id
-   local segmentId = data.segment_id
-
-   local function validateVerificationInputs(_valid, _requestId, _segmentId)
-      return true
-   end
-
-   if valid == nil or segmentId == nil or requestId == nil or not validateVerificationInputs(valid, requestId, segmentId) then
-      print("Failed to post Verification: " .. "values not provided or malformed")
-      ao.send(sendResponse(msg.From, "Error", { message = "Failed to post Verification: " .. "values not provided or malformed" }))
-      return false
-   end
-
-   local success, _err = verifierManager.processVerification(verifierId, requestId, segmentId, valid)
-
-   if success then
-      randomManager.decrementRequestedInputs(requestId)
-
-      return true
-   else
-
-      return false
-   end
-end
-
-function failedPostVerificationHandler(msg)
-   print("entered failedPostVerification")
-   local verifierId = msg.From
-   verifierManager.markAvailable(verifierId)
 end
 
 

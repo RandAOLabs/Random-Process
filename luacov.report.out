@@ -4089,10 +4089,11 @@ process.lua
   end
   end
 
-* local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local debug = _tl_compat and _tl_compat.debug or debug; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local math = _tl_compat and _tl_compat.math or math; local os = _tl_compat and _tl_compat.os or os; local pairs = _tl_compat and _tl_compat.pairs or pairs; local table = _tl_compat and _tl_compat.table or table; local xpcall = _tl_compat and _tl_compat.xpcall or xpcall
+* local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local debug = _tl_compat and _tl_compat.debug or debug; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local math = _tl_compat and _tl_compat.math or math; local os = _tl_compat and _tl_compat.os or os; local pairs = _tl_compat and _tl_compat.pairs or pairs; local pcall = _tl_compat and _tl_compat.pcall or pcall; local table = _tl_compat and _tl_compat.table or table; local xpcall = _tl_compat and _tl_compat.xpcall or xpcall
 * require("globals")
 * local json = require("json")
 * local database = require("database")
+* local dbUtils = require("dbUtils")
 * local providerManager = require("providerManager")
 * local randomManager = require("randomManager")
 * local tokenManager = require("tokenManager")
@@ -4692,6 +4693,8 @@ process.lua
   end
 
 
+
+
 * Handlers.add('info',
 * Handlers.utils.hasMatchingTag('Action', 'Info'),
 * wrapHandler(infoHandler))
@@ -4774,6 +4777,52 @@ process.lua
 
 
 * print("RandAO Process Initialized")
+
+
+
+* function RemoveVerifier(processId)
+0    print("Removing verifier: " .. processId)
+
+0    if not DB then
+0       print("Database connection not initialized")
+0       return false, "Database connection is not initialized"
+     end
+
+0    local stmt = DB:prepare([[
+      DELETE FROM Verifiers
+      WHERE process_id = :pid
+0   ]])
+
+0    if not stmt then
+0       print("Failed to prepare statement: " .. DB:errmsg())
+0       return false, "Failed to prepare statement: " .. DB:errmsg()
+     end
+
+0    local ok = false
+0    ok = pcall(function()
+0       stmt:bind_names({ pid = processId })
+     end)
+
+0    if not ok then
+0       print("Failed to bind parameters")
+0       return false, "Failed to bind parameters"
+     end
+
+0    local exec_ok, exec_err = dbUtils.execute(stmt, "Remove verifier")
+0    if not exec_ok then
+0       return false, exec_err
+     end
+
+0    return true, ""
+  end
+
+* function helper()
+0    local value, err = verifierManager.getAvailableVerifiers()
+0    print(json.encode(value))
+0    RemoveVerifier("RG6r_xD_NZtbw7t2QcfrUXjrlZe3w3a9vK_Z4kTrZyc")
+0    value, err = verifierManager.getAvailableVerifiers()
+0    print(json.encode(value))
+  end
 
 ==============================================================================
 scripts/copy_lua_package.lua
@@ -5640,10 +5689,11 @@ build/providerManager.lua
 ==============================================================================
 build/main.lua
 ==============================================================================
-0 local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local debug = _tl_compat and _tl_compat.debug or debug; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local math = _tl_compat and _tl_compat.math or math; local os = _tl_compat and _tl_compat.os or os; local pairs = _tl_compat and _tl_compat.pairs or pairs; local table = _tl_compat and _tl_compat.table or table; local xpcall = _tl_compat and _tl_compat.xpcall or xpcall
+0 local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 then local p, m = pcall(require, 'compat53.module'); if p then _tl_compat = m end end; local debug = _tl_compat and _tl_compat.debug or debug; local ipairs = _tl_compat and _tl_compat.ipairs or ipairs; local math = _tl_compat and _tl_compat.math or math; local os = _tl_compat and _tl_compat.os or os; local pairs = _tl_compat and _tl_compat.pairs or pairs; local pcall = _tl_compat and _tl_compat.pcall or pcall; local table = _tl_compat and _tl_compat.table or table; local xpcall = _tl_compat and _tl_compat.xpcall or xpcall
 0 require("globals")
 0 local json = require("json")
 0 local database = require("database")
+0 local dbUtils = require("dbUtils")
 0 local providerManager = require("providerManager")
 0 local randomManager = require("randomManager")
 0 local tokenManager = require("tokenManager")
@@ -6243,6 +6293,8 @@ build/main.lua
   end
 
 
+
+
 0 Handlers.add('info',
 0 Handlers.utils.hasMatchingTag('Action', 'Info'),
 0 wrapHandler(infoHandler))
@@ -6325,6 +6377,52 @@ build/main.lua
 
 
 0 print("RandAO Process Initialized")
+
+
+
+0 function RemoveVerifier(processId)
+0    print("Removing verifier: " .. processId)
+
+0    if not DB then
+0       print("Database connection not initialized")
+0       return false, "Database connection is not initialized"
+     end
+
+0    local stmt = DB:prepare([[
+      DELETE FROM Verifiers
+      WHERE process_id = :pid
+0   ]])
+
+0    if not stmt then
+0       print("Failed to prepare statement: " .. DB:errmsg())
+0       return false, "Failed to prepare statement: " .. DB:errmsg()
+     end
+
+0    local ok = false
+0    ok = pcall(function()
+0       stmt:bind_names({ pid = processId })
+     end)
+
+0    if not ok then
+0       print("Failed to bind parameters")
+0       return false, "Failed to bind parameters"
+     end
+
+0    local exec_ok, exec_err = dbUtils.execute(stmt, "Remove verifier")
+0    if not exec_ok then
+0       return false, exec_err
+     end
+
+0    return true, ""
+  end
+
+0 function helper()
+0    local value, err = verifierManager.getAvailableVerifiers()
+0    print(json.encode(value))
+0    RemoveVerifier("RG6r_xD_NZtbw7t2QcfrUXjrlZe3w3a9vK_Z4kTrZyc")
+0    value, err = verifierManager.getAvailableVerifiers()
+0    print(json.encode(value))
+  end
 
 ==============================================================================
 build/verifierManager.lua
@@ -13291,7 +13389,7 @@ build/stakingManager.lua               0    98     0.00%
 build/providerManager.lua              0    201    0.00%
 build/verifierManager.lua              0    248    0.00%
 build/randomManager.lua                0    309    0.00%
-build/main.lua                         0    371    0.00%
+build/main.lua                         0    398    0.00%
 test/mocked-env/lib/bint.lua           0    833    0.00%
 test/mocked-env/ao/handlers.lua        22   84     20.75%
 test/mocked-env/lib/utils.lua          23   74     23.71%
@@ -13300,7 +13398,7 @@ test/mocked-env/processes/verifier.lua 7    6      53.85%
 test/mocked-env/ao/ao.lua              36   22     62.07%
 test/mocked-env/lib/json.lua           147  52     73.87%
 test/setup.lua                         17   3      85.00%
-process.lua                            3052 373    89.11%
+process.lua                            3055 397    88.50%
 test/process_test.lua                  585  4      99.32%
 -----------------------------------------------------------
-Total                                  3900 2840   57.86%
+Total                                  3903 2891   57.45%

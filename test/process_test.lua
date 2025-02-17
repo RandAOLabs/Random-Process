@@ -288,7 +288,6 @@ describe("provider specific tests", function()
     assert.are_not.equal(err, "Provider not found")
   end)
 
-<<<<<<< HEAD
   it("should be able to stake with other correct token and correct quantity", function()
     local message = {
       Target = ao.id,
@@ -307,8 +306,6 @@ describe("provider specific tests", function()
     local provider, _ = providerManager.getProvider("Provider2")
     assert(provider, "Failure: unable to get provider")
   end)
-=======
->>>>>>> main
 
   it("should have a provider after updated balance for second instantiated provider", function()
     local availableRandomValues = 11
@@ -470,14 +467,11 @@ describe("requestRandom", function()
     assert(success, "Failure: failed to create random request")
   end)
 
-<<<<<<< HEAD
   it("should be able to view random request in activeRequests", function()
     assert(ActiveRequests.activeChallengeRequests.request_ids["d6cce35c-487a-458f-bab2-9032c2621f38"], "Failure: random request not found in activeRequests")
     cronTickHandler(nil) -- TODO: remove
   end)
 
-=======
->>>>>>> main
   it("should not be able to request random from no providers with correct balance and token", function()
     local userId = "Requester1"
     local providers = json.encode({provider_ids = {}})
@@ -529,15 +523,9 @@ describe("requestRandom", function()
       Data = json.encode({providerId = providerId})
     }
     local success = getOpenRandomRequestsHandler(message)
-<<<<<<< HEAD
     assert(success, "Failure: unable to get active requests from a requested provider")
     local _, err = providerManager.getActiveRequests("Provider2", true)
     assert(err ~= "", "Failure: no active request found")
-=======
-    assert(not success, "Failure: able to get active requests from an unrequested provider")
-    local _, err = providerManager.getActiveRequests("Provider2", true)
-    assert(err == "No active challenge requests found", "Failure: active request found")
->>>>>>> main
   end)
 
   it("should be able to retrieve active_requests for our requested provider",
@@ -667,14 +655,11 @@ describe("postVDFChallenge", function()
     assert(success, "Failure: unable to post VDF Challenge from requested provider")
   end)
 
-<<<<<<< HEAD
   it("should be able to view random request in activeRequests outputs after challenges have been posted", function()
     assert(ActiveRequests.activeOutputRequests.request_ids["d6cce35c-487a-458f-bab2-9032c2621f38"], "Failure: random request not found in activeRequests")
     cronTickHandler(nil) -- TODO: remove
   end)
 
-=======
->>>>>>> main
 end)
 
 describe("postVDFOutputAndProof", function()
@@ -801,13 +786,10 @@ describe("postVDFOutputAndProof", function()
     local success = postVDFOutputAndProofHandler(message)
     assert(success, "Failure: unable to post VDF output and proof from the second requested provider")
   end)
-<<<<<<< HEAD
 
   it("should be able to view random request in activeVerificationRequests", function()
     assert(ActiveRequests.activeVerificationRequests.request_ids["d6cce35c-487a-458f-bab2-9032c2621f38"], "Failure: random request not found in activeRequests")
   end)
-=======
->>>>>>> main
 end)
 
 describe("getRandomRequests & getRandomRequestViaCallbackId", function()
@@ -858,10 +840,6 @@ describe("getRandomRequests & getRandomRequestViaCallbackId", function()
       Action = "Get-Random-Request-Via-Callback-Id",
       Data = json.encode({callbackId = callbackId}),
       reply = function (msg)
-<<<<<<< HEAD
-=======
-        -- print("replied: " .. json.encode(msg))
->>>>>>> main
       end
     }
 
@@ -880,10 +858,6 @@ describe("getRandomRequests & getRandomRequestViaCallbackId", function()
       Action = "Get-Random-Request-Via-Callback-Id",
       Data = json.encode({callbackId = callbackId}),
       reply = function (msg)
-<<<<<<< HEAD
-=======
-        -- print("replied: " .. json.encode(msg))
->>>>>>> main
       end
     }
 
