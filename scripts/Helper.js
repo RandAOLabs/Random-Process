@@ -735,6 +735,158 @@ async function getAllProvidersDetails() {
     return id;
 }
 
+async function requestRandomTester() {
+    let tags = [
+        { name: "Action", value: "High-or-Low" },
+    ]
+
+    let id = await message({
+        /*
+          The arweave TXID of the process, this will become the "target".
+          This is the process the message is ultimately sent to.
+        */
+        process: randomTesting,
+        // Tags that the process will use as input.
+        tags,
+        // A signer function used to build the message "signature"
+        signer: createDataItemSigner(wallet),
+        /*
+          The "data" portion of the message
+          If not specified a random string will be generated
+        */
+        })
+
+    return id;
+}
+
+async function simulateResponse() {
+    let tags = [
+        { name: "Action", value: "Simulate-Response" },
+    ]
+
+    let id = await message({
+        /*
+          The arweave TXID of the process, this will become the "target".
+          This is the process the message is ultimately sent to.
+        */
+        process: processId,
+        // Tags that the process will use as input.
+        tags,
+        // A signer function used to build the message "signature"
+        signer: createDataItemSigner(wallet),
+        /*
+          The "data" portion of the message
+          If not specified a random string will be generated
+        */
+        data: JSON.stringify({ providerId }),
+
+    })
+
+    //console.log(id)
+    const { Output, Messages } = await result({
+        message: id,
+        process: processId,
+    });
+    
+    if (Messages && Messages.length > 0) {
+        const data = JSON.parse(Messages[0].Data);
+        console.log("Random Requests: ", data);
+    }
+    
+    return id;
+}
+
+async function sendQuery() {
+    let tags = [
+        { name: "Action", value: "Check-Status-Via-Callback" },
+    ]
+
+    let id = await message({
+        /*
+          The arweave TXID of the process, this will become the "target".
+          This is the process the message is ultimately sent to.
+        */
+        process: randomTesting,
+        // Tags that the process will use as input.
+        tags,
+        // A signer function used to build the message "signature"
+        signer: createDataItemSigner(wallet),
+        /*
+          The "data" portion of the message
+          If not specified a random string will be generated
+        */
+
+    })
+
+    return id;
+}
+
+async function highLow() {
+    let tags = [
+        { name: "Action", value: "High-or-Low" },
+        { name: "Guess", value: "Higher" }
+    ]
+
+    let id = await message({
+        /*
+          The arweave TXID of the process, this will become the "target".
+          This is the process the message is ultimately sent to.
+        */
+        process: randomTesting,
+        // Tags that the process will use as input.
+        tags,
+        // A signer function used to build the message "signature"
+        signer: createDataItemSigner(wallet),
+        /*
+          The "data" portion of the message
+          If not specified a random string will be generated
+        */
+
+    })
+    console.log(id)
+
+    return id;
+}
+
+
+async function viewGame() {
+    let tags = [
+        { name: "Action", value: "View-Game" },
+        { name: "GameId", value: gameId }
+    ]
+
+    let id = await message({
+        /*
+          The arweave TXID of the process, this will become the "target".
+          This is the process the message is ultimately sent to.
+        */
+        process: processId,
+        // Tags that the process will use as input.
+        tags,
+        // A signer function used to build the message "signature"
+        signer: createDataItemSigner(wallet),
+        /*
+          The "data" portion of the message
+          If not specified a random string will be generated
+        */
+        data: JSON.stringify({ providerId }),
+
+    })
+
+    //console.log(id)
+    const { Output, Messages } = await result({
+        message: id,
+        process: processId,
+    });
+    
+    if (Messages && Messages.length > 0) {
+        const data = JSON.parse(Messages[0].Data);
+        console.log("Random Requests: ", data);
+    }
+    
+    return id;
+}
+
 // Main function to call post data
 async function main() {
     const inputArg =  process.argv[2];

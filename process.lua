@@ -2296,7 +2296,6 @@ Provider = {}
 
 
 
-
 ProviderList = {}
 
 
@@ -4068,6 +4067,7 @@ local _tl_compat; if (tonumber((_VERSION or ''):match('[%d.]*$')) or 0) < 5.3 th
 require("globals")
 local json = require("json")
 local database = require("database")
+local dbUtils = require("dbUtils")
 local providerManager = require("providerManager")
 local randomManager = require("randomManager")
 local tokenManager = require("tokenManager")
@@ -4209,6 +4209,9 @@ function updateProviderBalanceHandler(msg)
    print("entered updateProviderBalance")
 
    local userId = msg.From
+   print("Asserting whitelisted user: " .. userId)
+   assert(isWhitelisted(userId), "User not whitelisted")
+
 
    local stakedStatus, statusErr = stakingManager.getStatus(userId)
 
@@ -4271,6 +4274,46 @@ function getAllProvidersDetailsHandler(msg)
       ao.send(sendResponse(msg.From, "Error", { message = "Providers not found: " .. err }))
       return false
    end
+end
+
+
+function postVerificationHandler(msg)
+   print("entered postVerification")
+
+   local verifierId = msg.From
+
+   local data = (json.decode(msg.Data))
+
+   local valid = data.valid
+   local requestId = data.request_id
+   local segmentId = data.segment_id
+
+   local function validateVerificationInputs(_valid, _requestId, _segmentId)
+      return true
+   end
+
+   if valid == nil or segmentId == nil or requestId == nil or not validateVerificationInputs(valid, requestId, segmentId) then
+      print("Failed to post Verification: " .. "values not provided or malformed")
+      ao.send(sendResponse(msg.From, "Error", { message = "Failed to post Verification: " .. "values not provided or malformed" }))
+      return false
+   end
+
+   local success, _err = verifierManager.processVerification(verifierId, requestId, segmentId, valid)
+
+   if success then
+      randomManager.decrementRequestedInputs(requestId)
+
+      return true
+   else
+
+      return false
+   end
+end
+
+function failedPostVerificationHandler(msg)
+   print("entered failedPostVerification")
+   local verifierId = msg.From
+   verifierManager.markAvailable(verifierId)
 end
 
 
@@ -4667,6 +4710,8 @@ function getRequestsToCrackHandler(msg)
 end
 
 
+
+
 Handlers.add('info',
 Handlers.utils.hasMatchingTag('Action', 'Info'),
 wrapHandler(infoHandler))
@@ -4749,3 +4794,49 @@ wrapHandler(cronTickHandler))
 
 
 print("RandAO Process Initialized")
+
+
+
+function RemoveVerifier(processId)
+   print("Removing verifier: " .. processId)
+
+   if not DB then
+      print("Database connection not initialized")
+      return false, "Database connection is not initialized"
+   end
+
+   local stmt = DB:prepare([[
+    DELETE FROM Verifiers
+    WHERE process_id = :pid
+  ]])
+
+   if not stmt then
+      print("Failed to prepare statement: " .. DB:errmsg())
+      return false, "Failed to prepare statement: " .. DB:errmsg()
+   end
+
+   local ok = false
+   ok = pcall(function()
+      stmt:bind_names({ pid = processId })
+   end)
+
+   if not ok then
+      print("Failed to bind parameters")
+      return false, "Failed to bind parameters"
+   end
+
+   local exec_ok, exec_err = dbUtils.execute(stmt, "Remove verifier")
+   if not exec_ok then
+      return false, exec_err
+   end
+
+   return true, ""
+end
+
+function helper()
+   local value, err = verifierManager.getAvailableVerifiers()
+   print(json.encode(value))
+   RemoveVerifier("RG6r_xD_NZtbw7t2QcfrUXjrlZe3w3a9vK_Z4kTrZyc")
+   value, err = verifierManager.getAvailableVerifiers()
+   print(json.encode(value))
+end
