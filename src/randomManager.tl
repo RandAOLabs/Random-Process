@@ -603,4 +603,33 @@ function randomManager.postVDFOutputAndProof(userId: string, requestId: string, 
   return execute_ok, execute_err
 end
 
+function randomManager.getProblemProviders(requestId: string, challenge: boolean): ProviderList, string
+  print("entered randomManager.getProblemProviders")
+
+  local randomRequest = randomManager.getRandomRequest(requestId)
+  
+  local problemProviders: ProviderList = {
+    provider_ids = {}
+  }
+
+  if randomRequest then
+    local providers = randomManager.getRandomProviderList(requestId).provider_ids
+    if providers then
+      for _, providerId in ipairs(providers) do
+        if challenge then
+          if providerManager.hasActiveRequest(providerId, requestId, true) then
+            problemProviders.provider_ids[#problemProviders.provider_ids + 1] = providerId
+          end
+        else
+          if providerManager.hasActiveRequest(providerId, requestId, false) then
+            problemProviders.provider_ids[#problemProviders.provider_ids + 1] = providerId
+          end
+        end
+      end
+    end
+  end
+
+  return problemProviders, ""
+end
+
 return randomManager

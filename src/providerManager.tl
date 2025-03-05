@@ -123,7 +123,7 @@ function providerManager.pushActiveRequests(providerIds: {string}, requestId: st
       end
 
       -- Insert the new requestId into the request_ids array
-      table.insert(active_challenge_requests.request_ids, requestId)
+      active_challenge_requests.request_ids[#active_challenge_requests.request_ids + 1] = requestId
 
       -- Encode the updated active_requests table back to JSON
       local stringified_requests = json.encode(active_challenge_requests)
@@ -157,7 +157,7 @@ function providerManager.pushActiveRequests(providerIds: {string}, requestId: st
       end
 
       -- Insert the new requestId into the request_ids array
-      table.insert(active_output_requests.request_ids, requestId)
+      active_output_requests.request_ids[#active_output_requests.request_ids + 1] = requestId
 
       -- Encode the updated active_output_requests table back to JSON
       local stringified_requests = json.encode(active_output_requests)
@@ -183,7 +183,7 @@ function providerManager.pushActiveRequests(providerIds: {string}, requestId: st
   end
 end
 
-function providerManager.removeActiveRequest(provider_id: string, requestId: string, challenge: boolean): boolean, string
+function providerManager.removeActiveRequest(provider_id: string, requestId: string, challenge: boolean, removeAll: boolean): boolean, string
   print("entered providerManager.removeActiveRequest")
 
   -- Fetch the provider
@@ -193,81 +193,97 @@ function providerManager.removeActiveRequest(provider_id: string, requestId: str
       return false, "Provider not found"
   end
 
-  if challenge then
-    -- Decode existing active_challenge_requests JSON if it exists
-    local active_challenge_requests: RequestList
-    if provider.active_challenge_requests then
-      active_challenge_requests = json.decode(provider.active_challenge_requests) as RequestList
-    else
-      active_challenge_requests = { request_ids = {} }
-    end
-
-    -- Remove the specific requestId from request_ids array
-    for i, id in ipairs(active_challenge_requests.request_ids) do
-        if id == requestId then
-            table.remove(active_challenge_requests.request_ids, i)
-            break
-        end
-    end
-
-    -- Encode the updated active_challenge_requests table back to JSON
-    local stringified_requests = json.encode(active_challenge_requests)
-
-    -- Update the database
+  if removeAll then
+    -- Clear both active_challenge_requests and active_output_requests
+    local emptyRequests = json.encode({ request_ids = {} })
     local stmt = DB:prepare([[
         UPDATE Providers
-        SET active_challenge_requests = :active_challenge_requests
+        SET active_challenge_requests = :active_challenge_requests,
+            active_output_requests = :active_output_requests
         WHERE provider_id = :provider_id;
     ]])
-    stmt:bind_names({ provider_id = provider_id, active_challenge_requests = stringified_requests })
-
+    stmt:bind_names({
+        provider_id = provider_id,
+        active_challenge_requests = emptyRequests,
+        active_output_requests = emptyRequests,
+    })
     local ok = pcall(function()
-      dbUtils.execute(stmt, "Failed to update provider active challenge requests")
+      dbUtils.execute(stmt, "Failed to update provider active requests")
     end)
-
     if not ok then
-        print("Failed to update provider active challenge requests for provider ID " .. provider_id)
-        return false, "Failed to update provider active challenge requests"
+        print("Failed to update provider active requests for provider ID " .. provider_id)
+        return false, "Failed to update provider active requests"
     end
+    return true, "All active requests removed successfully"
   else
-    -- Decode existing active_output_requests JSON if it exists
-    local active_output_requests: RequestList
-    if provider.active_output_requests then
-      active_output_requests = json.decode(provider.active_output_requests) as RequestList
+    if challenge then
+      -- Process active_challenge_requests
+      local active_challenge_requests: RequestList
+      if provider.active_challenge_requests then
+        active_challenge_requests = json.decode(provider.active_challenge_requests) as RequestList
+      else
+        active_challenge_requests = { request_ids = {} }
+      end
+
+      -- Remove the specific requestId from request_ids array
+      for i, id in ipairs(active_challenge_requests.request_ids) do
+          if id == requestId then
+              table.remove(active_challenge_requests.request_ids, i)
+              break
+          end
+      end
+
+      local stringified_requests = json.encode(active_challenge_requests)
+      local stmt = DB:prepare([[
+          UPDATE Providers
+          SET active_challenge_requests = :active_challenge_requests
+          WHERE provider_id = :provider_id;
+      ]])
+      stmt:bind_names({ provider_id = provider_id, active_challenge_requests = stringified_requests })
+
+      local ok = pcall(function()
+        dbUtils.execute(stmt, "Failed to update provider active challenge requests")
+      end)
+      if not ok then
+          print("Failed to update provider active challenge requests for provider ID " .. provider_id)
+          return false, "Failed to update provider active challenge requests"
+      end
     else
-      active_output_requests = { request_ids = {} }
+      -- Process active_output_requests
+      local active_output_requests: RequestList
+      if provider.active_output_requests then
+        active_output_requests = json.decode(provider.active_output_requests) as RequestList
+      else
+        active_output_requests = { request_ids = {} }
+      end
+
+      -- Remove the specific requestId from request_ids array
+      for i, id in ipairs(active_output_requests.request_ids) do
+          if id == requestId then
+              table.remove(active_output_requests.request_ids, i)
+              break
+          end
+      end
+
+      local stringified_requests = json.encode(active_output_requests)
+      local stmt = DB:prepare([[
+          UPDATE Providers
+          SET active_output_requests = :active_output_requests
+          WHERE provider_id = :provider_id;
+      ]])
+      stmt:bind_names({ provider_id = provider_id, active_output_requests = stringified_requests })
+
+      local ok = pcall(function()
+        dbUtils.execute(stmt, "Failed to update provider active output requests")
+      end)
+      if not ok then
+          print("Failed to update provider active output requests for provider ID " .. provider_id)
+          return false, "Failed to update provider active output requests"
+      end
     end
 
-    -- Remove the specific requestId from request_ids array
-    for i, id in ipairs(active_output_requests.request_ids) do
-        if id == requestId then
-            table.remove(active_output_requests.request_ids, i)
-            break
-        end
-    end
-
-    -- Encode the updated active_output_requests table back to JSON
-    local stringified_requests = json.encode(active_output_requests)
-
-    -- Update the database
-    local stmt = DB:prepare([[
-        UPDATE Providers
-        SET active_output_requests = :active_output_requests
-        WHERE provider_id = :provider_id;
-    ]])
-    stmt:bind_names({ provider_id = provider_id, active_output_requests = stringified_requests })
-
-    local ok = pcall(function()
-      dbUtils.execute(stmt, "Failed to update provider active output requests")
-    end)
-
-    if not ok then
-        print("Failed to update provider active output requests for provider ID " .. provider_id)
-        return false, "Failed to update provider active output requests"
-    end
+    return true, "Request ID removed successfully"
   end
-
-  return true, "Request ID removed successfully"
 end
 
 function providerManager.getActiveRequests(userId: string, challenge: boolean): string, string
@@ -352,11 +368,11 @@ function providerManager.updateProviderBalance(userId: string, balance: integer)
   dbUtils.execute(stmt, "Failed to update provider balance")
   end)
 
-  if balance == 0 then 
+  if balance <= 0 then 
     providerManager.updateProviderStatus(userId, "inactive")
   end
 
-  if previousBalance == 0 and balance > 0 then
+  if previousBalance <= 0 and balance > 0 then
     providerManager.updateProviderStatus(userId, "active")
   end
 
@@ -364,6 +380,45 @@ function providerManager.updateProviderBalance(userId: string, balance: integer)
     return true, ""
   else
     return false, "Failed to update provider balance"
+  end
+end
+
+function providerManager.decrementProviderBalance(userId: string): boolean, string
+  print("entered providerManager.decrementProviderBalance")
+
+  local provider, err = providerManager.getProvider(userId)
+  if err ~= "" then
+    return false, err
+  end
+
+  local previousBalance = provider.random_balance
+  local newBalance      = previousBalance - 1
+
+  -- Prepare the UPDATE statement with the new balance
+  local stmt = DB:prepare[[
+    UPDATE Providers
+    SET random_balance = :balance
+    WHERE provider_id  = :provider_id;
+  ]]
+  stmt:bind_names({
+    provider_id = userId,
+    balance     = newBalance
+  })
+
+  -- Execute the UPDATE inside a protected call
+  local ok = pcall(function()
+    dbUtils.execute(stmt, "Failed to decrement provider balance")
+  end)
+
+  -- If new balance is 0, mark provider inactive
+  if newBalance == 0 then 
+    providerManager.updateProviderStatus(userId, "inactive")
+  end
+
+  if ok then
+    return true, ""
+  else
+    return false, "Failed to decrement provider balance"
   end
 end
 
@@ -417,7 +472,6 @@ function providerManager.isActiveProvider(userId: string): boolean, string
   end
 end
 
-
 function providerManager.isStakedProvider(userId: string): boolean, string
   print("entered providerManager.isStakedProvider")
 
@@ -434,5 +488,24 @@ function providerManager.isStakedProvider(userId: string): boolean, string
   end
 end
 
+function providerManager.tombstoneProviders(providerList: ProviderList): boolean, string
+  print("entered providerManager.tombstoneProviders")
+
+  for _, providerId in ipairs(providerList.provider_ids) do
+    local success, err = providerManager.updateProviderBalance(providerId, -2)
+    success, err = providerManager.removeActiveRequest(providerId, "", true, true)
+    if success then
+      ao.send({
+        Target = StakingProcess,
+        Action = "Slash-Provider",
+        Data = json.encode({providerId = providerId})
+      })
+    else
+      return false, err
+    end
+  end
+
+  return true, ""
+end
 
 return providerManager

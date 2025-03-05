@@ -254,15 +254,15 @@ global function postVDFChallengeHandler(msg: Message): boolean
     return false
   end
 
-  local success, _err = randomManager.postVDFChallenge(userId, requestId, input, modulus)
+  local success, err = randomManager.postVDFChallenge(userId, requestId, input, modulus)
 
   if success then
-    providerManager.removeActiveRequest(userId, requestId, true)
+    providerManager.removeActiveRequest(userId, requestId, true, false)
     randomManager.decrementRequestedInputs(requestId)
-    --ao.send(sendResponse(msg.From, "Posted VDF Input", SuccessMessage))
+    providerManager.decrementProviderBalance(userId)
     return true
   else
-    --ao.send(sendResponse(msg.From, "Error", {message = "Failed to post VDF Input: " .. err}))
+    ao.send(sendResponse(msg.From, "Error", {message = "Failed to post VDF Input: " .. err}))
     return false
   end
 end
@@ -301,13 +301,12 @@ global function postVDFOutputAndProofHandler(msg: Message): boolean
     ao.send(sendResponse(msg.From, "Error", {message = "Failed to post VDF Output: " .. "not requested"}))
     return false
   end
-  providerManager.removeActiveRequest(userId, requestId, false)
+  providerManager.removeActiveRequest(userId, requestId, false, false)
 
   local success, err = randomManager.postVDFOutputAndProof(userId, requestId, output, proof)
 
   if success then
     randomManager.decrementRequestedInputs(requestId)
-    --ao.send(sendResponse(msg.From, "Posted VDF Output and Proof", SuccessMessage))
     return true
   else
     ao.send(sendResponse(msg.From, "Verification-Error", {message = "Failed to post VDF Output and Proof: " .. err}))
@@ -341,12 +340,12 @@ global function postVerificationHandler(msg: Message): boolean
   
   if success then
     randomManager.decrementRequestedInputs(requestId)
-    --ao.send(sendResponse(msg.From, "Posted Verification", SuccessMessage))
     return true
-  else
-    --ao.send(sendResponse(msg.From, "Error", {message = "Failed to post Verification: " .. err}))
-    return false
   end
+
+  print("Failed to post Verification: " .. _err)
+  ao.send(sendResponse(msg.From, "Error", {message = "Failed to post Verification: " .. _err}))
+  return false
 end
 
 -- Handler for posting verifier failed verification of segment authenticity
@@ -525,7 +524,14 @@ global function cronTickHandler(msg: Message): boolean
               -- Rerequest random from approved providers
               print("Rerequesting random from approved providers for request_id: " .. request_id)
               randomManager.rerequestRandom(request_id)
-              
+              ActiveRequests.activeChallengeRequests.request_ids[request_id] = nil
+
+              local providerList, _  = randomManager.getProblemProviders(request_id, true)
+              if providerList and providerList.provider_ids and #providerList.provider_ids > 0 then
+                providerManager.tombstoneProviders(providerList)
+              else
+                print("Provider list is empty, nothing to tombstone.")
+              end
             elseif category == "activeOutputRequests" then
               -- Move to cracking pool
               print("Moving to cracking pool for request_id: " .. request_id)
@@ -533,6 +539,12 @@ global function cronTickHandler(msg: Message): boolean
               ActiveRequests.activeOutputRequests.request_ids[request_id] = nil
               RequestsToCrack[request_id] = true
 
+              local providerList, _  = randomManager.getProblemProviders(request_id, true)
+              if providerList and providerList.provider_ids and #providerList.provider_ids > 0 then
+                providerManager.tombstoneProviders(providerList)
+              else
+                print("Provider list is empty, nothing to tombstone.")
+              end
             elseif category == "activeVerificationRequests" then
               -- Rerequest random from approved providers
               print("Rerequesting random from approved providers for request_id: " .. request_id)
@@ -552,7 +564,6 @@ global function getRequestsToCrackHandler(msg: Message): boolean
   sendResponse(msg.From, "Get-Requests-To-Crack", RequestsToCrack)
   return true
 end
-
 
 
 -- Add handlers

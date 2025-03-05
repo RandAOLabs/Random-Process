@@ -35,7 +35,7 @@ global ActiveRequests = {
 
 global RequestsToCrack = {}
 
-global FallbackProviders = '{"provider_ids":["XUo8jZtUDBFLtp5okR12oLrqIZ4ewNlTpqnqmriihJE"]}'
+global FallbackProviders = '{"provider_ids":["ld4ncW8yLSkckjia3cw6qO7silUdEe1nsdiEvMoLg-0"]}'
 
 global SuccessMessage: string = "200: Success"
 

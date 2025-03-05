@@ -92,7 +92,7 @@ function database.initializeDatabase(): boolean
           request_id TEXT,                               
           provider_id TEXT,                              
           input_value TEXT,
-          modulus_value TEXT,                               
+          modulus_value TEXT,                       
           output_value TEXT,                               
           proof TEXT,         
           created_at INTEGER,                             

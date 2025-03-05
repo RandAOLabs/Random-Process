@@ -404,12 +404,11 @@ describe("requestRandom", function()
     assert(success, "Failure: failed to create random request")
   end)
 
-
   it("should be able to request another random from a registered provider with correct balance and correct requested inputs and token to use for rerequesting", function()
     local userId = "Requester1"
     local providers = json.encode({provider_ids = {"Provider1", "Provider3"}})
     local callbackId = "xxxx-xxxx-4xxx-xxxy"
-    local requested_inputs = json.encode({requested_inputs = 1})
+    local requestedInputs = json.encode({requested_inputs = 1})
     local message = {
       Target = ao.id,
       From = TokenInUse,
@@ -579,6 +578,16 @@ describe("postVDFChallenge", function()
 
     local success = postVDFChallengeHandler(message)
     assert(success, "Failure: unable to post VDF Challenge from requested provider")
+  end)
+
+  it("should be able to retrieve providers decremented balance after posting challenge", function()
+    local provider, _ = providerManager.getProvider("Provider1")
+    assert.are.equal(0, provider.random_balance)
+    
+    local availableRandomValues = 11
+    message = { Target = ao.id, From = "Provider1", Action = "Update-Providers-Random-Balance", Data = json.encode({availableRandomValues = availableRandomValues}) }
+    success = updateProviderBalanceHandler(message)
+    assert(success, "Failure: failed to update")
   end)
 
   it("should not be able to post output and proof from a requested provider for a valid request before all challenges are posted",
@@ -865,7 +874,6 @@ describe("getRandomRequests & getRandomRequestViaCallbackId", function()
     local success = getRandomRequestViaCallbackIdHandler(message)
     assert(success, "Failure: errors out on valid callbackId")
   end)
-
 
   it("should not error on invalid callbackId",
   function()
