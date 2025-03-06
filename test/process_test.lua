@@ -917,4 +917,9 @@ describe("rerequest random", function()
     assert(request.status == "FAILED", "Failure: no random request found")
   end)
 
+  it("providers should have -2 balance after tombstone", function()
+    local provider, _ = providerManager.getProvider("Provider1")
+    assert.are.equal(provider.random_balance, -2)
+  end)
+
 end)

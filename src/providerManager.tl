@@ -97,6 +97,9 @@ function providerManager.getAllProviders(): ProviderDetailsList, string
   end
 end
 
+local active_challenge_requests: RequestList
+local active_output_requests: RequestList
+
 function providerManager.pushActiveRequests(providerIds: {string}, requestId: string, challenge: boolean): boolean, string
   print("entered providerManager.pushActiveRequests")
   local success: boolean = true
@@ -113,7 +116,6 @@ function providerManager.pushActiveRequests(providerIds: {string}, requestId: st
     end
 
     if challenge == true then 
-      local active_challenge_requests: RequestList
       if provider.active_challenge_requests then
         -- Decode existing active_requests JSON if it exists
         active_challenge_requests = json.decode(provider.active_challenge_requests) as RequestList
@@ -147,7 +149,6 @@ function providerManager.pushActiveRequests(providerIds: {string}, requestId: st
       end
     else
       print("made here")
-      local active_output_requests: RequestList
       if provider.active_output_requests then
         -- Decode existing active_output_requests JSON if it exists
         active_output_requests = json.decode(provider.active_output_requests) as RequestList
@@ -218,7 +219,6 @@ function providerManager.removeActiveRequest(provider_id: string, requestId: str
   else
     if challenge then
       -- Process active_challenge_requests
-      local active_challenge_requests: RequestList
       if provider.active_challenge_requests then
         active_challenge_requests = json.decode(provider.active_challenge_requests) as RequestList
       else
@@ -250,7 +250,6 @@ function providerManager.removeActiveRequest(provider_id: string, requestId: str
       end
     else
       -- Process active_output_requests
-      local active_output_requests: RequestList
       if provider.active_output_requests then
         active_output_requests = json.decode(provider.active_output_requests) as RequestList
       else
