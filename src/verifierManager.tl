@@ -309,6 +309,20 @@ function verifierManager.createSegment(proofId: string, segmentCount: string, se
   return segmentId, ""
 end
 
+-- Verify posted verification is from requested verifier
+function verifierManager.verifySegmentVerification(requestId: string, verifierId: string): boolean, string
+  print("Verifying verification from verifier: " .. verifierId)
+
+  local stmt = DB:prepare("SELECT * FROM Verifiers WHERE process_id = :process_id")
+  stmt:bind_names({process_id = verifierId})  
+  local result = dbUtils.queryOne(stmt) as VerifierProcess
+  if not result or string.find(result.current_segment, requestId, 1) then
+    return false, "Segment not found"
+  end
+  
+  return true, ""
+end
+
 -- Process VDF proofs
 function verifierManager.processProof(requestId: string, input: string, modulus: string, proofJson: string, providerId: string, modExpectedOutput: string): boolean, string  
   -- First decode the proofJson string since it's already JSON encoded

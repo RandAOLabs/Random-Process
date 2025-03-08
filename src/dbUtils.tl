@@ -39,7 +39,7 @@ function dbUtils.execute(stmt: statement, statementHint: string | nil): boolean,
   end
 
   -- Logging
-  print("dbUtils.execute: Executing SQL statement")
+  -- print("dbUtils.execute: Executing SQL statement")
 
   if stmt then
     local step_ok, step_err = pcall(function(): string stmt:step() end)
@@ -54,7 +54,7 @@ function dbUtils.execute(stmt: statement, statementHint: string | nil): boolean,
       return false, "dbUtils.execute: Failed to finalize SQL statement StatementHint being: " .. DB:errmsg()
     end
     
-    print("dbUtils.execute: SQL execution successful")
+    -- print("dbUtils.execute: SQL execution successful")
     return true, ""
   else
     print("dbUtils.execute: Statement preparation failed: " .. DB:errmsg())

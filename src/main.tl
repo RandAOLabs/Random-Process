@@ -85,7 +85,31 @@ global record GetRandomRequestsResponse
 end
 
 -- Initialize the database
-database.initializeDatabase()
+local function initializeApplication(): boolean
+  print("Initializing application")
+  
+  -- Initialize database
+  local success = database.initializeDatabase()
+  if not success then
+    print("Failed to initialize database")
+    return false
+  end
+  
+  -- Initialize active providers queue for round-robin
+  success = providerManager.initializeActiveQueue()
+  if not success then
+    print("Failed to initialize active providers queue")
+    return false
+  end
+  
+  return true
+end
+
+-- Initialize the application
+if not initializeApplication() then
+  print("Failed to initialize application")
+  return
+end
 
 -- Drop verifiers table
 verifierManager.dropVerifierTable()
@@ -326,13 +350,16 @@ global function postVerificationHandler(msg: Message): boolean
   local requestId = data.request_id
   local segmentId = data.segment_id
 
-  local function validateVerificationInputs(_valid: boolean, _requestId: string, _segmentId: string): boolean
-    return true
+  local validVerification, err = verifierManager.verifySegmentVerification(requestId, verifierId)
+  if not validVerification then
+    print("Failed to post Verification: " .. "not verified")
+    ao.send(sendResponse(msg.From, "Error", {message = "Failed to post Verification: " .. "not verified"}))
+    return false
   end
-  
-  if valid == nil or segmentId == nil or requestId == nil or not validateVerificationInputs(valid, requestId, segmentId) then
-    print("Failed to post Verification: " .. "values not provided or malformed")
-    ao.send(sendResponse(msg.From, "Error", {message = "Failed to post Verification: " .. "values not provided or malformed"}))
+
+  if valid == nil or segmentId == nil or requestId == nil or not validVerification then
+    print("Failed to post Verification: " .. (err or "values not provided or malformed"))
+    ao.send(sendResponse(msg.From, "Error", {message = "Failed to post Verification: " .. (err or "values not provided or malformed")}))
     return false
   end
   
@@ -394,7 +421,9 @@ global function creditNoticeHandler(msg: Message): boolean
   local providers         = msg.Tags["X-Providers"] or nil
   local requestedInputs   = msg.Tags["X-RequestedInputs"] or ""
 
-  local success, err = randomManager.createRandomRequest(userId, providers, callbackId, requestedInputs)
+  -- Use round-robin if no providers specified
+  local useRoundRobin = providers == nil
+  local success, err = randomManager.createRandomRequest(userId, providers or "", callbackId, requestedInputs, useRoundRobin)
 
   if success then
     ao.send(sendResponse(userId, "Created New Random Request", SuccessMessage))
@@ -545,10 +574,11 @@ global function cronTickHandler(msg: Message): boolean
               else
                 print("Provider list is empty, nothing to tombstone.")
               end
-            elseif category == "activeVerificationRequests" then
+            elseif category == "activeVerificationRequests" and timestamp + (OverridePeriod * 2) < currentTimestamp then
               -- Rerequest random from approved providers
               print("Rerequesting random from approved providers for request_id: " .. request_id)
               randomManager.rerequestRandom(request_id)
+              ActiveRequests.activeVerificationRequests.request_ids[request_id] = nil
             end
           end
         end
@@ -565,6 +595,12 @@ global function getRequestsToCrackHandler(msg: Message): boolean
   return true
 end
 
+global function requestNextPollNumberHandler(_msg: Message): boolean
+  print("entered requestNextPollNumber")
+
+
+  return true
+end
 
 -- Add handlers
 Handlers.add('info', 

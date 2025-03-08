@@ -40,7 +40,8 @@ _G.Verifiers = {
     "t1HZIJI7L21Km_MGV7QQqt6WBroytgf3feNM-7hElpk",
     "wcGuo6YEI1selRocjgus2CA_OdJIkS3JRMI5Fjtc4PE",
     "3saSMk1uy864vqYinCO6YOe1HE-7hL7gREM4pkL58WU",
-    "t4otY-MlmD2ptyzAVzeb5Zy6sSEKSCQhUv2Bhszh-Q0",
+    --"t4otY-MlmD2ptyzAVzeb5Zy6sSEKSCQhUv2Bhszh-Q0",
+    "oCXpVaPircmbIl06jnZ3LtId4hRWq0xUUPWZZ6JHNXQ",
     "YBzowoZnPJVeygzfUivYmS7--ghokur0Gh3GSgjWjOM",
     "7gODvtdDnlDTPuokN24tIZ1BjyY_tu3-1r9Xma8x12U",
     "dA-U0VLNjZVsgCOMM7VKfzlY3yzqaJ10d272hPuIF1w"
@@ -288,6 +289,15 @@ describe("provider specific tests", function()
     success = updateProviderStakeHandler(message)
     assert(success, "Failure: failed to update")
 
+    message = { 
+      Target = ao.id, 
+      From = StakingProcess, 
+      Action = "Update-Provider-Stake", 
+      Data = json.encode({providerId = "Sr3HVH0Nh6iZzbORLpoQFOEvmsuKjXsHswSWH760KAk", status = "active"}) }
+    success = updateProviderStakeHandler(message)
+    assert(success, "Failure: failed to update")
+
+
     local availableRandomValues = 1
     message = { Target = ao.id, From = "Provider1", Action = "Update-Providers-Random-Balance", Data = json.encode({availableRandomValues = availableRandomValues}) }
     success = updateProviderBalanceHandler(message)
@@ -295,6 +305,10 @@ describe("provider specific tests", function()
 
 
     message = { Target = ao.id, From = "XUo8jZtUDBFLtp5okR12oLrqIZ4ewNlTpqnqmriihJE", Action = "Update-Providers-Random-Balance", Data = json.encode({availableRandomValues = availableRandomValues}) }
+    success = updateProviderBalanceHandler(message)
+    assert(success, "Failure: failed to update")
+
+    message = { Target = ao.id, From = "Sr3HVH0Nh6iZzbORLpoQFOEvmsuKjXsHswSWH760KAk", Action = "Update-Providers-Random-Balance", Data = json.encode({availableRandomValues = availableRandomValues}) }
     success = updateProviderBalanceHandler(message)
     assert(success, "Failure: failed to update")
   end)
@@ -311,7 +325,7 @@ describe("provider specific tests", function()
     assert(success, "Failure: unable to get providers")
 
     local providers, _ = providerManager.getAllProviders()
-    assert.are.equal(#providers, 4)
+    assert.are.equal(#providers, 5)
   end)
 
 end)

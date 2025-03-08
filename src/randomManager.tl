@@ -173,8 +173,7 @@ function randomManager.getVDFResults(requestId: string): ProviderVDFResults, str
   local stmt = DB:prepare("SELECT * FROM ProviderVDFResults WHERE request_id = :request_id")
   stmt:bind_names({request_id = requestId})  
   local queryResult = dbUtils.queryMany(stmt)
-  print(json.encode(queryResult))
-  print(json.encode(queryResult[1]))
+
   local result: ProviderVDFResults = { 
     requestResponses = {}
   }
@@ -182,8 +181,6 @@ function randomManager.getVDFResults(requestId: string): ProviderVDFResults, str
   for _, response in ipairs(queryResult) do
     table.insert(result.requestResponses, response as ProviderVDFResult)
   end
-
-  print(json.encode(result))
 
   if result then
     return result, ""
@@ -391,11 +388,45 @@ function randomManager.getVDFResult(requestId: string, providerId: string): Prov
   end
 end
 
-function randomManager.createRandomRequest(userId: string, providers: string, callbackId: string, requestedInputs: string): boolean, string
+function randomManager.getRoundRobinProviders(count: number): string, string
+  print("entered randomManager.getRoundRobinProviders")
+  
+  -- Get next providers from queue
+  local providers, err = providerManager.getNextActiveProviders(count)
+  if err ~= "" then
+    return "", "Failed to get active providers: " .. err
+  end
+  
+  -- Move used providers to end of queue
+  for _, providerId in ipairs(providers) do
+    local success, update_err = providerManager.updateProviderQueuePosition(providerId)
+    if not success then
+      print("Warning: Failed to update queue position for provider " .. providerId .. ": " .. update_err)
+    end
+  end
+  
+  -- Create provider list
+  local providerList: ProviderList = {
+    provider_ids = providers
+  }
+  
+  return json.encode(providerList), ""
+end
+
+function randomManager.createRandomRequest(userId: string, providers: string, callbackId: string, requestedInputs: string, useRoundRobin: boolean | nil): boolean, string
   print("entered randomManager.createRandomRequest")
 
-  local timestamp           = os.time()
-  local requestId           = randomManager.generateUUID()
+  local timestamp = os.time()
+  local requestId = randomManager.generateUUID()
+
+  -- Handle round-robin provider selection
+  if useRoundRobin then
+    local roundRobinProviders, err = randomManager.getRoundRobinProviders(3) -- Get 3 providers by default
+    if err ~= "" then
+      return false, "Failed to get round-robin providers: " .. err
+    end
+    providers = roundRobinProviders
+  end
 
   -- Decode providers JSON
   local providerList = json.decode(providers) as ProviderList
@@ -491,7 +522,7 @@ function randomManager.rerequestRandom(requestId: string): boolean, string
   end
     
   -- AFTER LUNCH TODO VERIFY BELOW THEN DECONFLICT WITH CALLBACKIDS
-  local success, err = randomManager.createRandomRequest(initalRequest.requester, providerList, initalRequest.callback_id, "")
+  local success, err = randomManager.createRandomRequest(initalRequest.requester, providerList, initalRequest.callback_id, "", false)
   if not success then
     return false, err
   end

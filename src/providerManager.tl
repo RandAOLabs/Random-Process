@@ -507,4 +507,205 @@ function providerManager.tombstoneProviders(providerList: ProviderList): boolean
   return true, ""
 end
 
+function providerManager.addToActiveQueue(providerId: string): boolean, string
+  print("entered providerManager.addToActiveQueue")
+  
+  local timestamp = os.time()
+  local stmt = DB:prepare([[
+    INSERT INTO ActiveProvidersQueue (provider_id, last_used_at)
+    VALUES (:provider_id, :last_used_at)
+  ]])
+  
+  if not stmt then
+    return false, "Failed to prepare statement: " .. DB:errmsg()
+  end
+  
+  stmt:bind_names({
+    provider_id = providerId,
+    last_used_at = timestamp
+  })
+  
+  return dbUtils.execute(stmt, "Add provider to active queue")
+end
+
+function providerManager.getNextActiveProviders(count: number): {string}, string
+  print("entered providerManager.getNextActiveProviders")
+  
+  local stmt = DB:prepare([[
+    SELECT provider_id FROM ActiveProvidersQueue
+    ORDER BY queue_position ASC
+    LIMIT :count
+  ]])
+  
+  if not stmt then
+    return {}, "Failed to prepare statement"
+  end
+  
+  stmt:bind_names({count = count})
+  local result = dbUtils.queryMany(stmt)
+  
+  if not result then
+    return {}, "Failed to get next active providers"
+  end
+  
+  local providers: {string} = {}
+  for i = 1, #result do
+    local row = result[i] as table
+    local provider_id = row.provider_id as string
+    if provider_id then
+      table.insert(providers, provider_id)
+    end
+  end
+  
+  return providers, ""
+end
+
+function providerManager.updateProviderQueuePosition(providerId: string): boolean, string
+  print("entered providerManager.updateProviderQueuePosition")
+  
+  local timestamp = os.time()
+  local stmt = DB:prepare([[
+    UPDATE ActiveProvidersQueue
+    SET queue_position = (SELECT MAX(queue_position) + 1 FROM ActiveProvidersQueue),
+        last_used_at = :last_used_at
+    WHERE provider_id = :provider_id
+  ]])
+  
+  if not stmt then
+    return false, "Failed to prepare statement: " .. DB:errmsg()
+  end
+  
+  stmt:bind_names({
+    provider_id = providerId,
+    last_used_at = timestamp
+  })
+  
+  return dbUtils.execute(stmt, "Update provider queue position")
+end
+
+function providerManager.initializeActiveQueue(): boolean, string
+  print("entered providerManager.initializeActiveQueue")
+  
+  -- First, clear the existing queue
+  local clear_stmt = DB:prepare("DELETE FROM ActiveProvidersQueue")
+  if not clear_stmt then
+    return false, "Failed to prepare clear statement"
+  end
+  local success, err = dbUtils.execute(clear_stmt, "Clear active queue")
+  if not success then
+    return false, err
+  end
+  
+  -- Get all active providers
+  local providers_stmt = DB:prepare([[
+    SELECT provider_id 
+    FROM Providers 
+    WHERE active = 1 
+    AND staked > 0
+  ]])
+  
+  if not providers_stmt then
+    return false, "Failed to prepare providers statement"
+  end
+  
+  local result = dbUtils.queryMany(providers_stmt)
+  if not result then
+    return false, "Failed to get active providers"
+  end
+  
+  -- Add each active provider to the queue
+  local timestamp = os.time()
+  for i = 1, #result do
+    local row = result[i] as table
+    local provider_id = row.provider_id as string
+    if provider_id then
+      local insert_stmt = DB:prepare([[
+        INSERT INTO ActiveProvidersQueue (provider_id, last_used_at)
+        VALUES (:provider_id, :last_used_at)
+      ]])
+      
+      if not insert_stmt then
+        return false, "Failed to prepare insert statement"
+      end
+      
+      insert_stmt:bind_names({
+        provider_id = provider_id,
+        last_used_at = timestamp
+      })
+      
+      success, err = dbUtils.execute(insert_stmt, "Insert provider into queue")
+      if not success then
+        return false, err
+      end
+    end
+  end
+  
+  return true, ""
+end
+
+function providerManager.syncProviderQueueStatus(providerId: string, active: boolean): boolean, string
+  print("entered providerManager.syncProviderQueueStatus")
+  
+  if active then
+    -- Check if provider is already in queue
+    local check_stmt = DB:prepare([[
+      SELECT 1 FROM ActiveProvidersQueue WHERE provider_id = :provider_id
+    ]])
+    
+    if not check_stmt then
+      return false, "Failed to prepare check statement"
+    end
+    
+    check_stmt:bind_names({provider_id = providerId})
+    local exists = dbUtils.queryOne(check_stmt) ~= nil
+    
+    if not exists then
+      -- Add to queue if not present
+      return providerManager.addToActiveQueue(providerId)
+    end
+  else
+    -- Remove from queue if inactive
+    local remove_stmt = DB:prepare([[
+      DELETE FROM ActiveProvidersQueue WHERE provider_id = :provider_id
+    ]])
+    
+    if not remove_stmt then
+      return false, "Failed to prepare remove statement"
+    end
+    
+    remove_stmt:bind_names({provider_id = providerId})
+    return dbUtils.execute(remove_stmt, "Remove provider from queue")
+  end
+  
+  return true, ""
+end
+
+function providerManager.setProviderActive(providerId: string, active: boolean): boolean, string
+  print("entered providerManager.setProviderActive")
+  
+  -- Update provider status
+  local update_stmt = DB:prepare([[
+    UPDATE Providers 
+    SET active = :active 
+    WHERE provider_id = :provider_id
+  ]])
+  
+  if not update_stmt then
+    return false, "Failed to prepare update statement"
+  end
+  
+  update_stmt:bind_names({
+    provider_id = providerId,
+    active = active and 1 or 0
+  })
+  
+  local success, err = dbUtils.execute(update_stmt, "Update provider active status")
+  if not success then
+    return false, err
+  end
+  
+  -- Sync queue status
+  return providerManager.syncProviderQueueStatus(providerId, active)
+end
+
 return providerManager
