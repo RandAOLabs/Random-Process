@@ -534,9 +534,12 @@ end
 -- Handler for cron ticks that facilitate cracking and slashing
 global function cronTickHandler(msg: Message): boolean
   print("entered cronTick")
-  
+  -- Initiate next station request
+  randomManager.nextStationRequest()
+    
   -- Loop through each category of requests
   for category, data in pairs(ActiveRequests as {string: RequestList}) do
+
     -- Check if request_ids is a valid table (which it should be)
     local request_ids = data.request_ids as {string: integer}
     local currentTimestamp = msg.Timestamp
@@ -574,7 +577,7 @@ global function cronTickHandler(msg: Message): boolean
               else
                 print("Provider list is empty, nothing to tombstone.")
               end
-            elseif category == "activeVerificationRequests" and timestamp + (OverridePeriod * 2) < currentTimestamp then
+            elseif category == "activeVerificationRequests" then -- and timestamp + (OverridePeriod * 2) < currentTimestamp then
               -- Rerequest random from approved providers
               print("Rerequesting random from approved providers for request_id: " .. request_id)
               randomManager.rerequestRandom(request_id)
@@ -595,12 +598,33 @@ global function getRequestsToCrackHandler(msg: Message): boolean
   return true
 end
 
-global function requestNextPollNumberHandler(_msg: Message): boolean
-  print("entered requestNextPollNumber")
+global function requestNextStationNumberHandler(msg: Message): boolean
+  print("entered requestNextStationNumberHandler")
+  local userId = msg.From
 
+  local function validateRequest(): boolean
+    return true
+  end
 
+  if not validateRequest() then
+    return false
+  end
+
+  -- Check if userId is already in NextRoundList
+  for _, id in ipairs(NextRoundList as {string}) do
+    if id == userId then
+      return false -- Ignore duplicate requests
+    end
+  end
+
+  -- Add userId to the list if it's not already present
+  NextRoundList[#NextRoundList + 1] = userId
+
+  -- Respond with the expected callback they will receive along with randomness
+  msg.reply({Data = json.encode(Round)})
   return true
 end
+
 
 -- Add handlers
 Handlers.add('info', 
@@ -670,6 +694,10 @@ wrapHandler(getRequestsToCrackHandler))
 Handlers.add('cronTick', 
 Handlers.utils.hasMatchingTag('Action', 'Cron'), 
 wrapHandler(cronTickHandler))
+
+Handlers.add('requestNextStationNumber', 
+Handlers.utils.hasMatchingTag('Action', 'Request-Next-Station-Number'), 
+wrapHandler(requestNextStationNumberHandler))
 
 -- Logging
 print("RandAO Process Initialized")

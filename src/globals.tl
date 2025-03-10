@@ -8,6 +8,12 @@ global Info = {
     name = "RandAO-Random-Process",
     version = "1.0.0"
 }
+if not Configured then
+    global Round                            = 1
+end
+
+global RoundXList                       = {}
+global NextRoundList                    = {}
 
 global Admin: string = "KLzn6IzhmML7M-XXFNSI29GVNd3xSHtH26zuKa1TWn8"
 global StakingProcess: string = "EIQJoqVWonlxsEe8xGpQZhh54wrmgE3q0tAsVIhKYQU"
