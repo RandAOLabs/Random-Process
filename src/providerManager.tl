@@ -564,19 +564,35 @@ function providerManager.updateProviderQueuePosition(providerId: string): boolea
   print("entered providerManager.updateProviderQueuePosition")
   
   local timestamp = os.time()
+  
+  -- Get current max position
+  local max_pos_stmt = DB:prepare("SELECT COALESCE(MAX(queue_position), 0) as max_pos FROM ActiveProvidersQueue")
+  if not max_pos_stmt then
+    return false, "Failed to prepare max position statement"
+  end
+  
+  local result = dbUtils.queryOne(max_pos_stmt)
+  if not result then
+    return false, "Failed to get max position"
+  end
+  
+  local max_pos = (result.max_pos as number) + 1
+  
+  -- Update the provider's position
   local stmt = DB:prepare([[
     UPDATE ActiveProvidersQueue
-    SET queue_position = (SELECT MAX(queue_position) + 1 FROM ActiveProvidersQueue),
+    SET queue_position = :new_pos,
         last_used_at = :last_used_at
     WHERE provider_id = :provider_id
   ]])
   
   if not stmt then
-    return false, "Failed to prepare statement: " .. DB:errmsg()
+    return false, "Failed to prepare statement"
   end
   
   stmt:bind_names({
     provider_id = providerId,
+    new_pos = max_pos,
     last_used_at = timestamp
   })
   
@@ -602,6 +618,7 @@ function providerManager.initializeActiveQueue(): boolean, string
     FROM Providers 
     WHERE active = 1 
     AND staked > 0
+    ORDER BY provider_id
   ]])
   
   if not providers_stmt then
