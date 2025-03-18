@@ -187,6 +187,16 @@ describe("staking + unstaking tests", function()
     assert(success, "Failure: failed to update")
     provider, _ = providerManager.getProvider("XUo8jZtUDBFLtp5okR12oLrqIZ4ewNlTpqnqmriihJE")
     assert.are.equal(1, provider.staked)
+
+    message = { 
+      Target = ao.id, 
+      From = StakingProcess, 
+      Action = "Update-Provider-Stake", 
+      Data = json.encode({providerId = "Provider5", status = "active"}) }
+    success = updateProviderStakeHandler(message)
+    assert(success, "Failure: failed to update")
+    provider, _ = providerManager.getProvider("Provider5")
+    assert.are.equal(1, provider.staked)
   end)
 
 end)
@@ -264,8 +274,10 @@ describe("provider specific tests", function()
     assert(success, "Failure: failed to update")
     local status, _ = providerManager.isActiveProvider("Provider1")
     assert(status, "Failure: wrong status found")
-    availableRandomValues = 1
+    availableRandomValues = 5
     message = { Target = ao.id, From = "Provider1", Action = "Update-Providers-Random-Balance", Data = json.encode({availableRandomValues = availableRandomValues}) }
+    updateProviderBalanceHandler(message)
+    message = { Target = ao.id, From = "Provider5", Action = "Update-Providers-Random-Balance", Data = json.encode({availableRandomValues = availableRandomValues}) }
     updateProviderBalanceHandler(message)
   end)
 
@@ -325,7 +337,7 @@ describe("provider specific tests", function()
     assert(success, "Failure: unable to get providers")
 
     local providers, _ = providerManager.getAllProviders()
-    assert.are.equal(#providers, 5)
+    assert.are.equal(#providers, 6)
   end)
 
 end)
@@ -918,6 +930,17 @@ describe("rerequest random", function()
 
  _G.VirtualTime = _G.VirtualTime + 500000000000
 
+  it("", function ()  
+    print("Next: ")
+    local added, _ = providerManager.addToActiveQueue("Provider2")
+    local inited, _ = providerManager.initializeActiveQueue()
+    local synced, _ = providerManager.syncProviderQueueStatus("Provider3", true)
+    local next, _ = providerManager.getNextActiveProviders(1)
+    local updated, _ = providerManager.updateProviderQueuePosition("Provider5")
+    print("Next: ".. json.encode(next))
+    assert(true, "Failure: unable to get next active providers")
+  end)
+
   it('cron ticksshould be able to rerequest random after time delay', function()
     local message = {
       Timestamp = _G.VirtualTime
@@ -926,7 +949,7 @@ describe("rerequest random", function()
     assert(success, "Failure: unable to rerequest random")
   end)
 
-  it('should be able to rerequest random after time delay', function()
+  it('should see previous failed request set to failed', function()
     local request, _ = randomManager.getRandomRequest("d94a87f4-c8c6-4e45-be1f-813ae510713f")
     assert(request.status == "FAILED", "Failure: no random request found")
   end)

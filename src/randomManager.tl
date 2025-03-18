@@ -584,15 +584,13 @@ end
 function randomManager.rerequestRandom(requestId: string): boolean, string
   print("entered randomManager.rerequestRandom")
 
-  local providerList = FallbackProviders
-
   local initalRequest, requestErr = randomManager.getRandomRequest(requestId)
   if requestErr ~= "" then
     return false, requestErr
   end
     
   -- AFTER LUNCH TODO VERIFY BELOW THEN DECONFLICT WITH CALLBACKIDS
-  local success, err = randomManager.createRandomRequest(initalRequest.requester, providerList, initalRequest.callback_id, "", false)
+  local success, err = randomManager.createRandomRequest(initalRequest.requester, "", initalRequest.callback_id, "", true)
   if not success then
     return false, err
   end

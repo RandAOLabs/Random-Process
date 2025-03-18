@@ -148,7 +148,6 @@ function providerManager.pushActiveRequests(providerIds: {string}, requestId: st
         return success, err
       end
     else
-      print("made here")
       if provider.active_output_requests then
         -- Decode existing active_output_requests JSON if it exists
         active_output_requests = json.decode(provider.active_output_requests) as RequestList
@@ -320,6 +319,27 @@ function providerManager.hasActiveRequest(userId: string, requestId: string, cha
   end
 end
 
+function providerManager.addToActiveQueue(providerId: string): boolean, string
+  print("entered providerManager.addToActiveQueue")
+  
+  local timestamp = os.time()
+  local stmt = DB:prepare([[
+    INSERT INTO ActiveProvidersQueue (provider_id, last_used_at)
+    VALUES (:provider_id, :last_used_at)
+  ]])
+  
+  if not stmt then
+    return false, "Failed to prepare statement: " .. DB:errmsg()
+  end
+  
+  stmt:bind_names({
+    provider_id = providerId,
+    last_used_at = timestamp
+  })
+  
+  return dbUtils.execute(stmt, "Add provider to active queue")
+end
+
 function providerManager.updateProviderStatus(providerId: string, status: string): boolean, string
   print("entered providerManager.updateProviderStatus")
 
@@ -373,6 +393,7 @@ function providerManager.updateProviderBalance(userId: string, balance: integer)
 
   if previousBalance <= 0 and balance > 0 then
     providerManager.updateProviderStatus(userId, "active")
+    providerManager.addToActiveQueue(userId)
   end
 
   if ok then
@@ -485,47 +506,6 @@ function providerManager.isStakedProvider(userId: string): boolean, string
   else
     return false, ""
   end
-end
-
-function providerManager.tombstoneProviders(providerList: ProviderList): boolean, string
-  print("entered providerManager.tombstoneProviders")
-
-  for _, providerId in ipairs(providerList.provider_ids) do
-    local success, err = providerManager.updateProviderBalance(providerId, -2)
-    success, err = providerManager.removeActiveRequest(providerId, "", true, true)
-    if success then
-      ao.send({
-        Target = StakingProcess,
-        Action = "Slash-Provider",
-        Data = json.encode({providerId = providerId})
-      })
-    else
-      return false, err
-    end
-  end
-
-  return true, ""
-end
-
-function providerManager.addToActiveQueue(providerId: string): boolean, string
-  print("entered providerManager.addToActiveQueue")
-  
-  local timestamp = os.time()
-  local stmt = DB:prepare([[
-    INSERT INTO ActiveProvidersQueue (provider_id, last_used_at)
-    VALUES (:provider_id, :last_used_at)
-  ]])
-  
-  if not stmt then
-    return false, "Failed to prepare statement: " .. DB:errmsg()
-  end
-  
-  stmt:bind_names({
-    provider_id = providerId,
-    last_used_at = timestamp
-  })
-  
-  return dbUtils.execute(stmt, "Add provider to active queue")
 end
 
 function providerManager.getNextActiveProviders(count: number): {string}, string
@@ -697,32 +677,25 @@ function providerManager.syncProviderQueueStatus(providerId: string, active: boo
   return true, ""
 end
 
-function providerManager.setProviderActive(providerId: string, active: boolean): boolean, string
-  print("entered providerManager.setProviderActive")
-  
-  -- Update provider status
-  local update_stmt = DB:prepare([[
-    UPDATE Providers 
-    SET active = :active 
-    WHERE provider_id = :provider_id
-  ]])
-  
-  if not update_stmt then
-    return false, "Failed to prepare update statement"
+function providerManager.tombstoneProviders(providerList: ProviderList): boolean, string
+  print("entered providerManager.tombstoneProviders")
+
+  for _, providerId in ipairs(providerList.provider_ids) do
+    local success, err = providerManager.updateProviderBalance(providerId, -2)
+    success, err = providerManager.removeActiveRequest(providerId, "", true, true)
+    if success then
+      providerManager.syncProviderQueueStatus(providerId, false)
+      ao.send({
+        Target = StakingProcess,
+        Action = "Slash-Provider",
+        Data = json.encode({providerId = providerId})
+      })
+    else
+      return false, err
+    end
   end
-  
-  update_stmt:bind_names({
-    provider_id = providerId,
-    active = active and 1 or 0
-  })
-  
-  local success, err = dbUtils.execute(update_stmt, "Update provider active status")
-  if not success then
-    return false, err
-  end
-  
-  -- Sync queue status
-  return providerManager.syncProviderQueueStatus(providerId, active)
+
+  return true, ""
 end
 
 return providerManager
