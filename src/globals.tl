@@ -15,7 +15,7 @@ end
 global RoundXList                       = {}
 global NextRoundList                    = {}
 
-global Admin: string = "KLzn6IzhmML7M-XXFNSI29GVNd3xSHtH26zuKa1TWn8"
+global Admin: string = "N90q65iT59dCo01-gtZRUlLMX0w6_ylFHv2uHaSUFNk"
 global StakingProcess: string = "EIQJoqVWonlxsEe8xGpQZhh54wrmgE3q0tAsVIhKYQU"
 
 global Cost: number = 100

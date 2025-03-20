@@ -592,12 +592,14 @@ global function cronTickHandler(msg: Message): boolean
   return true
 end
 
+-- Handler to get requests to crack
 global function getRequestsToCrackHandler(msg: Message): boolean
   print("entered getRequestsToCrack")
   sendResponse(msg.From, "Get-Requests-To-Crack", RequestsToCrack)
   return true
 end
 
+-- Handler to get next station random number
 global function requestNextStationNumberHandler(msg: Message): boolean
   print("entered requestNextStationNumberHandler")
   local userId = msg.From
@@ -625,6 +627,16 @@ global function requestNextStationNumberHandler(msg: Message): boolean
   return true
 end
 
+-- Admin function to reset the balance of a provider to 0
+global function reinitializeProviderHandler(msg: Message): boolean
+  print("entered reinitializeProviderHandler")
+  if msg.From ~= Admin then
+    return false
+  end
+  local providerId = msg.Tags["ProviderId"]
+  providerManager.updateProviderBalance(providerId, 0)
+  return true
+end
 
 -- Add handlers
 Handlers.add('info', 
@@ -698,6 +710,10 @@ wrapHandler(cronTickHandler))
 Handlers.add('requestNextStationNumber', 
 Handlers.utils.hasMatchingTag('Action', 'Request-Next-Station-Number'), 
 wrapHandler(requestNextStationNumberHandler))
+
+Handlers.add('reinitializeProvider', 
+Handlers.utils.hasMatchingTag('Action', 'Reinitialize-Provider'), 
+wrapHandler(reinitializeProviderHandler))
 
 -- Logging
 print("RandAO Process Initialized")

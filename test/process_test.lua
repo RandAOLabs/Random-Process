@@ -959,4 +959,34 @@ describe("rerequest random", function()
     assert.are.equal(provider.random_balance, -2)
   end)
 
+  it('non admin should not be able to reinitialize a tombstoned provider', function()
+    local message = {
+      Target = ao.id,
+      From = "Provider1",
+      Action = "Reinitialize-Provider",
+      Tags = {
+        ["ProviderId"] = "Provider1"
+      }
+    }
+    local success = reinitializeProviderHandler(message)
+    assert(not success, "Failure: able to reinitialize tombstoned provider")
+    local provider, _ = providerManager.getProvider("Provider1")
+    assert.are.equal(provider.random_balance, -2)
+  end)
+
+  it('admin should be able to reinitialize a tombstoned provider', function()
+    local message = {
+      Target = ao.id,
+      From = Admin,
+      Action = "Reinitialize-Provider",
+      Tags = {
+        ["ProviderId"] = "Provider1"
+      }
+    }
+    local success = reinitializeProviderHandler(message)
+    assert(success, "Failure: unable to reinitialize tombstoned provider")
+    local provider, _ = providerManager.getProvider("Provider1")
+    assert.are.equal(provider.random_balance, 0)
+  end)
+
 end)
