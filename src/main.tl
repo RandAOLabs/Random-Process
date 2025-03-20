@@ -6,7 +6,6 @@ local providerManager = require "providerManager"
 local randomManager   = require "randomManager"
 local tokenManager    = require "tokenManager"
 local verifierManager = require "verifierManager"
-local stakingManager  = require "stakingManager"
 
 -- Type definitions
 global record ResponseData
@@ -20,12 +19,13 @@ global record ReplyData
   Data: string
 end
 
-global record UpdateProviderRandomBalanceData
-  availableRandomValues: integer
+global record StakeUpdateData
+  providerId: string
+  status: string
 end
 
-global record UpdateProviderDetailsData
-  providerDetails: string
+global record UpdateProviderRandomBalanceData
+  availableRandomValues: integer
 end
 
 global record PostVDFChallengeData
@@ -85,7 +85,31 @@ global record GetRandomRequestsResponse
 end
 
 -- Initialize the database
-database.initializeDatabase()
+local function initializeApplication(): boolean
+  print("Initializing application")
+  
+  -- Initialize database
+  local success = database.initializeDatabase()
+  if not success then
+    print("Failed to initialize database")
+    return false
+  end
+  
+  -- Initialize active providers queue for round-robin
+  success = providerManager.initializeActiveQueue()
+  if not success then
+    print("Failed to initialize active providers queue")
+    return false
+  end
+  
+  return true
+end
+
+-- Initialize the application
+if not initializeApplication() then
+  print("Failed to initialize application")
+  return
+end
 
 -- Drop verifiers table
 verifierManager.dropVerifierTable()
@@ -131,11 +155,31 @@ local function wrapHandler(handlerFn: function(msg: Message)): function(msg: Mes
 end
 
 -- Handler to return the process info
-local function infoHandler(msg: Message)
-    local verifiers = verifierManager.printAvailableVerifiers()
-    print("Verifiers: " .. json.encode(verifiers))
-    ao.send(sendResponse(msg.From, "Info", {json.encode(verifiers)}))
+global function infoHandler(msg: Message): boolean
+    ao.send(sendResponse(msg.From, "Info", {json.encode(Info)}))
+    return true
+end
 
+-- Handler to update provider staking status
+global function updateProviderStakeHandler(msg: Message): boolean
+  print("entered updateProviderStakeHandler")
+  
+  if msg.From ~= StakingProcess then
+    ao.send(sendResponse(msg.From, "Error", {message = "Unauthorized provider update"}))
+    return false
+  end
+
+  local data = (json.decode(msg.Data as string) as StakeUpdateData)
+  local providerId = data.providerId
+  local status = data.status
+
+  local success, _err = providerManager.updateProviderStakedStatus(providerId, status, msg.Timestamp) 
+
+  if success then
+    return true
+  else
+    return false
+  end
 end
 
 -- Handler for updating providers balance
@@ -144,10 +188,10 @@ global function updateProviderBalanceHandler(msg: Message): boolean
   
   local userId = msg.From
  
-  local stakedStatus, statusErr = stakingManager.getStatus(userId)
+  local stakedStatus, statusErr = providerManager.isStakedProvider(userId)
 
   -- Check if staked
-  if stakedStatus == 'inactive' or stakedStatus == 'unstaking' or statusErr ~= "" then 
+  if stakedStatus == false or statusErr ~= "" then 
     ao.send(sendResponse(msg.From, "Error", {message = "Update failed: Provider status is not active"}))
     return false
   end
@@ -157,52 +201,8 @@ global function updateProviderBalanceHandler(msg: Message): boolean
   local success, _err = providerManager.updateProviderBalance(userId, balance)
 
   if success then
-    --ao.send(sendResponse(msg.From, "Updated Provider Random Balance", SuccessMessage))
     return true
   else
-    --ao.send(sendResponse(msg.From, "Error", {message = "Failed to update provider balance: " .. err}))
-    return false
-  end
-end
-
--- Handler for updating provider details
-global function updateProviderDetailsHandler(msg: Message): boolean
-  print("entered updateProviderDetails")
-
-  local providerId = msg.From
-  local data = json.decode(msg.Data as string) as UpdateProviderDetailsData
-  local success, err = providerManager.updateProviderDetails(providerId, data.providerDetails)
-  if success then
-    ao.send(sendResponse(msg.From, "Updated Provider Details", SuccessMessage))
-    return true
-  else
-    ao.send(sendResponse(msg.From, "Error", {message = "Failed to update provider details: " .. err}))
-    return false
-  end
-end
-
-global function getProviderDetailsHandler(msg: Message): boolean
-  print("entered getProviderDetails")
-  local data = (json.decode(msg.Data as string) as GetProviderData)
-  local providerId = data.providerId
-  local providerDetails, err = providerManager.getProvider(providerId)
-  if err == "" then
-    ao.send(sendResponse(msg.From, "Get-Provider-Details-Response", providerDetails))
-    return true
-  else
-    ao.send(sendResponse(msg.From, "Error", {message = "Provider not found: " .. err}))
-    return false
-  end
-end
-
-global function getAllProvidersDetailsHandler(msg: Message): boolean
-  print("entered getAllProvidersDetails")
-  local providers, err = providerManager.getAllProviders()
-  if err == "" then
-    ao.send(sendResponse(msg.From, "Get-All-Providers-Details-Response", providers))
-    return true
-  else
-    ao.send(sendResponse(msg.From, "Error", {message = "Providers not found: " .. err}))
     return false
   end
 end
@@ -240,31 +240,15 @@ global function getProviderHandler(msg: Message): boolean
   end
 end
 
--- Handler for geting a providers stake
-global function getProviderStakeHandler(msg: Message): boolean
-  print("entered getProviderStake")
-  local data = (json.decode(msg.Data as string) as GetProviderData)
-  local providerId = data.providerId
-  local stake, err = stakingManager.getProviderStake(providerId)
+-- Handler for getting all providers
+global function getAllProvidersHandler(msg: Message): boolean
+  print("entered getAllProvidersHandler")
+  local providers, err = providerManager.getAllProviders()
   if err == "" then
-    ao.send(sendResponse(msg.From, "Get-Provider-Stake-Response", stake))
+    ao.send(sendResponse(msg.From, "Get-All-Providers-Response", providers))
     return true
   else
-    ao.send(sendResponse(msg.From, "Error", {message = "Failed to get provider stake: " .. err}))
-    return false
-  end
-end
-
--- Handler for unstaking requests
-global function unstakeHandler(msg: Message): boolean
-  print("entered unstake")
-  local userId = msg.From
-  local success, err, message = stakingManager.unstake(userId, msg.Timestamp)
-  if success then
-    ao.send(sendResponse(userId, "Unstake-Response", message))
-    return true
-  else
-    ao.send(sendResponse(userId, "Error", {message = "Failed to unstake: " .. err}))
+    ao.send(sendResponse(msg.From, "Error", {message = "Providers not found: " .. err}))
     return false
   end
 end
@@ -294,15 +278,15 @@ global function postVDFChallengeHandler(msg: Message): boolean
     return false
   end
 
-  local success, _err = randomManager.postVDFChallenge(userId, requestId, input, modulus)
+  local success, err = randomManager.postVDFChallenge(userId, requestId, input, modulus)
 
   if success then
-    providerManager.removeActiveRequest(userId, requestId, true)
+    providerManager.removeActiveRequest(userId, requestId, true, false)
     randomManager.decrementRequestedInputs(requestId)
-    --ao.send(sendResponse(msg.From, "Posted VDF Input", SuccessMessage))
+    providerManager.decrementProviderBalance(userId)
     return true
   else
-    --ao.send(sendResponse(msg.From, "Error", {message = "Failed to post VDF Input: " .. err}))
+    ao.send(sendResponse(msg.From, "Error", {message = "Failed to post VDF Input: " .. err}))
     return false
   end
 end
@@ -341,13 +325,12 @@ global function postVDFOutputAndProofHandler(msg: Message): boolean
     ao.send(sendResponse(msg.From, "Error", {message = "Failed to post VDF Output: " .. "not requested"}))
     return false
   end
-  providerManager.removeActiveRequest(userId, requestId, false)
+  providerManager.removeActiveRequest(userId, requestId, false, false)
 
   local success, err = randomManager.postVDFOutputAndProof(userId, requestId, output, proof)
 
   if success then
     randomManager.decrementRequestedInputs(requestId)
-    --ao.send(sendResponse(msg.From, "Posted VDF Output and Proof", SuccessMessage))
     return true
   else
     ao.send(sendResponse(msg.From, "Verification-Error", {message = "Failed to post VDF Output and Proof: " .. err}))
@@ -367,13 +350,16 @@ global function postVerificationHandler(msg: Message): boolean
   local requestId = data.request_id
   local segmentId = data.segment_id
 
-  local function validateVerificationInputs(_valid: boolean, _requestId: string, _segmentId: string): boolean
-    return true
+  local validVerification, err = verifierManager.verifySegmentVerification(requestId, verifierId)
+  if not validVerification then
+    print("Failed to post Verification: " .. "not verified")
+    ao.send(sendResponse(msg.From, "Error", {message = "Failed to post Verification: " .. "not verified"}))
+    return false
   end
-  
-  if valid == nil or segmentId == nil or requestId == nil or not validateVerificationInputs(valid, requestId, segmentId) then
-    print("Failed to post Verification: " .. "values not provided or malformed")
-    ao.send(sendResponse(msg.From, "Error", {message = "Failed to post Verification: " .. "values not provided or malformed"}))
+
+  if valid == nil or segmentId == nil or requestId == nil or not validVerification then
+    print("Failed to post Verification: " .. (err or "values not provided or malformed"))
+    ao.send(sendResponse(msg.From, "Error", {message = "Failed to post Verification: " .. (err or "values not provided or malformed")}))
     return false
   end
   
@@ -381,37 +367,30 @@ global function postVerificationHandler(msg: Message): boolean
   
   if success then
     randomManager.decrementRequestedInputs(requestId)
-    --ao.send(sendResponse(msg.From, "Posted Verification", SuccessMessage))
     return true
-  else
-    --ao.send(sendResponse(msg.From, "Error", {message = "Failed to post Verification: " .. err}))
-    return false
   end
+
+  print("Failed to post Verification: " .. _err)
+  ao.send(sendResponse(msg.From, "Error", {message = "Failed to post Verification: " .. _err}))
+  return false
 end
 
 -- Handler for posting verifier failed verification of segment authenticity
 global function failedPostVerificationHandler(msg: Message): boolean
   print("entered failedPostVerification")
   local verifierId = msg.From
-  verifierManager.markAvailable(verifierId)
+  local success, err = verifierManager.markAvailable(verifierId)
+  if success then
+    return true
+  else
+    print("Failed to mark verifier: " .. verifierId .. " as available: " .. err)
+    return false
+  end
 end
 
 -- Handler for creating random requests
 global function creditNoticeHandler(msg: Message): boolean
   print("entered creditNotice")
-
-  local xStake = msg.Tags["X-Stake"] or nil
-
-  -- TODO improve
-  if xStake ~= nil then  
-    local success, err = stakingManager.processStake(msg)
-    if success then
-      return true
-    else
-      ao.send(sendResponse(msg.Sender, "Error", {message = err}))
-      return false
-    end
-  end
 
   local value = math.floor(tonumber(msg.Quantity))
   local callbackId = msg.Tags["X-CallbackId"] or nil
@@ -442,7 +421,9 @@ global function creditNoticeHandler(msg: Message): boolean
   local providers         = msg.Tags["X-Providers"] or nil
   local requestedInputs   = msg.Tags["X-RequestedInputs"] or ""
 
-  local success, err = randomManager.createRandomRequest(userId, providers, callbackId, requestedInputs)
+  -- Use round-robin if no providers specified
+  local useRoundRobin = providers == nil
+  local success, err = randomManager.createRandomRequest(userId, providers or "", callbackId, requestedInputs, useRoundRobin)
 
   if success then
     ao.send(sendResponse(userId, "Created New Random Request", SuccessMessage))
@@ -551,28 +532,38 @@ global function getActiveRequestsHandler(msg: Message): boolean
 end
 
 -- Handler for cron ticks that facilitate cracking and slashing
-global function cronTickHandler(_msg: Message): boolean
+global function cronTickHandler(msg: Message): boolean
   print("entered cronTick")
-  
+  -- Initiate next station request
+  randomManager.nextStationRequest()
+    
   -- Loop through each category of requests
   for category, data in pairs(ActiveRequests as {string: RequestList}) do
+
     -- Check if request_ids is a valid table (which it should be)
     local request_ids = data.request_ids as {string: integer}
+    local currentTimestamp = msg.Timestamp
 
     if type(request_ids) == "table" then
-
         -- Loop through the request_ids using pairs (since it's a dictionary-like table)
         for request_id, timestamp in pairs(request_ids) do
           -- Do something with each request_id and timestamp
           print("Category: " .. category .. ", Request ID: " .. request_id .. ", Timestamp: " .. timestamp)         
 
-          if timestamp + OverridePeriod < os.time() then
+          if timestamp + OverridePeriod < currentTimestamp then
             print("Request ID: " .. request_id .. " in category: " .. category .. " is overdue.")
             if category == "activeChallengeRequests" then
               -- Rerequest random from approved providers
               print("Rerequesting random from approved providers for request_id: " .. request_id)
               randomManager.rerequestRandom(request_id)
-              
+              ActiveRequests.activeChallengeRequests.request_ids[request_id] = nil
+
+              local providerList, _  = randomManager.getProblemProviders(request_id, true)
+              if providerList and providerList.provider_ids and #providerList.provider_ids > 0 then
+                providerManager.tombstoneProviders(providerList)
+              else
+                print("Provider list is empty, nothing to tombstone.")
+              end
             elseif category == "activeOutputRequests" then
               -- Move to cracking pool
               print("Moving to cracking pool for request_id: " .. request_id)
@@ -580,10 +571,17 @@ global function cronTickHandler(_msg: Message): boolean
               ActiveRequests.activeOutputRequests.request_ids[request_id] = nil
               RequestsToCrack[request_id] = true
 
-            elseif category == "activeVerificationRequests" then
+              local providerList, _  = randomManager.getProblemProviders(request_id, true)
+              if providerList and providerList.provider_ids and #providerList.provider_ids > 0 then
+                providerManager.tombstoneProviders(providerList)
+              else
+                print("Provider list is empty, nothing to tombstone.")
+              end
+            elseif category == "activeVerificationRequests" then -- and timestamp + (OverridePeriod * 2) < currentTimestamp then
               -- Rerequest random from approved providers
               print("Rerequesting random from approved providers for request_id: " .. request_id)
               randomManager.rerequestRandom(request_id)
+              ActiveRequests.activeVerificationRequests.request_ids[request_id] = nil
             end
           end
         end
@@ -594,50 +592,76 @@ global function cronTickHandler(_msg: Message): boolean
   return true
 end
 
+-- Handler to get requests to crack
 global function getRequestsToCrackHandler(msg: Message): boolean
   print("entered getRequestsToCrack")
   sendResponse(msg.From, "Get-Requests-To-Crack", RequestsToCrack)
   return true
 end
 
+-- Handler to get next station random number
+global function requestNextStationNumberHandler(msg: Message): boolean
+  print("entered requestNextStationNumberHandler")
+  local userId = msg.From
 
+  local function validateRequest(): boolean
+    return true
+  end
+
+  if not validateRequest() then
+    return false
+  end
+
+  -- Check if userId is already in NextRoundList
+  for _, id in ipairs(NextRoundList as {string}) do
+    if id == userId then
+      return false -- Ignore duplicate requests
+    end
+  end
+
+  -- Add userId to the list if it's not already present
+  NextRoundList[#NextRoundList + 1] = userId
+
+  -- Respond with the expected callback they will receive along with randomness
+  msg.reply({Data = json.encode(Round)})
+  return true
+end
+
+-- Admin function to reset the balance of a provider to 0
+global function reinitializeProviderHandler(msg: Message): boolean
+  print("entered reinitializeProviderHandler")
+  if msg.From ~= Admin then
+    return false
+  end
+  local providerId = msg.Tags["ProviderId"]
+  providerManager.updateProviderBalance(providerId, 0)
+  return true
+end
 
 -- Add handlers
 Handlers.add('info', 
 Handlers.utils.hasMatchingTag('Action', 'Info'), 
 wrapHandler(infoHandler))
 
+Handlers.add('updateProviderStake', 
+Handlers.utils.hasMatchingTag('Action', 'Update-Provider-Stake'), 
+wrapHandler(updateProviderStakeHandler))
+
 Handlers.add('updateProviderBalance', 
 Handlers.utils.hasMatchingTag('Action', 'Update-Providers-Random-Balance'), 
 wrapHandler(updateProviderBalanceHandler))
-
-Handlers.add('updateProviderDetails', 
-Handlers.utils.hasMatchingTag('Action', 'Update-Provider-Details'), 
-wrapHandler(updateProviderDetailsHandler))
-
-Handlers.add('getProviderDetails', 
-Handlers.utils.hasMatchingTag('Action', 'Get-Provider-Details'), 
-wrapHandler(getProviderDetailsHandler))
-
-Handlers.add('getAllProvidersDetails', 
-Handlers.utils.hasMatchingTag('Action', 'Get-All-Providers-Details'), 
-wrapHandler(getAllProvidersDetailsHandler))
 
 Handlers.add('getProviderRandomBalance', 
 Handlers.utils.hasMatchingTag('Action', 'Get-Providers-Random-Balance'), 
 wrapHandler(getProviderRandomBalanceHandler))
 
-Handlers.add('getProviderStake',  
-Handlers.utils.hasMatchingTag('Action', 'Get-Provider-Stake'), 
-wrapHandler(getProviderStakeHandler))
-
-Handlers.add('unstake', 
-Handlers.utils.hasMatchingTag('Action', 'Unstake'), 
-wrapHandler(unstakeHandler))
-
 Handlers.add('getProvider',
 Handlers.utils.hasMatchingTag('Action', 'Get-Provider'),
 wrapHandler(getProviderHandler))
+
+Handlers.add('getAllProviders',
+Handlers.utils.hasMatchingTag('Action', 'Get-All-Providers'),
+wrapHandler(getAllProvidersHandler))
 
 Handlers.add('getOpenRandomRequests', 
 Handlers.utils.hasMatchingTag('Action', 'Get-Open-Random-Requests'), 
@@ -682,6 +706,14 @@ wrapHandler(getRequestsToCrackHandler))
 Handlers.add('cronTick', 
 Handlers.utils.hasMatchingTag('Action', 'Cron'), 
 wrapHandler(cronTickHandler))
+
+Handlers.add('requestNextStationNumber', 
+Handlers.utils.hasMatchingTag('Action', 'Request-Next-Station-Number'), 
+wrapHandler(requestNextStationNumberHandler))
+
+Handlers.add('reinitializeProvider', 
+Handlers.utils.hasMatchingTag('Action', 'Reinitialize-Provider'), 
+wrapHandler(reinitializeProviderHandler))
 
 -- Logging
 print("RandAO Process Initialized")

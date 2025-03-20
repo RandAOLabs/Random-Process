@@ -46,13 +46,21 @@ function database.initializeDatabase(): boolean
       [[
         CREATE TABLE IF NOT EXISTS Providers (
           provider_id TEXT PRIMARY KEY,
-          provider_details TEXT,
-          stake TEXT,
           active INTEGER,
+          staked INTEGER,
           active_challenge_requests TEXT,
           active_output_requests TEXT,
           random_balance INTEGER,
           created_at INTEGER
+        );
+      ]],
+      -- Active Providers Queue Table
+      [[
+        CREATE TABLE IF NOT EXISTS ActiveProvidersQueue (
+          queue_position INTEGER PRIMARY KEY AUTOINCREMENT,
+          provider_id TEXT NOT NULL,
+          last_used_at INTEGER NOT NULL,
+          FOREIGN KEY(provider_id) REFERENCES Providers(provider_id)
         );
       ]],
       -- Verifiers DB Table
@@ -93,7 +101,7 @@ function database.initializeDatabase(): boolean
           request_id TEXT,                               
           provider_id TEXT,                              
           input_value TEXT,
-          modulus_value TEXT,                               
+          modulus_value TEXT,                       
           output_value TEXT,                               
           proof TEXT,         
           created_at INTEGER,                             

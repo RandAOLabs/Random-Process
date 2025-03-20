@@ -21,16 +21,30 @@ _G.Owner = '123MyOwner321'
 _G.MainProcessId = '123xyzMySelfabc321'
 
 _G.Verifiers = {
-  "RtkXacFBEGXhw6OTjCqECKSap_y2CJMukBsGxElCd-E",
-  "qbCteSj7907pwb_SQ1AD2kMG_HZDuUVf2IZnnm4pJxc",
-  "toqzmcIxYC2yUQWJJVbd-ecBbCB2w1r_7Gvoq99DOzM",
-  "G0JLVocfhW_1qHnX64yuaVBCWdpBRhSQ3T8AkGoiIJA",
-  "Fpb42AKYswyM8nIAb6vZYBePwPUxzZhQhu72srZr1xY",
-  "06IG1T_JXyhVV0TZ42_EEDKZ7T0kBfmdDjATTaBr8ic",
-  "xcLnD6OdSbbO4dY_HAwNHLWRuNEPSJXoi4gRreywwi8",
-  "bKQiEWkOg77FqygZ4yIp7lBV5mlMDQDg3_5CS36PUqg",
-  "SqdPCK1LrMa_6-xf4a9UKchAqL26Mbj_Pg5kLk4NWxo",
-  "tgfpewpX3j7htX03Cj5pCz_CB0nOzDFlc0WJi1sRxRI"
+    "W2zyre9crvPfemVJ-7Vu5YjiZ3_hBFjXx5tSkk8SE7I",
+    "XAqyzdLBGq7IaCP97YF6cNz2CGOkRwT19FzNZm7bf-8",
+    "g2TiAskBjwcSYAwQTVLV2GVozkqGeoHUCDh5kyWtpN8",
+    "zT0rvxiKZ-vZoVfbrlmglMOxQ6xBVF5qmNKodb6U8ec",
+    "3orP5f7a3c9pIwkcuiC3HS_QdS2fl8ntc6_FVBcv6ys",
+    "bek-lE9BX0RXatlQdlN0akgEPtcZb_qG0uYJUah9IbU",
+    "PJvMLXw1O150Am5Ve3B6ommiVhX9HTL1pLqqjxTPvvI",
+    "qrYuDTM8lkEUOw4owpmLSLYVmzHTgoj6mj-nrDY1uL4",
+    "KwepB2J-jVZuLfWOkSR6iA06lbwm5Y0Yr756SC6sVz8",
+    "fnDntyJoNsZMiH1VKAZNj9wnay-VQDD8Sal8-j_rbC8",
+    "yMKUC_B-59EeQ4gYSLyql8ThFsDO436WP78DLk3ryGY",
+    "UQFW0-JAp1vsly3UygXJJvOuZ5R8TAJQ_cg7ekq-avI",
+    "pBVqT3TIFauI_vn8jC-8yt2sAC1mSuGaToJYmFuTVZM",
+    "fIAkZccaLfK2h3Ts6Qh-nBcnL0SDc8uFJVbc_rqqlaE",
+    "YZNQzA2Ef6sts2b9cTi6fElwLqJOkjIGaiatmgwFxn4",
+    "X2aN7x4XDgV7HEFoSWMwzZpepqItCNSHMQSMJjnSNNo",
+    "t1HZIJI7L21Km_MGV7QQqt6WBroytgf3feNM-7hElpk",
+    "wcGuo6YEI1selRocjgus2CA_OdJIkS3JRMI5Fjtc4PE",
+    "3saSMk1uy864vqYinCO6YOe1HE-7hL7gREM4pkL58WU",
+    --"t4otY-MlmD2ptyzAVzeb5Zy6sSEKSCQhUv2Bhszh-Q0",
+    "oCXpVaPircmbIl06jnZ3LtId4hRWq0xUUPWZZ6JHNXQ",
+    "YBzowoZnPJVeygzfUivYmS7--ghokur0Gh3GSgjWjOM",
+    "7gODvtdDnlDTPuokN24tIZ1BjyY_tu3-1r9Xma8x12U",
+    "dA-U0VLNjZVsgCOMM7VKfzlY3yzqaJ10d272hPuIF1w"
 }
 
 _G.Processes = {
@@ -44,6 +58,7 @@ _G.Processes = {
   [_G.Verifiers[8]] = require "verifier" (_G.Verifiers[8]),
   [_G.Verifiers[9]] = require "verifier" (_G.Verifiers[9]),
   [_G.Verifiers[10]] = require "verifier" (_G.Verifiers[10]),
+  [_G.Verifiers[11]] = require "verifier" (_G.Verifiers[11]),
 }
 
 _G.Handlers = require "handlers"
@@ -65,9 +80,21 @@ local json = require "json"
 local database = require "database"
 local providerManager = require "providerManager"
 local randomManager = require "randomManager"
-local stakingManager = require "stakingManager"
--- local utils = require "utils"
--- local bint = require ".bint" (512)
+local verifierManager = require "verifierManager"
+
+describe("InfoHandler", function()
+  setup(function()
+  end)
+
+  teardown(function()
+  end)
+
+  it("should be able to call InfoHandler", function()
+    local message = { Target = ao.id, From = "Provider1", Action = "Info" }
+    local success = infoHandler(message)
+    assert(success, "Failure: unable to call InfoHandler")
+  end)
+end)
 
 describe("staking + unstaking tests", function()
   setup(function()
@@ -76,190 +103,100 @@ describe("staking + unstaking tests", function()
   teardown(function()
   end)
 
-  it("should not be able to unstake without staking", function()
-    local message = {
-      Target = ao.id,
-      From = "Provider2",
-      Action = "Unstake",
-      Timestamp = _G.VirtualTime
-    }
-
-    local success = unstakeHandler(message)
-    assert(not success, "Failure: able to unstake without staking")
+  it("db should not be nil but stood up", function()
+    assert.is_not_nil(_G.DB)
   end)
 
-  it("should not be able to stake with incorrect token", function()
-    local message = {
-      Target = ao.id,
-      From = "NotTokenInUse",
-      Sender = "Provider2",
-      Quantity = tostring(100 * 10^Decimals),
-      Action = "Credit-Notice",
-      Timestamp = _G.VirtualTime,
-      Tags = {
-        ["X-Stake"] = "true",
-      }
-    }
-
-    local success = creditNoticeHandler(message)
-    assert(not success, "Failure: able to stake with incorrect token")
+  it("configured should be true", function()
+    assert.are.equal(_G.Configured, true)
   end)
 
-  it("should not be able to stake with correct token but incorrect quantity", function()
-    local message = {
-      Target = ao.id,
-      From = TokenInUse,
-      Quantity = tostring(99 * 10^Decimals),
-      Action = "Credit-Notice",
-      Sender = "Provider2",
-      Timestamp = _G.VirtualTime,
-      Tags = {
-        ["X-Stake"] = "true",
-      }
-    }
-
-    local success = creditNoticeHandler(message)
-    assert(not success, "Failure: able to stake with incorrect token")
+  it("the staking process should be able to update the provider", function()    
+    local message = { 
+      Target = ao.id, 
+      From = StakingProcess, 
+      Action = "Update-Provider-Stake", 
+      Data = json.encode({providerId = "Provider1", status = "active"}) }
+    local success = updateProviderStakeHandler(message)
+    assert(success, "Failure: failed to update")
+    local provider, _ = providerManager.getProvider("Provider1")
+    assert.are.equal(1, provider.staked)
   end)
 
-  it("should be able to stake with correct token and correct quantity", function()
-    local message = {
-      Target = ao.id,
-      From = TokenInUse,
-      Quantity = tostring(100 * 10^Decimals),
-      Sender = "Provider1",
-      Action = "Credit-Notice",
-      Timestamp = _G.VirtualTime,
-      Tags = {
-        ["X-Stake"] = "true",
-      }
-    }
-
-    local success = creditNoticeHandler(message)
-    assert(success, "Failure: unable to stake with correct token and quantity")
-    local provider, err = providerManager.getProvider("Provider1")
-    assert(provider, "Failure: unable to get provider")
-
+  it("only the staking process should be able to update the provider", function()    
+    local message = { 
+      Target = ao.id, 
+      From = "StakingProcess", 
+      Action = "Update-Provider-Stake", 
+      Data = json.encode({providerId = "Provider2", status = "active"}) }
+    local success = updateProviderStakeHandler(message)
+    assert(not success, "Failure: non staking process should not be able to update")
+    local _, error = providerManager.getProvider("Provider2")
+    assert.are.equal(error, "Unable to retrieve provider")
   end)
 
-  it("should be able to check if staking", function()
-    local success, _ = stakingManager.checkStake("Provider1")
-    assert(success, "Failure: unable to check if staking")
+  it("the staking process should be able to update the provider to inactive", function()    
+    local message = { 
+      Target = ao.id, 
+      From = StakingProcess, 
+      Action = "Update-Provider-Stake", 
+      Data = json.encode({providerId = "Provider1", status = "inactive"}) }
+    local success = updateProviderStakeHandler(message)
+    assert(success, "Failure: failed to update")
+    local provider, _ = providerManager.getProvider("Provider1")
+    assert.are.equal(0, provider.staked)
   end)
+  
+  it("the staking process should be able to update multiple providers", function()    
+    local message = { 
+      Target = ao.id, 
+      From = StakingProcess, 
+      Action = "Update-Provider-Stake", 
+      Data = json.encode({providerId = "Provider1", status = "active"}) }
+    local success = updateProviderStakeHandler(message)
+    assert(success, "Failure: failed to update")
+    local provider, _ = providerManager.getProvider("Provider1")
+    assert.are.equal(1, provider.staked)
 
-  it("should not be able to stake with correct token and correct quantity if already staked", function()
-    local message = {
-      Target = ao.id,
-      From = TokenInUse,
-      Quantity = tostring(100 * 10^Decimals),
-      Action = "Credit-Notice",
-      Sender = "Provider1",
-      Timestamp = _G.VirtualTime,
-      Tags = {
-        ["X-Stake"] = "true",
-      }
-    }
+    message = { 
+      Target = ao.id, 
+      From = StakingProcess, 
+      Action = "Update-Provider-Stake", 
+      Data = json.encode({providerId = "Provider2", status = "active"}) }
+    success = updateProviderStakeHandler(message)
+    assert(success, "Failure: failed to update")
+    provider, _ = providerManager.getProvider("Provider2")
+    assert.are.equal(1, provider.staked)
 
-    local success = creditNoticeHandler(message)
-    assert(not success, "Failure: able to stake with correct token and quantity while staked")
-  end)
+    message = { 
+      Target = ao.id, 
+      From = StakingProcess, 
+      Action = "Update-Provider-Stake", 
+      Data = json.encode({providerId = "Provider3", status = "active"}) }
+    success = updateProviderStakeHandler(message)
+    assert(success, "Failure: failed to update")
+    provider, _ = providerManager.getProvider("Provider3")
+    assert.are.equal(1, provider.staked)
 
-  it("should be able to stake with other correct token and correct quantity", function()
-    local message = {
-      Target = ao.id,
-      From = WrappedAR,
-      Quantity = tostring(100 * 10^Decimals),
-      Sender = "Provider2",
-      Action = "Credit-Notice",
-      Timestamp = _G.VirtualTime,
-      Tags = {
-        ["X-Stake"] = "true",
-      }
-    }
+    message = { 
+      Target = ao.id, 
+      From = StakingProcess, 
+      Action = "Update-Provider-Stake", 
+      Data = json.encode({providerId = "XUo8jZtUDBFLtp5okR12oLrqIZ4ewNlTpqnqmriihJE", status = "active"}) }
+    success = updateProviderStakeHandler(message)
+    assert(success, "Failure: failed to update")
+    provider, _ = providerManager.getProvider("XUo8jZtUDBFLtp5okR12oLrqIZ4ewNlTpqnqmriihJE")
+    assert.are.equal(1, provider.staked)
 
-    local success = creditNoticeHandler(message)
-    assert(success, "Failure: unable to stake with correct token and quantity")
-    local provider, _ = providerManager.getProvider("Provider2")
-    assert(provider, "Failure: unable to get provider")
-  end)
-
-  it("should be able to unstake while staking", function()
-    local message = {
-      Target = ao.id,
-      From = "Provider1",
-      Action = "Unstake",
-      Timestamp = _G.VirtualTime,
-    }
-
-    local success = unstakeHandler(message)
-    assert(success, "Failure: able to unstake without staking")
-  end)
-
-  it("should not be able to trigger second unstake before time has elapsed", function()
-    local message = {
-      Target = ao.id,
-      From = "Provider1",
-      Action = "Unstake",
-      Timestamp = _G.VirtualTime,
-    }
-
-    local success = unstakeHandler(message)
-    assert(not success, "Failure: able to trigger second unstake before time has elapsed")
-  end)
-
-  it("should be able to trigger second unstake after time has elapsed", function()
-    _G.VirtualTime = _G.VirtualTime + UnstakePeriod
-    local message = {
-      Target = ao.id,
-      From = "Provider1",
-      Action = "Unstake",
-      Timestamp = _G.VirtualTime,
-    }
-
-    local success = unstakeHandler(message)
-    assert(success, "Failure: unable to trigger second unstake after time has elapsed")
-  end)
-
-  it("should not be staked after unstaking", function()
-    local success, _ = stakingManager.checkStake("Provider1")
-    assert(not success, "Failure: able to check if staking")
-  end)
-
-  it("should be able to stake with correct token and correct quantity after unstaking", function()
-    local message = {
-      Target = ao.id,
-      From = TokenInUse,
-      Quantity = tostring(100 * 10^Decimals),
-      Sender = "Provider1",
-      Action = "Credit-Notice",
-      Timestamp = _G.VirtualTime,
-      Tags = {
-        ["X-Stake"] = "true",
-      }
-    }
-
-    local success = creditNoticeHandler(message)
-    assert(success, "Failure: unable to stake with correct token and quantity")
-    local provider, err = providerManager.getProvider("Provider1")
-    assert(provider, "Failure: unable to get provider")
-
-  end)
-
-  it("should be able to check if staking after restaking", function()
-    local success, _ = stakingManager.checkStake("Provider1")
-    assert(success, "Failure: unable to check if staking")
-  end)
-
-  it("should be able to get provider stake from handler", function()
-    local message = { Target = ao.id, From = "Provider1", Action = "Get-Provider-Stake", Data = json.encode({providerId = "Provider1"}) }
-    local success = getProviderStakeHandler(message)
-    assert(success, "Failure: unable to get provider stake")
-  end)
-
-  it("should not be able to get provider stake from handler for false provider", function()
-    local message = { Target = ao.id, From = "ProviderX", Action = "Get-Provider-Stake", Data = json.encode({providerId = "ProviderX"}) }
-    local success = getProviderStakeHandler(message)
-    assert(not success, "Failure: able to get provider stake")
+    message = { 
+      Target = ao.id, 
+      From = StakingProcess, 
+      Action = "Update-Provider-Stake", 
+      Data = json.encode({providerId = "Provider5", status = "active"}) }
+    success = updateProviderStakeHandler(message)
+    assert(success, "Failure: failed to update")
+    provider, _ = providerManager.getProvider("Provider5")
+    assert.are.equal(1, provider.staked)
   end)
 
 end)
@@ -279,41 +216,18 @@ describe("provider specific tests", function()
     assert.are.equal(_G.Configured, true)
   end)
 
-  it("should have a provider after updated balance", function()
-    local availableRandomValues = 7
-    local message = { Target = ao.id, From = "Provider1", Action = "Update-Providers-Random-Balance", Data = json.encode({availableRandomValues = availableRandomValues}) }
-    local success = updateProviderBalanceHandler(message)
-    assert(success, "Failure: failed to update")
-    local _, err = providerManager.getProvider("Provider1")
-    assert.are_not.equal(err, "Provider not found")
+  it("providers should have 0 balance after instantiated", function()
+    local provider, _ = providerManager.getProvider("Provider1")
+    assert.are.equal(provider.random_balance, 0)
   end)
 
-  it("should be able to stake with other correct token and correct quantity", function()
-    local message = {
-      Target = ao.id,
-      From = WrappedETH,
-      Quantity = tostring(100 * 10^Decimals),
-      Sender = "Provider3",
-      Action = "Credit-Notice",
-      Timestamp = _G.VirtualTime,
-      Tags = {
-        ["X-Stake"] = "true",
-      }
-    }
-
-    local success = creditNoticeHandler(message)
-    assert(success, "Failure: unable to stake with correct token and quantity")
-    local provider, _ = providerManager.getProvider("Provider2")
-    assert(provider, "Failure: unable to get provider")
-  end)
-
-  it("should have a provider after updated balance for second instantiated provider", function()
+  it("values should be updated post balance update", function()
     local availableRandomValues = 11
     local message = { Target = ao.id, From = "Provider3", Action = "Update-Providers-Random-Balance", Data = json.encode({availableRandomValues = availableRandomValues}) }
     local success = updateProviderBalanceHandler(message)
     assert(success, "Failure: failed to update")
-    local _, err = providerManager.getProvider("Provider3")
-    assert.are_not.equal(err, "Provider not found")
+    local provider, _ = providerManager.getProvider("Provider3")
+    assert.are.equal(provider.random_balance, 11)
   end)
 
   it("should update the provider balance after update", function()
@@ -353,14 +267,62 @@ describe("provider specific tests", function()
     updateProviderBalanceHandler(message)
   end)
 
-  it("should be able to update provider details", function()
-    local providerId = "Provider1"
-    local details = "details to test"
-    local message = { Target = ao.id, From = "Provider1", Action = "Update-Provider-Details", Data = json.encode({providerDetails = details}) }
-    local success = updateProviderDetailsHandler(message)
-    assert(success, "Failure: Unable to update provider details")
-    local provider, _ = providerManager.getProvider(providerId)
-    assert.are.equal(details, provider.provider_details)
+  it("should be able to see active status after updating balance to 1", function()
+    local availableRandomValues = 1
+    local message = { Target = ao.id, From = "Provider1", Action = "Update-Providers-Random-Balance", Data = json.encode({availableRandomValues = availableRandomValues}) }
+    local success = updateProviderBalanceHandler(message)
+    assert(success, "Failure: failed to update")
+    local status, _ = providerManager.isActiveProvider("Provider1")
+    assert(status, "Failure: wrong status found")
+    availableRandomValues = 5
+    message = { Target = ao.id, From = "Provider1", Action = "Update-Providers-Random-Balance", Data = json.encode({availableRandomValues = availableRandomValues}) }
+    updateProviderBalanceHandler(message)
+    message = { Target = ao.id, From = "Provider5", Action = "Update-Providers-Random-Balance", Data = json.encode({availableRandomValues = availableRandomValues}) }
+    updateProviderBalanceHandler(message)
+  end)
+
+
+  it("should be able to see balance of 0 after unstake", function()
+    local message = { 
+      Target = ao.id, 
+      From = StakingProcess, 
+      Action = "Update-Provider-Stake", 
+      Data = json.encode({providerId = "Provider1", status = "inactive"}) }
+    local success = updateProviderStakeHandler(message)
+    assert(success, "Failure: failed to update")
+    local provider, _ = providerManager.getProvider("Provider1")
+    assert.are.equal(0, provider.random_balance)
+
+    message = { 
+      Target = ao.id, 
+      From = StakingProcess, 
+      Action = "Update-Provider-Stake", 
+      Data = json.encode({providerId = "Provider1", status = "active"}) }
+    success = updateProviderStakeHandler(message)
+    assert(success, "Failure: failed to update")
+
+    message = { 
+      Target = ao.id, 
+      From = StakingProcess, 
+      Action = "Update-Provider-Stake", 
+      Data = json.encode({providerId = "Sr3HVH0Nh6iZzbORLpoQFOEvmsuKjXsHswSWH760KAk", status = "active"}) }
+    success = updateProviderStakeHandler(message)
+    assert(success, "Failure: failed to update")
+
+
+    local availableRandomValues = 1
+    message = { Target = ao.id, From = "Provider1", Action = "Update-Providers-Random-Balance", Data = json.encode({availableRandomValues = availableRandomValues}) }
+    success = updateProviderBalanceHandler(message)
+    assert(success, "Failure: failed to update")
+
+
+    message = { Target = ao.id, From = "XUo8jZtUDBFLtp5okR12oLrqIZ4ewNlTpqnqmriihJE", Action = "Update-Providers-Random-Balance", Data = json.encode({availableRandomValues = availableRandomValues}) }
+    success = updateProviderBalanceHandler(message)
+    assert(success, "Failure: failed to update")
+
+    message = { Target = ao.id, From = "Sr3HVH0Nh6iZzbORLpoQFOEvmsuKjXsHswSWH760KAk", Action = "Update-Providers-Random-Balance", Data = json.encode({availableRandomValues = availableRandomValues}) }
+    success = updateProviderBalanceHandler(message)
+    assert(success, "Failure: failed to update")
   end)
 
   it("should be able to get provider object from handler", function()
@@ -369,12 +331,13 @@ describe("provider specific tests", function()
     assert(success, "Failure: unable to get provider")
   end)
 
-  it("should NOT be able to update provider details for a nonexistent provider", function()
-    local providerId = "ProviderX"
-    local details = "details to test"
-    local message = { Target = ao.id, From = providerId, Action = "Update-Provider-Details", Data = json.encode({details = details}) }
-    local success = updateProviderDetailsHandler(message)
-    assert(not success, "Failure: Able to update provider details")
+  it("should be able to get all providers", function()
+    local message = { Target = ao.id, From = "Provider1", Action = "Get-All-Providers" }
+    local success = getAllProvidersHandler(message)
+    assert(success, "Failure: unable to get providers")
+
+    local providers, _ = providerManager.getAllProviders()
+    assert.are.equal(#providers, 6)
   end)
 
 end)
@@ -467,9 +430,31 @@ describe("requestRandom", function()
     assert(success, "Failure: failed to create random request")
   end)
 
+  it("should be able to request another random from a registered provider with correct balance and correct requested inputs and token to use for rerequesting", function()
+    local userId = "Requester1"
+    local providers = json.encode({provider_ids = {"Provider1", "Provider3"}})
+    local callbackId = "xxxx-xxxx-4xxx-xxxy"
+    local requestedInputs = json.encode({requested_inputs = 1})
+    local message = {
+      Target = ao.id,
+      From = TokenInUse,
+      Action = "Credit-Notice",
+      Quantity = "100",
+      Tags = {
+        ["X-Providers"] = providers,
+        ["X-CallbackId"] = callbackId,
+        ["X-RequestedInputs"] = requestedInputs,
+        Sender = userId
+      }
+    }
+    local success = creditNoticeHandler(message)
+
+    assert(success, "Failure: failed to create random request")
+
+  end)
+
   it("should be able to view random request in activeRequests", function()
     assert(ActiveRequests.activeChallengeRequests.request_ids["d6cce35c-487a-458f-bab2-9032c2621f38"], "Failure: random request not found in activeRequests")
-    cronTickHandler(nil) -- TODO: remove
   end)
 
   it("should not be able to request random from no providers with correct balance and token", function()
@@ -621,6 +606,16 @@ describe("postVDFChallenge", function()
     assert(success, "Failure: unable to post VDF Challenge from requested provider")
   end)
 
+  it("should be able to retrieve providers decremented balance after posting challenge", function()
+    local provider, _ = providerManager.getProvider("Provider1")
+    assert.are.equal(0, provider.random_balance)
+    
+    local availableRandomValues = 11
+    message = { Target = ao.id, From = "Provider1", Action = "Update-Providers-Random-Balance", Data = json.encode({availableRandomValues = availableRandomValues}) }
+    success = updateProviderBalanceHandler(message)
+    assert(success, "Failure: failed to update")
+  end)
+
   it("should not be able to post output and proof from a requested provider for a valid request before all challenges are posted",
   function()
     local output = "0x023456987678"
@@ -657,7 +652,6 @@ describe("postVDFChallenge", function()
 
   it("should be able to view random request in activeRequests outputs after challenges have been posted", function()
     assert(ActiveRequests.activeOutputRequests.request_ids["d6cce35c-487a-458f-bab2-9032c2621f38"], "Failure: random request not found in activeRequests")
-    cronTickHandler(nil) -- TODO: remove
   end)
 
 end)
@@ -792,6 +786,66 @@ describe("postVDFOutputAndProof", function()
   end)
 end)
 
+describe("post verification", function()
+
+  it('should be able to post all verifications from requested verifiers and get a generated entropy', function()
+    local requestId = "d6cce35c-487a-458f-bab2-9032c2621f38"
+    local currentSegmentId = 1
+    for i = 1, 11 do
+      local message = {
+      Target = ao.id,
+      From = Verifiers[i],
+      Action = "Post-Verification",
+      Data = json.encode({
+        segment_id = requestId .. "_Provider1_" .. tostring(currentSegmentId),
+        request_id = requestId,
+        valid = true
+      })
+    }
+
+      local success = postVerificationHandler(message)
+      assert(success, "Failure: unable to post verification")
+      currentSegmentId = currentSegmentId + 1
+    end
+
+    for i = 12, 22 do
+      local message = {
+      Target = ao.id,
+      From = Verifiers[i],
+      Action = "Post-Verification",
+      Data = json.encode({
+        segment_id = requestId .. "_Provider3_" .. tostring(currentSegmentId),
+        request_id = requestId,
+        valid = true
+      })
+    }
+
+      local success = postVerificationHandler(message)
+      assert(success, "Failure: unable to post verification")
+      currentSegmentId = currentSegmentId + 1
+    end
+
+  end)
+
+  it('nonrequested verifiers should not be able to fail to post verification', function()
+    local message = {
+      Target = ao.id,
+      From = Verifiers[23],
+      Action = "Failed-Post-Verification",
+    }
+    local success = failedPostVerificationHandler(message)
+    assert(not success, "Failure: able to fail to post verification from nonrequested verifier")
+  end)
+
+  it('should be able to remove a verifier', function()
+    local verifier = Verifiers[23]
+    local success = verifierManager.removeVerifier(verifier)
+    assert(success, "Failure: unable to remove verifier")
+  end)
+
+
+end)
+
 describe("getRandomRequests & getRandomRequestViaCallbackId", function()
   setup(function()
     -- to execute before this describe
@@ -847,7 +901,6 @@ describe("getRandomRequests & getRandomRequestViaCallbackId", function()
     assert(success, "Failure: errors out on valid callbackId")
   end)
 
-
   it("should not error on invalid callbackId",
   function()
     local callbackId = "xxxx-xxxx-4xxx-xxx"
@@ -863,27 +916,77 @@ describe("getRandomRequests & getRandomRequestViaCallbackId", function()
 
     local success = getRandomRequestViaCallbackIdHandler(message)
     assert(success, "Failure: errors out on invalid callbackId")
-    cronTickHandler(nil) 
   end)
 
-  it("should not return a random request for a valid callbackId thats request has failed",
-  function()
-    local callbackId = "xxxx-xxxx-4xxx-xxxx"
+end)
 
+describe("rerequest random", function()
+  setup(function()
+    -- to execute before this describe
+  end)
+
+  teardown(function()
+  end)
+
+ _G.VirtualTime = _G.VirtualTime + 500000000000
+
+  it("", function ()  
+    print("Next: ")
+    local added, _ = providerManager.addToActiveQueue("Provider2")
+    local inited, _ = providerManager.initializeActiveQueue()
+    local synced, _ = providerManager.syncProviderQueueStatus("Provider3", true)
+    local next, _ = providerManager.getNextActiveProviders(1)
+    local updated, _ = providerManager.updateProviderQueuePosition("Provider5")
+    print("Next: ".. json.encode(next))
+    assert(true, "Failure: unable to get next active providers")
+  end)
+
+  it('cron ticksshould be able to rerequest random after time delay', function()
+    local message = {
+      Timestamp = _G.VirtualTime
+    }
+    local success = cronTickHandler(message) -- randomManager.rerequestRandom("d94a87f4-c8c6-4e45-be1f-813ae510713f")
+    assert(success, "Failure: unable to rerequest random")
+  end)
+
+  it('should see previous failed request set to failed', function()
+    local request, _ = randomManager.getRandomRequest("d94a87f4-c8c6-4e45-be1f-813ae510713f")
+    assert(request.status == "FAILED", "Failure: no random request found")
+  end)
+
+  it("providers should have -2 balance after tombstone", function()
+    local provider, _ = providerManager.getProvider("Provider1")
+    assert.are.equal(provider.random_balance, -2)
+  end)
+
+  it('non admin should not be able to reinitialize a tombstoned provider', function()
     local message = {
       Target = ao.id,
       From = "Provider1",
-      Action = "Get-Random-Request-Via-Callback-Id",
-      Data = json.encode({callbackId = callbackId}),
-      reply = function (msg)
-      end
+      Action = "Reinitialize-Provider",
+      Tags = {
+        ["ProviderId"] = "Provider1"
+      }
     }
+    local success = reinitializeProviderHandler(message)
+    assert(not success, "Failure: able to reinitialize tombstoned provider")
+    local provider, _ = providerManager.getProvider("Provider1")
+    assert.are.equal(provider.random_balance, -2)
+  end)
 
-    local request, err = randomManager.getRandomRequestViaCallbackId(callbackId)
-    assert(request.request_id == "d6cce35c-487a-458f-bab2-9032c2621f38", "Failure: unable to get random request for a valid callbackId")
-    randomManager.rerequestRandom(request.request_id)
-    _, err = randomManager.getRandomRequestViaCallbackId(callbackId)
-    assert(err == "RandomRequest not found", "Failure: able to get random request for a valid callbackId that has failed")
+  it('admin should be able to reinitialize a tombstoned provider', function()
+    local message = {
+      Target = ao.id,
+      From = Admin,
+      Action = "Reinitialize-Provider",
+      Tags = {
+        ["ProviderId"] = "Provider1"
+      }
+    }
+    local success = reinitializeProviderHandler(message)
+    assert(success, "Failure: unable to reinitialize tombstoned provider")
+    local provider, _ = providerManager.getProvider("Provider1")
+    assert.are.equal(provider.random_balance, 0)
   end)
 
 end)

@@ -114,6 +114,28 @@ function randomManager.updateRandomRequestStatus(requestId: string, newStatus: s
   return true, ""
 end
 
+
+function randomManager.updateCallbackId(requestId: string, newCallbackId: string): boolean, string
+  print("Entered randomManager.updateCallbackId")
+
+  local stmt = DB:prepare([[
+    UPDATE RandomRequests
+    SET callback_id = :callback_id
+    WHERE request_id = :request_id;
+  ]])
+  if not stmt then
+     return false, "Failed to prepare statement: " .. DB:errmsg()
+  end
+  stmt:bind_names({ callback_id = newCallbackId, request_id = requestId })
+  local execute_ok, execute_err = dbUtils.execute(stmt, "Update random request callbackId")
+  if not execute_ok then
+     return false, "Failed to update random request callbackId: " .. tostring(execute_err)
+  end
+
+  print("Random request callbackId updated successfully to: " .. newCallbackId)
+  return true, ""
+end
+
 function randomManager.getRandomRequestedInputs(requestId: string): integer, string
   print("entered randomManager.getRandomRequestedInputs")
 
@@ -269,7 +291,6 @@ function randomManager.deliverRandomResponse(requestId: string): boolean
     return false
   end
 
-  local target                            = randomRequest.requester
   local callbackId                        = randomRequest.callback_id
   local entropy                           = randomManager.processEntropy(requestId)
 
@@ -279,14 +300,37 @@ function randomManager.deliverRandomResponse(requestId: string): boolean
     callbackId  = callbackId,
     entropy     = entropy
   }
-  
-  ao.send({
-    Target = target, 
-    Tags = {
-      Action = action, 
-    },
-    Data = data
-  })
+
+  local target = randomRequest.requester
+
+  if target == ao.id then
+     local round = tonumber(callbackId)
+     local requesters = RoundXList[round] as {string}
+     if #requesters == 0 then
+        print("No requesters for round " .. round)
+        return false
+     end
+
+     print("Delivering random response to " .. #requesters .. " requesters " .. json.encode(requesters))
+     for _, requester in ipairs(requesters) do
+        print("Delivering random response to " .. requester)
+        ao.send({
+           Target = requester,
+           Tags = {
+              Action = action,
+           },
+           Data = data,
+        })
+     end
+  else
+     ao.send({
+        Target = target,
+        Tags = {
+           Action = action,
+        },
+        Data = data,
+     })
+  end
 end
 
 function randomManager.decrementRequestedInputs(requestId: string): boolean, string
@@ -323,21 +367,49 @@ function randomManager.decrementRequestedInputs(requestId: string): boolean, str
   end
 
   if requested == 0 then
-    local status, err = randomManager.getRandomStatus(requestId)
-    
+    local request, err = randomManager.getRandomRequest(requestId)
+    if err ~= "" then
+       print("Failed to get random request: " .. err)
+       return false, err
+    end
+    local status = request.status
+
     if err == "" then
       -- Finished collecting inputs update requested inputs start collecting outputs
       if status == Status[1] then
         print("Random request finished collecting inputs")
-        local providerList  = randomManager.getRandomProviderList(requestId) as ProviderList
-        randomManager.resetRandomRequestRequestedInputs(requestId, #providerList.provider_ids)
-        providerManager.pushActiveRequests(providerList.provider_ids, requestId, false)
-        randomManager.updateRandomRequestStatus(requestId, Status[2])
+        local validRequest = true
 
+        if request.requester == ao.id and request.callback_id == "" then
+            print("Random request " .. requestId .. " is a station request")
+            if #NextRoundList == 0 then
+              print("No requesters for round " .. Round)
+              validRequest = false
+            end
+            RoundXList[Round] = NextRoundList
+            NextRoundList = {}
+
+
+            print("Updating callbackId for next round to: " .. Round)
+            randomManager.updateCallbackId(requestId, tostring(Round))
+
+            Round = Round + 1
+        end
+
+        local providerList = randomManager.getRandomProviderList(requestId)
         ActiveRequests.activeChallengeRequests.request_ids[requestId] = nil
-        ActiveRequests.activeOutputRequests.request_ids[requestId] = os.time()
 
-      -- Finished collecting outputs update requested inputs start verifying
+        if validRequest then
+            randomManager.resetRandomRequestRequestedInputs(requestId, #providerList.provider_ids)
+            providerManager.pushActiveRequests(providerList.provider_ids, requestId, false)
+            ActiveRequests.activeOutputRequests.request_ids[requestId] = os.time()
+            randomManager.updateRandomRequestStatus(requestId, Status[2])
+        else
+
+            randomManager.updateRandomRequestStatus(requestId, Status[5])
+        end
+
+        -- Finished collecting outputs update requested inputs start verifying
       elseif status == Status[2] then
         print("Random request finished collecting outputs")
         local providerList  = randomManager.getRandomProviderList(requestId) as ProviderList
@@ -391,12 +463,41 @@ function randomManager.getVDFResult(requestId: string, providerId: string): Prov
   end
 end
 
-function randomManager.createRandomRequest(userId: string, providers: string, callbackId: string, requestedInputs: string): boolean, string
+function randomManager.getRoundRobinProviders(count: integer): string, string
+  print("entered randomManager.getRoundRobinProviders")
+
+  local providers, err = providerManager.getNextActiveProviders(count)
+  if err ~= "" then
+     return "", "Failed to get active providers: " .. err
+  end
+
+  for _, providerId in ipairs(providers) do
+     local success, update_err = providerManager.updateProviderQueuePosition(providerId)
+     if not success then
+        print("Warning: Failed to update queue position for provider " .. providerId .. ": " .. update_err)
+     end
+  end
+
+
+  local providerList = {
+     provider_ids = providers,
+  }
+
+  return json.encode(providerList), ""
+end
+
+function randomManager.createRandomRequest(userId: string, providers: string, callbackId: string, requestedInputs: string, useRoundRobin: boolean): boolean, string
   print("entered randomManager.createRandomRequest")
 
   local timestamp           = os.time()
   local requestId           = randomManager.generateUUID()
-
+  if useRoundRobin then
+    local roundRobinProviders, err = randomManager.getRoundRobinProviders(3)
+    if err ~= "" then
+       return false, "Failed to get round-robin providers: " .. err
+    end
+    providers = roundRobinProviders
+ end
   -- Decode providers JSON
   local providerList = json.decode(providers) as ProviderList
   print("providerList: " .. providers)
@@ -483,15 +584,13 @@ end
 function randomManager.rerequestRandom(requestId: string): boolean, string
   print("entered randomManager.rerequestRandom")
 
-  local providerList = FallbackProviders
-
   local initalRequest, requestErr = randomManager.getRandomRequest(requestId)
   if requestErr ~= "" then
     return false, requestErr
   end
     
   -- AFTER LUNCH TODO VERIFY BELOW THEN DECONFLICT WITH CALLBACKIDS
-  local success, err = randomManager.createRandomRequest(initalRequest.requester, providerList, initalRequest.callback_id, "")
+  local success, err = randomManager.createRandomRequest(initalRequest.requester, "", initalRequest.callback_id, "", true)
   if not success then
     return false, err
   end
@@ -499,6 +598,10 @@ function randomManager.rerequestRandom(requestId: string): boolean, string
   randomManager.updateRandomRequestStatus(requestId, Status[6])
   ActiveRequests.activeChallengeRequests.request_ids[requestId] = nil
   return true, ""
+end
+
+function randomManager.nextStationRequest()
+  randomManager.createRandomRequest(ao.id, nil, "", "", true)
 end
 
 function randomManager.postVDFChallenge(userId: string, requestId: string, inputValue: string, modulusValue: string): boolean, string
@@ -601,6 +704,35 @@ function randomManager.postVDFOutputAndProof(userId: string, requestId: string, 
   end
 
   return execute_ok, execute_err
+end
+
+function randomManager.getProblemProviders(requestId: string, challenge: boolean): ProviderList, string
+  print("entered randomManager.getProblemProviders")
+
+  local randomRequest = randomManager.getRandomRequest(requestId)
+  
+  local problemProviders: ProviderList = {
+    provider_ids = {}
+  }
+
+  if randomRequest then
+    local providers = randomManager.getRandomProviderList(requestId).provider_ids
+    if providers then
+      for _, providerId in ipairs(providers) do
+        if challenge then
+          if providerManager.hasActiveRequest(providerId, requestId, true) then
+            problemProviders.provider_ids[#problemProviders.provider_ids + 1] = providerId
+          end
+        else
+          if providerManager.hasActiveRequest(providerId, requestId, false) then
+            problemProviders.provider_ids[#problemProviders.provider_ids + 1] = providerId
+          end
+        end
+      end
+    end
+  end
+
+  return problemProviders, ""
 end
 
 return randomManager

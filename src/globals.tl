@@ -4,32 +4,26 @@ require "lsqlite3"
 global DB: db
 global Configured: boolean
 
-global Admin: string = "KLzn6IzhmML7M-XXFNSI29GVNd3xSHtH26zuKa1TWn8"
+global Info = {
+    name = "RandAO-Random-Process",
+    version = "1.0.0"
+}
+if not Configured then
+    global Round                            = 1
+end
 
-global CurrentRequestId: integer
+global RoundXList                       = {}
+global NextRoundList                    = {}
+
+global Admin: string = "N90q65iT59dCo01-gtZRUlLMX0w6_ylFHv2uHaSUFNk"
+global StakingProcess: string = "EIQJoqVWonlxsEe8xGpQZhh54wrmgE3q0tAsVIhKYQU"
 
 global Cost: number = 100
 
 global TokenTest: string = "5ZR9uegKoEhE9fJMbs-MvWLIztMNCVxgpzfeBVE3vqI"
-global WrappedAR: string = "xU9zFkq3X2ZQ6olwNVvr1vUWIjc3kXTWr7xKQD6dh10"
-global WrappedETH: string = "0x0000000000000000000000000000000000000000"
 global TokenInUse: string = TokenTest
 
 global Decimals: integer = 18
-
-global UnstakePeriod: integer = 50000 -- 50 seconds -- 1209600000 -- 14 days
-
-global StakeTokens = {
-    [TokenTest] = {
-        amount  = 100 * 10^Decimals
-    },
-    [WrappedAR] = {
-        amount  = 100 * 10^Decimals
-    },
-    [WrappedETH] = {
-        amount  = 100 * 10^Decimals
-    }
-}
 
 global OverridePeriod: integer = 50000 -- 50 seconds
 
@@ -47,8 +41,6 @@ global ActiveRequests = {
 
 global RequestsToCrack = {}
 
-global FallbackProviders = '{"provider_ids":["XUo8jZtUDBFLtp5okR12oLrqIZ4ewNlTpqnqmriihJE"]}'
-
 global SuccessMessage: string = "200: Success"
 
 global Status = {
@@ -58,15 +50,6 @@ global Status = {
     "CRACKING",
     "FINALIZED",
     "FAILED"
-}
-
-global TestNetProviders = {
-    "ld4ncW8yLSkckjia3cw6qO7silUdEe1nsdiEvMoLg-0",
-    "XUo8jZtUDBFLtp5okR12oLrqIZ4ewNlTpqnqmriihJE",
-    "N90q65iT59dCo01-gtZRUlLMX0w6_ylFHv2uHaSUFNk",
-    "c8Iq4yunDnsJWGSz_wYwQU--O9qeODKHiRdUkQkW2p8",
-    "Sr3HVH0Nh6iZzbORLpoQFOEvmsuKjXsHswSWH760KAk",
-    "1zlA7nKecUGevGNAEbjim_SlbioOI6daNNn2luDEHb0"
 }
 
 global VerifierProcesses = {
@@ -89,11 +72,10 @@ global VerifierProcesses = {
     "t1HZIJI7L21Km_MGV7QQqt6WBroytgf3feNM-7hElpk",
     "wcGuo6YEI1selRocjgus2CA_OdJIkS3JRMI5Fjtc4PE",
     "3saSMk1uy864vqYinCO6YOe1HE-7hL7gREM4pkL58WU",
-    "t4otY-MlmD2ptyzAVzeb5Zy6sSEKSCQhUv2Bhszh-Q0",
+    "oCXpVaPircmbIl06jnZ3LtId4hRWq0xUUPWZZ6JHNXQ",
     "YBzowoZnPJVeygzfUivYmS7--ghokur0Gh3GSgjWjOM",
     "7gODvtdDnlDTPuokN24tIZ1BjyY_tu3-1r9Xma8x12U",
     "dA-U0VLNjZVsgCOMM7VKfzlY3yzqaJ10d272hPuIF1w",
-    "oCXpVaPircmbIl06jnZ3LtId4hRWq0xUUPWZZ6JHNXQ",
     "R7wLvmN6c6eFTeQrk3L1np15ILF1nFpynyVG-w5DNJ4",
     "D3-PQ7WEEuoxx8LnxBH5G2YdCdWLv_awnSlbFSrfnL8",
     "xQbALEYV7LqxuESXe9BttA5xW5SICQFG7hcEwoh8WDc",
@@ -154,7 +136,6 @@ global VerifierProcesses = {
     "0lLvWzkUd39-BiPsfbyhmseawKWfoj0wNL41ZOny4Xs",
     "Up5GquO8Xzj_CRGYJm5Wd50Ol5ryKWqAFRdT6U0CDSE",
     "Dyef74dCjnnI1a0q8a3vDYLIdIQIkO7dGZpS8gsFqrk",
-    "PORLl8UCwJZICVqW4veQfCfYBOd0hCrIh0CAS0g2UoQ",
     "UAGGA7HKUx_qc0rHNGSp6PPUXwSF_9epX3IzFXptPjU",
     "F8A5GRFdG7biD7z6hReUOd1FIF0TZGVMUSLBOLXh9N4",
     "KL5H_Ol_em2gHX3VD1pZZA5shjiS5uvpsv1eQHxFzcI",
@@ -172,7 +153,6 @@ global VerifierProcesses = {
     "U70KGXibOltmKfjk6hlzxehEk8cBcCFKQnfMymPhW08",
     "DJdYXA2NrJqpzDYs2CnBB2jES_Yue0rFBL2IB6ML4rI",
     "2jdlzA2DNsyQ3rBZORmxcSt2Ph1lpNFkIXoZTleerhc",
-    "rHMaFJcBjUZH8gBxJQM2Nu-zQENWJ5wTPlSSXm3F7O0",
     "FUcZzor9LDq0XDIxNPQ8ECRIuQ-6c40htSvsIPieCS0",
     "R9r8IBhABb4M-WVZ-OYToM8P_y6r6eHcUU4eVL9mook",
     "qpNVnnCLDfVZU-MzKGJDve3lfMTKKKzsKqlbEFZtUc0",
@@ -186,8 +166,6 @@ global VerifierProcesses = {
     "_Nzu4eqyRC6-KZX_td1hcLXwmam3JBelXZWvtP1x0to",
     "WciCRhwyHpugKpcOSL9zn9T4fFJBq1NamjpCRBmlBZU",
     "1QHKpw9SNmWz236Ne46QZXsC4bJrpW6806vZ8BsIJWo",
-    "KXTsJRvINZxPGZK0scTwIWgqzAqTS50GYKW7KY7vzUk",
-    "Sz3hcxiafXfnXaDmFlJoh3CO71grnghpFiR0WSqO34M",
     "0sSSc8aToK3XnH_Zz2b3zD5LhjjdQMnnWQmEKW0rBhk",
     "ogOpFXZ1llf-9EW1nrZS49NaaC9GRz7kJw-CATHb8Kc",
     "dGzDfbkrWFyjW4P7rkT4hFWLRyeH3U7bzAhzwnvRM8s",
@@ -298,7 +276,6 @@ global VerifierProcesses = {
     "wjtNHzO_NWHuAyykRIhA_SAHkjyzLKcrcpcxDAcBugc",
     "Xr9bJsM5HuHWZsYM7gXlNT9fhccFqecfhUhnug4bz2Y",
     "jXsU9nc7TKiYB8EnOMpKo_5oWVoOqPiuWJoggXTMODo",
-    "vsTeiyFl0q2xq0MwbL5_S8V2UEgyc2rZjHataCF5c4M",
     "lwWFGlOqCFETZI4h4B4WOF-Xl8LGbDVuePLoMz-1kro",
     "2EZOLLUb43IGcVp73earnZv2kEhU9ay7WkwHo7jcnZc",
     "j5DtgYCA-YRBnDtDfuPfgmYAUCNSerO39bwaL1Y4u1w",
@@ -360,7 +337,6 @@ global VerifierProcesses = {
     "4s3kBfh4vYwM6ZiRNSCqqX_1IPYT3bnxXgi6Wo3Z2Z4",
     "yPEmhN5pZhq8FeEq3KYiROkwCeagIFGBw2e8kE528qM",
     "GAFPpIM-LdmvasCMR2azWpR0Wxmab5oehebX6tYo__c",
-    "v6LUleDuAIo-NnEuUvsH4V0LKuB70q1r1vSPDjponaE",
     "XE3NIcWiBt-cXATZwsc5oT7-OsevVleE31pLv50GdR8",
     "STYnjt8j8OFQaQpd15YowtEJn0meTymqI7jr9PjBeqI",
     "kPpdzwlwmJOpobMavLZGWR0lIq1on_u5vxVUriI90x0",

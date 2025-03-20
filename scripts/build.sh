@@ -13,7 +13,7 @@ cyan build -u
 cd build
 
 amalg.lua -s main.lua -o ../process.lua \
-    globals dbUtils database providerManager stakingManager randomManager tokenManager verifierManager
+    globals dbUtils database providerManager randomManager tokenManager verifierManager
 
 # FINAL RESULT is build/main.lua
 

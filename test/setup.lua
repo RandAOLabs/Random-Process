@@ -1,7 +1,8 @@
 local originalRequire = require
 
 local function mockedRequire(moduleName)
-  print(_VERSION)
+  -- Add build directory to package path
+  package.path = package.path .. ";./build/?.lua"
 
   if moduleName == "ao" then
     return originalRequire("test.mocked-env.ao.ao")
@@ -19,9 +20,9 @@ local function mockedRequire(moduleName)
     return originalRequire("test.mocked-env.processes.verifier")
   end
 
-  if moduleName == ".bint" then
-    return originalRequire("test.mocked-env.lib.bint")
-  end
+  -- if moduleName == ".bint" then
+  --   return originalRequire("test.mocked-env.lib.bint")
+  -- end
 
   if moduleName == ".utils" then
     return originalRequire("test.mocked-env.lib.utils")
@@ -39,6 +40,9 @@ local function mockedRequire(moduleName)
 end
 
 return function()
+  -- Add build directory to package path
+  package.path = package.path .. ";./build/?.lua"
+  
   -- Override the require function globally for the tests
   _G.require = mockedRequire
 
