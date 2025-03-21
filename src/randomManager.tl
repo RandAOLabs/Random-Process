@@ -21,6 +21,7 @@ global record RandomRequest
     callback_id: string
     providers: string
     requested_inputs: integer
+    price: integer
     status: string
     entropy: string
     created_at: integer
@@ -114,6 +115,69 @@ function randomManager.updateRandomRequestStatus(requestId: string, newStatus: s
   return true, ""
 end
 
+function randomManager.getVDFResults(requestId: string): ProviderVDFResults, string
+  print("entered randomManager.getVDFResults")
+  
+  local stmt = DB:prepare("SELECT * FROM ProviderVDFResults WHERE request_id = :request_id")
+  stmt:bind_names({request_id = requestId})  
+  local queryResult = dbUtils.queryMany(stmt)
+
+  local result: ProviderVDFResults = { 
+    requestResponses = {}
+  }
+
+  for _, response in ipairs(queryResult) do
+    table.insert(result.requestResponses, response as ProviderVDFResult)
+  end
+
+  if result then
+    return result, ""
+  else
+    return {} as ProviderVDFResults, "RandomRequest not found"
+  end
+end
+
+function randomManager.updateRandomRequestProviders(requestId: string, newProviders: string): boolean, string
+  print("Entered randomManager.updateRandomRequestProviders")
+
+  local stmt = DB:prepare([[
+    UPDATE RandomRequests
+    SET providers = :providers
+    WHERE request_id = :request_id;
+  ]])
+  if not stmt then
+     return false, "Failed to prepare statement: " .. DB:errmsg()
+  end
+  stmt:bind_names({ providers = newProviders, request_id = requestId })
+  local execute_ok, execute_err = dbUtils.execute(stmt, "Update random request providers")
+  if not execute_ok then
+     return false, "Failed to update random request providers: " .. tostring(execute_err)
+  end
+
+  print("Random request providers updated successfully to: " .. newProviders)
+  return true, ""
+end
+
+function randomManager.trimProviders(requestId: string): boolean, string
+  print("Entered randomManager.trimProviders")
+  local vdfResults = randomManager.getVDFResults(requestId)
+  local trimmedProviders: ProviderList = {
+    provider_ids = {}
+  }
+
+  for _, providerVDFResult in ipairs(vdfResults.requestResponses) do
+    table.insert(trimmedProviders.provider_ids, providerVDFResult.provider_id)
+  end
+
+  print("TRIMMED PROVIDERS: " .. json.encode(trimmedProviders))
+
+  local success, err = randomManager.updateRandomRequestProviders(requestId, json.encode(trimmedProviders))
+  if not success then
+    return false, err
+  end
+
+  return true, ""
+end
 
 function randomManager.updateCallbackId(requestId: string, newCallbackId: string): boolean, string
   print("Entered randomManager.updateCallbackId")
@@ -189,31 +253,6 @@ function randomManager.resetRandomRequestRequestedInputs(requestId: string, newR
   return true, ""
 end
 
-function randomManager.getVDFResults(requestId: string): ProviderVDFResults, string
-  print("entered randomManager.getVDFResults")
-  
-  local stmt = DB:prepare("SELECT * FROM ProviderVDFResults WHERE request_id = :request_id")
-  stmt:bind_names({request_id = requestId})  
-  local queryResult = dbUtils.queryMany(stmt)
-  print(json.encode(queryResult))
-  print(json.encode(queryResult[1]))
-  local result: ProviderVDFResults = { 
-    requestResponses = {}
-  }
-
-  for _, response in ipairs(queryResult) do
-    table.insert(result.requestResponses, response as ProviderVDFResult)
-  end
-
-  print(json.encode(result))
-
-  if result then
-    return result, ""
-  else
-    return {} as ProviderVDFResults, "RandomRequest not found"
-  end
-end
-
 function randomManager.getRandomRequest(requestId: string): RandomRequest, string
   print("entered randomManager.getRandomRequest")
 
@@ -237,23 +276,33 @@ function randomManager.processEntropy(requestId: string): string, string
     return "", err
   end
 
+  local providers, providerErr = randomManager.getRandomProviderList(requestId)
+  if providerErr ~= "" then
+    print("Failed to get random request providers: " .. providerErr)
+    return "", providerErr
+  end
+
   results = results as ProviderVDFResults
 
-  -- Start with the first value
-  local mixed = tonumber(results.requestResponses[1].output_value)
+  local mixed: number = 0
 
-  -- XOR and mix subsequent values
-  for i = 2, #results.requestResponses do
-    local value = tonumber(results.requestResponses[i].output_value)
-    if not value then
-        print("Invalid output_value at index " .. i .. ": " .. tostring(results.requestResponses[i].output_value))
-        return "", "Invalid output_value in requestResponses"
+  for _, response in ipairs(results.requestResponses) do
+    local found = false
+    for _, id in ipairs(providers.provider_ids) do
+      if response.provider_id == id then
+        if mixed == 0 then
+          mixed = tonumber(response.output_value)
+        else
+          local value = tonumber(response.output_value)
+          mixed = (mixed ~ (value >> 32) ~ (value & 0xFFFFFFFF))
+          -- Combine with a prime multiplier and modulus to reduce overflow
+          mixed = (mixed * 0x5bd1e995 + value) % (2^31 - 1)
+        end
+        found = true
+        break
+      end
     end
-
-    mixed = (mixed ~ (value >> 32) ~ (value & 0xFFFFFFFF))
-    -- Combine with a prime multiplier and modulus to reduce overflow
-    mixed = (mixed * 0x5bd1e995 + value) % (2^31 - 1)
-  end
+  end 
 
   local entropy = tostring(math.floor(mixed)) -- Convert to string representation of the mixed value
   print("Request " .. requestId .. " entropy: " .. entropy)
@@ -279,6 +328,35 @@ function randomManager.processEntropy(requestId: string): string, string
   print("Random request entropy updated successfully to: " .. entropy)
   
   return entropy, ""
+end
+
+function randomManager.forwardFulfillmentRewards(requestId: string): boolean, string
+  print("Entered randomManager.forwardFulfillmentRewards")
+
+  local randomRequest, err = randomManager.getRandomRequest(requestId)
+  if err ~= "" then
+    print("Failed to get random request: " .. err)
+    return false, err
+  end
+
+  local providers = (json.decode(randomRequest.providers) as ProviderList).provider_ids
+  local rewards   = {}
+
+  for _, _ in ipairs(providers) do
+    rewards[#rewards + 1] = tostring(math.floor(Cost / #providers))
+  end
+
+  ao.send({
+    Target = StakingProcess,
+    Tags = {
+      Action = "Fulfillment-Rewaards",
+    },
+    Data = {
+      json.encode({providerIds = providers, rewards = rewards})
+    },
+  })
+
+  return true, ""
 end
 
 function randomManager.deliverRandomResponse(requestId: string): boolean
@@ -331,6 +409,7 @@ function randomManager.deliverRandomResponse(requestId: string): boolean
         Data = data,
      })
   end
+  randomManager.forwardFulfillmentRewards(requestId)
 end
 
 function randomManager.decrementRequestedInputs(requestId: string): boolean, string
@@ -389,13 +468,13 @@ function randomManager.decrementRequestedInputs(requestId: string): boolean, str
             RoundXList[Round] = NextRoundList
             NextRoundList = {}
 
-
             print("Updating callbackId for next round to: " .. Round)
             randomManager.updateCallbackId(requestId, tostring(Round))
 
             Round = Round + 1
         end
 
+        randomManager.trimProviders(requestId)
         local providerList = randomManager.getRandomProviderList(requestId)
         ActiveRequests.activeChallengeRequests.request_ids[requestId] = nil
 
@@ -532,10 +611,11 @@ function randomManager.createRandomRequest(userId: string, providers: string, ca
     -- Handle the case where requestedInputs is empty
     decodedRequestList = {} -- Default to an empty table
   end
+  print("decodedRequestList: " .. json.encode(decodedRequestList))
 
   -- Determine requestedValue
   local requestedValue: integer = math.min(decodedRequestList.requested_inputs or #providerList.provider_ids, #providerList.provider_ids)
-
+  print("requestedValue: " .. tonumber(requestedValue))
   if not DB then
     print("Database connection not initialized")
     return false, "Database connection is not initialized"

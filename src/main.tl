@@ -391,7 +391,7 @@ end
 -- Handler for creating random requests
 global function creditNoticeHandler(msg: Message): boolean
   print("entered creditNotice")
-
+  
   local value = math.floor(tonumber(msg.Quantity))
   local callbackId = msg.Tags["X-CallbackId"] or nil
 
@@ -535,7 +535,7 @@ end
 global function cronTickHandler(msg: Message): boolean
   print("entered cronTick")
   -- Initiate next station request
-  randomManager.nextStationRequest()
+  -- TODO randomManager.nextStationRequest()
     
   -- Loop through each category of requests
   for category, data in pairs(ActiveRequests as {string: RequestList}) do

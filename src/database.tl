@@ -91,6 +91,8 @@ function database.initializeDatabase(): boolean
           callback_id TEXT,
           providers TEXT,
           requested_inputs INTEGER,
+          requested_provider_count INTEGER,
+          price INTEGER,
           status TEXT,
           entropy TEXT,
           created_at INTEGER
