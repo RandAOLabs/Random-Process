@@ -99,13 +99,14 @@ function database.initializeDatabase(): boolean
         );
       ]],
       [[
-        CREATE TABLE IF NOT EXISTS ProviderVDFResults (
+        CREATE TABLE IF NOT EXISTS ProviderTimelockPuzzles (
           request_id TEXT,                               
           provider_id TEXT,                              
           input_value TEXT,
           modulus_value TEXT,                       
-          output_value TEXT,                               
-          proof TEXT,         
+          output_value TEXT,  
+          p TEXT,
+          q TEXT,                             
           created_at INTEGER,                             
           PRIMARY KEY (request_id, provider_id),          
           FOREIGN KEY (request_id) REFERENCES RandomRequests(request_id)

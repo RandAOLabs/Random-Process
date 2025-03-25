@@ -29,13 +29,13 @@ global record VerifierStats
   total_busy: number
 end
 
-global record VDFRequestData
+global record TimelockVerificationData
   request_id: string
   segment_id: string
-  checkpoint_input: string
   input: string
   modulus: string
-  expected_output: string
+  p: string
+  q: string
 end
 
 global record VDFRequestResponse
@@ -114,25 +114,6 @@ function verifierManager.getAvailableVerifiers(): {VerifierProcess}, string
   end
   
   return verifiers, ""
-end
-
-function verifierManager.requestVerification(processId: string, data: VDFRequestData, checkpoint: boolean)
-  --print("Sending verification request to process: " .. processId)
-  
-  if checkpoint then
-    local _ = ao.send({
-      Target = processId,
-      Action = "Validate-Checkpoint",
-      Data = json.encode(data)
-    })
-    return
-  else
-    local _ = ao.send({
-      Target = processId,
-      Action = "Validate-Output",
-      Data = json.encode(data)
-    })
-  end
 end
 
 -- Assign segment to verifier
@@ -323,97 +304,50 @@ function verifierManager.verifySegmentVerification(requestId: string, verifierId
   return true, ""
 end
 
--- Process VDF proofs
-function verifierManager.processProof(requestId: string, input: string, modulus: string, proofJson: string, providerId: string, modExpectedOutput: string): boolean, string  
-  -- First decode the proofJson string since it's already JSON encoded
-  local proofArray = json.decode(proofJson) as {string}
-  if not proofArray then
-    return false, "Failed to parse proof JSON"
-  end
-
-  -- Now create a Proof record with the array
-  local proof: Proof = { proof = proofArray }
+-- Function to verify timelock puzzle
+function verifierManager.verifyTimelockPuzzle(processId: string, data: TimelockVerificationData): boolean, string
+  print("Sending verification request to process: " .. processId)
   
-  local proofId = requestId .. "_" .. providerId
+  local _ = ao.send({
+    Target = processId,
+    Action = "Validate-Timelock-Solution",
+    Data = json.encode(data)
+  })
+  
+  return true, ""
+end
+
+-- Function to process a timelock puzzle
+function verifierManager.processTimelockPuzzle(requestId: string, input: string, modulus: string,p: string, q: string, providerId: string): boolean, string
+  
   local availableVerifiers = verifierManager.getAvailableVerifiers()
 
-  if #availableVerifiers < 11 then
+  if #availableVerifiers < 1 then
     return false, "No verifiers available"
   end
-
-
-
-  local outputSegmentId, segmentCreateErr = verifierManager.createSegment(proofId, "output", modExpectedOutput)
-
-  if segmentCreateErr ~= "" then
-    return false, "Failed to create segment: " .. segmentCreateErr
-  end
-  
-  local outputVerifierId = availableVerifiers[1]
+  local timelockVerifierId = availableVerifiers[1].process_id
   table.remove(availableVerifiers, 1)
 
-  local outputAssigned, _outputAssignErr = verifierManager.assignSegment(outputVerifierId.process_id, outputSegmentId)
-  if not outputAssigned then
-    --print("Failed to assign segment: " .. outputAssignErr)
-  else
-    local outputSegmentInput = proofArray[10]
-    local segmentExpectedOutput = modExpectedOutput
+  local timelockId = requestId .. "_" .. providerId
 
-    local requestData: VDFRequestData = {
-      request_id = requestId,
-      segment_id = outputSegmentId,
-      input = outputSegmentInput,
-      expected_output = segmentExpectedOutput
-    }
-    
-    verifierManager.requestVerification(outputVerifierId.process_id, requestData, false)
+  local segmentId, _ = verifierManager.createSegment(timelockId, "timelock", "TODOREMOVE")
+
+  local segmentAssigned, _ = verifierManager.assignSegment(timelockVerifierId, segmentId)
+
+  if not segmentAssigned then
+    return false, "Failed to assign segment"
   end
 
-
-
-  local segmentCount = 1
-  for _, segment in ipairs(proof.proof) do
-    --print("Processing segment: " .. segment .. " count: " ..  segmentCount)
-    
-    local segmentId, createErr = verifierManager.createSegment(proofId, tostring(segmentCount), segment)
-    segmentCount = segmentCount + 1
-
-    if createErr ~= "" then
-      return false, "Failed to create segment: " .. createErr
-    end
-    
-    if #availableVerifiers > 0 then
-      local verifierId = availableVerifiers[1]
-      table.remove(availableVerifiers, 1)
-
-      local assigned, _assignErr = verifierManager.assignSegment(verifierId.process_id, segmentId)
-      if not assigned then
-        --print("Failed to assign segment: " .. assignErr)
-      else
-        local segmentInput = input
-        local segmentExpectedOutput = proofArray[segmentCount - 1]
-        
-        if segmentCount > 2 then
-          segmentInput = proofArray[segmentCount - 2]
-        end
-        
-        local requestData: VDFRequestData = {
-          request_id = requestId,
-          segment_id = segmentId,
-          checkpoint_input = segmentInput,
-          modulus = modulus,
-          expected_output = segmentExpectedOutput
-        }
-        
-        verifierManager.requestVerification(verifierId.process_id, requestData, true)
-      end
-    else
-      --print("No verifiers available for segment: " .. segmentId)
-    end
-    
-  end
-
-  return true, ""
+  local timelockData: TimelockVerificationData = {
+    request_id = requestId,
+    segment_id = segmentId,
+    input = input,
+    modulus = modulus,
+    p = p,
+    q = q,
+  }
+  
+  return verifierManager.verifyTimelockPuzzle(timelockVerifierId, timelockData)
 end
 
 function verifierManager.initializeVerifierManager()
