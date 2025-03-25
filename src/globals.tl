@@ -25,7 +25,7 @@ global TokenInUse: string = TokenTest
 
 global Decimals: integer = 18
 
-global OverridePeriod: integer = 50000 -- 50 seconds
+global OverridePeriod: integer = 300000 -- 50 seconds
 
 global ActiveRequests = {
     activeChallengeRequests = {
