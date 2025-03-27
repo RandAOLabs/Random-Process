@@ -77,7 +77,7 @@ function database.initializeDatabase(): boolean
           segment_id TEXT PRIMARY KEY,
           proof_id TEXT NOT NULL,
           verifier_id TEXT,
-          segment_data TEXT NOT NULL,
+          provider_id TEXT NOT NULL,
           status TEXT NOT NULL,
           timestamp INTEGER NOT NULL,
           result TEXT,

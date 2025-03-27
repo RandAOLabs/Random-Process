@@ -38,16 +38,10 @@ global record RevealPuzzleData
   requestId: string
 end
 
-global record PostVDFOutputAndProofData
-  requestId: string
-  output: string
-  proof: string
-end
-
-global record CheckpointResponseData
+global record PuzzleVerificationData
   request_id: string
   segment_id: string
-  valid: boolean
+  puzzle_result: string
 end
 
 global record GetRandomRequestsData
@@ -342,11 +336,11 @@ global function postVerificationHandler(msg: Message): boolean
 
   local verifierId = msg.From
 
-  local data = (json.decode(msg.Data as string) as CheckpointResponseData)
+  local data = (json.decode(msg.Data as string) as PuzzleVerificationData)
 
-  local valid = data.valid
   local requestId = data.request_id
   local segmentId = data.segment_id
+  local puzzleResult = data.puzzle_result
 
   local validVerification, err = verifierManager.verifySegmentVerification(requestId, verifierId)
   if not validVerification then
@@ -355,13 +349,13 @@ global function postVerificationHandler(msg: Message): boolean
     return false
   end
 
-  if valid == nil or segmentId == nil or requestId == nil or not validVerification then
+  if puzzleResult == nil or segmentId == nil or requestId == nil or not validVerification then
     print("Failed to post Verification: " .. (err or "values not provided or malformed"))
     ao.send(sendResponse(msg.From, "Error", {message = "Failed to post Verification: " .. (err or "values not provided or malformed")}))
     return false
   end
   
-  local success, _err = verifierManager.processVerification(verifierId, segmentId, valid)
+  local success, _err = verifierManager.processVerification(requestId, verifierId, segmentId, puzzleResult, true)
   
   if success then
     randomManager.decrementRequestedInputs(requestId)

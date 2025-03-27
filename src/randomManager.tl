@@ -132,7 +132,6 @@ function randomManager.getTimelockPuzzles(requestId: string): ProviderTimelockPu
   local stmt = DB:prepare("SELECT * FROM ProviderTimelockPuzzles WHERE request_id = :request_id")
   stmt:bind_names({request_id = requestId})  
   local queryResult = dbUtils.queryMany(stmt)
-
   local result: ProviderTimelockPuzzles = { 
     requestResponses = {}
   }
@@ -295,27 +294,22 @@ function randomManager.processEntropy(requestId: string): string, string
 
   results = results as ProviderTimelockPuzzles
 
-  local mixed: number = 0
+  local componentEntropy = {}
 
-  for _, response in ipairs(results.requestResponses) do
-    local found = false
-    for _, id in ipairs(providers.provider_ids) do
-      if response.provider_id == id then
-        if mixed == 0 then
-          mixed = tonumber(response.output_value)
-        else
-          local value = tonumber(response.output_value)
-          mixed = (mixed ~ (value >> 32) ~ (value & 0xFFFFFFFF))
-          -- Combine with a prime multiplier and modulus to reduce overflow
-          mixed = (mixed * 0x5bd1e995 + value) % (2^31 - 1)
-        end
-        found = true
-        break
-      end
-    end
-  end 
+  for _, result in ipairs(results.requestResponses) do
+    table.insert(componentEntropy, result.output_value)
+  end
+  print("Component entropy: " .. json.encode(componentEntropy))
+  local entropy = ao.send({
+    Target = "vw_bzLO5nULZ97ofY_mFgp-T_V5Apkyo8eMW0z69cM4",
+    Tags = {
+      Action = "Hash-Entropy",
+    },
+    Data = json.encode({
+      requestId = requestId, components = componentEntropy
+    }),
+  }).receive().Data
 
-  local entropy = tostring(math.floor(mixed)) -- Convert to string representation of the mixed value
   print("Request " .. requestId .. " entropy: " .. entropy)
   
   -- Update request with entropy
@@ -503,7 +497,7 @@ function randomManager.decrementRequestedInputs(requestId: string): boolean, str
       elseif status == Status[2] then
         print("Random request finished collecting outputs")
         local providerList  = randomManager.getRandomProviderList(requestId) as ProviderList
-        local requestedValue = #providerList.provider_ids * 11
+        local requestedValue = #providerList.provider_ids
         randomManager.resetRandomRequestRequestedInputs(requestId, requestedValue) -- multiply this number by segment count TODO non hardcode
         randomManager.updateRandomRequestStatus(requestId, Status[3])
 
@@ -546,6 +540,7 @@ function randomManager.getTimelockPuzzle(requestId: string, providerId: string):
   local stmt = DB:prepare("SELECT * FROM ProviderTimelockPuzzles WHERE request_id = :request_id AND provider_id = :provider_id")
   stmt:bind_names({request_id = requestId, provider_id = providerId})  
   local result = dbUtils.queryOne(stmt)
+  print("result: " .. json.encode(result))
   if result then
     return result as ProviderTimelockPuzzle, ""
   else

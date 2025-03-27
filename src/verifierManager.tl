@@ -14,7 +14,7 @@ global record VerifierSegment
   segment_id: string    -- Unique ID for this segment
   proof_id: string     -- ID of the parent proof
   verifier_id: string  -- ID of the assigned verifier
-  segment_data: string -- The actual segment data
+  provider_id: string -- The actual segment data
   status: string       -- Status of verification (pending, in_progress, verified, failed)
   timestamp: number    -- When this segment was created
   result: string       -- Result of verification
@@ -201,14 +201,54 @@ function verifierManager.markAvailable(verifierId: string): boolean, string
   return true, ""
 end
 
+-- Get segment from db by id
+function verifierManager.getSegment(segmentId: string): VerifierSegment, string
+  print("entered verifierManager.getSegment")
+  
+  local stmt = DB:prepare("SELECT * FROM VerifierSegments WHERE segment_id = :segment_id")
+  stmt:bind_names({segment_id = segmentId})  
+  local result = dbUtils.queryOne(stmt)
+
+  if result then
+    return result as VerifierSegment, ""
+  else
+    return {} as VerifierSegment, "Unable to retrieve segment"
+  end
+end
+
+function verifierManager.updateOutput(requestId: string, providerId: string, newOutput: string): boolean, string
+  print("Entered verifierManager.updateOutput")
+
+  local stmt = DB:prepare([[
+    UPDATE ProviderTimelockPuzzles
+    SET output_value = :output
+    WHERE request_id = :request_id
+    AND provider_id = :provider_id;
+  ]])
+  if not stmt then
+     return false, "Failed to prepare statement: " .. DB:errmsg()
+  end
+  stmt:bind_names({ output = newOutput, request_id = requestId, provider_id = providerId })
+  local execute_ok, execute_err = dbUtils.execute(stmt, "Update random request output")
+  if not execute_ok then
+     return false, "Failed to update random request output: " .. tostring(execute_err)
+  end
+
+  print("Random request output updated successfully to: " .. newOutput)
+  return true, ""
+end
+
 -- Process verification result
-function verifierManager.processVerification(verifierId: string, segmentId: string, result: boolean): boolean, string
-  --print("Processing verification result for segment: " .. segmentId)
-  if not DB then
-    --print("Database connection not initialized")
-    return false, "Database connection is not initialized"
+function verifierManager.processVerification(requestId: string, verifierId: string, segmentId: string, output: string, result: boolean): boolean, string
+  print("Processing verification result for segment: " .. segmentId)
+
+  local segment = verifierManager.getSegment(segmentId)
+  if not segment then
+    return false, "Segment not found"
   end
   
+  local providerId = segment.provider_id
+
   local stmt = DB:prepare([[
     UPDATE VerifierSegments 
     SET status = 'processed', result = :result
@@ -238,6 +278,11 @@ function verifierManager.processVerification(verifierId: string, segmentId: stri
     return false, exec_err
   end
 
+  local postedOutput, postErr = verifierManager.updateOutput(requestId, providerId, output)
+  if not postedOutput then
+    return false, postErr
+  end
+
   local markOk, markErr = verifierManager.markAvailable(verifierId)
   if not markOk then
     return false, markErr
@@ -247,7 +292,7 @@ function verifierManager.processVerification(verifierId: string, segmentId: stri
 end
 
 -- Create new verification segment
-function verifierManager.createSegment(proofId: string, segmentCount: string, segmentData: string): string, string
+function verifierManager.createSegment(proofId: string, segmentCount: string, providerId: string): string, string
   if not DB then
     --print("Database connection not initialized")
     return "", "Database connection is not initialized"
@@ -258,8 +303,8 @@ function verifierManager.createSegment(proofId: string, segmentCount: string, se
 
   local stmt = DB:prepare([[
     INSERT INTO VerifierSegments 
-    (segment_id, proof_id, segment_data, status, timestamp)
-    VALUES (:sid, :pid, :data, 'pending', :time)
+    (segment_id, proof_id, provider_id, status, timestamp)
+    VALUES (:sid, :pid, :providerId, 'pending', :time)
   ]])
   
   if not stmt then
@@ -272,7 +317,7 @@ function verifierManager.createSegment(proofId: string, segmentCount: string, se
     stmt:bind_names({
       sid = segmentId,
       pid = proofId,
-      data = segmentData,
+      providerId = providerId,
       time = timestamp
     })
   end)
@@ -310,7 +355,7 @@ function verifierManager.verifyTimelockPuzzle(processId: string, data: TimelockV
   
   local _ = ao.send({
     Target = processId,
-    Action = "Validate-Timelock-Solution",
+    Action = "Validate-Puzzle",
     Data = json.encode(data)
   })
   
@@ -319,7 +364,7 @@ end
 
 -- Function to process a timelock puzzle
 function verifierManager.processTimelockPuzzle(requestId: string, input: string, modulus: string,p: string, q: string, providerId: string): boolean, string
-  
+  print("Processing timelock puzzle")
   local availableVerifiers = verifierManager.getAvailableVerifiers()
 
   if #availableVerifiers < 1 then
@@ -330,7 +375,7 @@ function verifierManager.processTimelockPuzzle(requestId: string, input: string,
 
   local timelockId = requestId .. "_" .. providerId
 
-  local segmentId, _ = verifierManager.createSegment(timelockId, "timelock", "TODOREMOVE")
+  local segmentId, _ = verifierManager.createSegment(timelockId, "timelock", providerId)
 
   local segmentAssigned, _ = verifierManager.assignSegment(timelockVerifierId, segmentId)
 
