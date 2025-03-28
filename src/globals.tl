@@ -16,7 +16,7 @@ global RoundXList                       = {}
 global NextRoundList                    = {}
 
 global Admin: string = "N90q65iT59dCo01-gtZRUlLMX0w6_ylFHv2uHaSUFNk"
-global StakingProcess: string = "tBTBSZ7ClgA6k_lwGkL1g0NRIXIQN2mDwDjWjP0YHoc"
+global StakingProcess: string = "EIQJoqVWonlxsEe8xGpQZhh54wrmgE3q0tAsVIhKYQU"
 
 global Cost: number = 100
 
@@ -53,11 +53,16 @@ global Status = {
 }
 
 global VerifierProcesses = {
-    "7GkRiHSFCDsjBaXdu6XCi0L6QLhfQ4q5sOZNRMowlgA",
-    "TpUkMK7mTQoxViojbG1otALE2mgxdK9GbXaZre59wTI",
-    "_dkU-inQtSbRlhI-nxsHkbk5y3sMjQP6EWjrRinW2FY",
-    "RpfLX743j6ibO6Uw-YtXbr8GS9LVAxR_WXgsdiQxE0U",
-    "E3zj-COWw5KBoEJ5bPBNc_jDftnngRPW6r0Orl1jGVA"
+    "V6mBghJsBRP8btJ26Mnvwqotf3ybZEaj_Daq3HO09PI",
+    "1t90nE0WsqLDyFnNmcndv8agaBx1op49dMf3BYPzt7U",
+    "3qzbEGCk2vSK_f9OpHsqorYpUn5UKZgBOj9Icl00m58",
+    "PsMQd6u-Bwi7Mnnkxay6E8DU-YjsjaKYSZKvLfA_85Y",
+    "-dkAJYbmWH_dWX2NIwz4kGjv3AS8SL1dg0Rfk055Zls",
+    "KDxsGmdhdHOFWhFtRE4OlQM-fn8jJ2TmI9XiL8XFK2Y",
+    "FwnOY2Yd4k7gq9tyC5xLqpsUzgUwI747N3peGVtUuMc",
+    "bSVqKT49HhLUFvQdrRWXFPCZA1aKb7Szer0LYwKzCWw",
+    "hXuei7DCQQt-s3qfTkov1mv2J8j_Qvy8BsJY98BWj1o",
+    "NvbpDY3OZTqIL1UuCInByOD0DnmSBp3SXBRXZ_bkSqE"
 }
 
 return {}

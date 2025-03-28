@@ -540,7 +540,6 @@ function randomManager.getTimelockPuzzle(requestId: string, providerId: string):
   local stmt = DB:prepare("SELECT * FROM ProviderTimelockPuzzles WHERE request_id = :request_id AND provider_id = :provider_id")
   stmt:bind_names({request_id = requestId, provider_id = providerId})  
   local result = dbUtils.queryOne(stmt)
-  print("result: " .. json.encode(result))
   if result then
     return result as ProviderTimelockPuzzle, ""
   else

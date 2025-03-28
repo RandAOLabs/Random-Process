@@ -331,8 +331,8 @@ global function revealPuzzleParamsHandler(msg: Message): boolean
 end
 
 -- Handler for posting verifier verification of segment authenticity
-global function postVerificationHandler(msg: Message): boolean
-  print("entered postVerification")
+global function puzzleVerificationHandler(msg: Message): boolean
+  print("entered puzzleVerification")
 
   local verifierId = msg.From
 
@@ -368,8 +368,8 @@ global function postVerificationHandler(msg: Message): boolean
 end
 
 -- Handler for posting verifier failed verification of segment authenticity
-global function failedPostVerificationHandler(msg: Message): boolean
-  print("entered failedPostVerification")
+global function failedPuzzleVerificationHandler(msg: Message): boolean
+  print("entered failedPuzzleVerification")
   local verifierId = msg.From
   local success, err = verifierManager.markAvailable(verifierId)
   if success then
@@ -667,13 +667,13 @@ Handlers.add('revealPuzzleParams',
 Handlers.utils.hasMatchingTag('Action', 'Reveal-Puzzle-Params'),
 wrapHandler(revealPuzzleParamsHandler))
 
-Handlers.add('postVerification',
-Handlers.utils.hasMatchingTag('Action', 'Post-Verification'),
-wrapHandler(postVerificationHandler))
+Handlers.add('puzzleVerification', 
+Handlers.utils.hasMatchingTag('Action', 'Puzzle-Verification'),
+wrapHandler(puzzleVerificationHandler))
 
-Handlers.add('failedPostVerification',
-Handlers.utils.hasMatchingTag('Action', 'Failed-Post-Verification'),
-wrapHandler(failedPostVerificationHandler))
+Handlers.add('failedPuzzleVerification',
+Handlers.utils.hasMatchingTag('Action', 'Failed-Puzzle-Verification'),
+wrapHandler(failedPuzzleVerificationHandler))
 
 Handlers.add('creditNotice', 
 Handlers.utils.hasMatchingTag('Action', 'Credit-Notice'), 
@@ -709,3 +709,10 @@ wrapHandler(reinitializeProviderHandler))
 
 -- Logging
 print("RandAO Process Initialized")
+
+global function Helper() 
+  print("Helper")
+  local prov = "XUo8jZtUDBFLtp5okR12oLrqIZ4ewNlTpqnqmriihJE"
+  local active,_ = providerManager.isActiveProvider(prov)
+  print("active: " .. json.encode(active))
+end
