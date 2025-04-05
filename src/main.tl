@@ -38,12 +38,6 @@ global record RevealPuzzleData
   requestId: string
 end
 
-global record PuzzleVerificationData
-  request_id: string
-  segment_id: string
-  puzzle_result: string
-end
-
 global record GetRandomRequestsData
   requestIds: {string}
 end
@@ -333,7 +327,7 @@ end
 -- Handler for posting verifier verification of segment authenticity
 global function puzzleVerificationHandler(msg: Message): boolean
   print("entered puzzleVerification")
-
+  assert(false)
   local verifierId = msg.From
 
   local data = (json.decode(msg.Data as string) as PuzzleVerificationData)
@@ -527,7 +521,7 @@ end
 global function cronTickHandler(msg: Message): boolean
   print("entered cronTick")
   -- Initiate next station request
-  -- TODO randomManager.nextStationRequest()
+  -- randomManager.nextStationRequest()
     
   -- Loop through each category of requests
   for category, data in pairs(ActiveRequests as {string: RequestList}) do
@@ -712,7 +706,6 @@ print("RandAO Process Initialized")
 
 global function Helper() 
   print("Helper")
-  local prov = "XUo8jZtUDBFLtp5okR12oLrqIZ4ewNlTpqnqmriihJE"
-  local active,_ = providerManager.isActiveProvider(prov)
-  print("active: " .. json.encode(active))
+  local verifiers, _ = verifierManager.getAvailableVerifiers() 
+  print("verifiers: " .. json.encode(verifiers))
 end

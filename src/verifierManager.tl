@@ -1,7 +1,6 @@
 -- verifierManager.tl
 require "globals"
 local dbUtils = require "dbUtils"
-local json            = require "json"
 
 -- Type definitions for verifier process management
 global record VerifierProcess
@@ -18,6 +17,12 @@ global record VerifierSegment
   status: string       -- Status of verification (pending, in_progress, verified, failed)
   timestamp: number    -- When this segment was created
   result: string       -- Result of verification
+end
+
+global record PuzzleVerificationData
+  request_id: string
+  segment_id: string
+  puzzle_result: string
 end
 
 global record Proof
@@ -349,57 +354,11 @@ function verifierManager.verifySegmentVerification(requestId: string, verifierId
   return true, ""
 end
 
--- Function to verify timelock puzzle
-function verifierManager.verifyTimelockPuzzle(processId: string, data: TimelockVerificationData): boolean, string
-  print("Sending verification request to process: " .. processId)
-  
-  local _ = ao.send({
-    Target = processId,
-    Action = "Validate-Puzzle",
-    Data = json.encode(data)
-  })
-  
-  return true, ""
-end
-
--- Function to process a timelock puzzle
-function verifierManager.processTimelockPuzzle(requestId: string, input: string, modulus: string,p: string, q: string, providerId: string): boolean, string
-  print("Processing timelock puzzle")
-  local availableVerifiers = verifierManager.getAvailableVerifiers()
-
-  if #availableVerifiers < 1 then
-    return false, "No verifiers available"
-  end
-  local timelockVerifierId = availableVerifiers[1].process_id
-  table.remove(availableVerifiers, 1)
-
-  local timelockId = requestId .. "_" .. providerId
-
-  local segmentId, _ = verifierManager.createSegment(timelockId, "timelock", providerId)
-
-  local segmentAssigned, _ = verifierManager.assignSegment(timelockVerifierId, segmentId)
-
-  if not segmentAssigned then
-    return false, "Failed to assign segment"
-  end
-
-  local timelockData: TimelockVerificationData = {
-    request_id = requestId,
-    segment_id = segmentId,
-    input = input,
-    modulus = modulus,
-    p = p,
-    q = q,
-  }
-  
-  return verifierManager.verifyTimelockPuzzle(timelockVerifierId, timelockData)
-end
-
 function verifierManager.initializeVerifierManager()
   for _, verifier in ipairs(VerifierProcesses) do  
     verifierManager.registerVerifier(verifier)
   end
-  --print("Verifier manager and processes initialized")
+  print("Verifier manager and processes initialized")
 end
 
 function verifierManager.dropVerifierTable()

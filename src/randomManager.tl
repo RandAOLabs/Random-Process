@@ -286,12 +286,6 @@ function randomManager.processEntropy(requestId: string): string, string
     return "", err
   end
 
-  local providers, providerErr = randomManager.getRandomProviderList(requestId)
-  if providerErr ~= "" then
-    print("Failed to get random request providers: " .. providerErr)
-    return "", providerErr
-  end
-
   results = results as ProviderTimelockPuzzles
 
   local componentEntropy = {}
@@ -301,7 +295,7 @@ function randomManager.processEntropy(requestId: string): string, string
   end
   print("Component entropy: " .. json.encode(componentEntropy))
   local entropy = ao.send({
-    Target = "vw_bzLO5nULZ97ofY_mFgp-T_V5Apkyo8eMW0z69cM4",
+    Target = "NvbpDY3OZTqIL1UuCInByOD0DnmSBp3SXBRXZ_bkSqE",
     Tags = {
       Action = "Hash-Entropy",
     },
@@ -733,6 +727,80 @@ function randomManager.commitPuzzle(userId: string, requestId: string, puzzle: P
   return execute_ok, execute_err
 end
 
+
+
+-- Function to verify timelock puzzle
+function randomManager.verifyTimelockPuzzle(processId: string, data: TimelockVerificationData): boolean, string
+  print("Sending verification request to process: " .. processId)
+  
+  local unprocessedData = ao.send({
+    Target = processId,
+    Action = "Validate-Puzzle",
+    Data = json.encode(data)
+  }).receive().Data
+  
+  print("Received verification response")
+
+  local resultData = (json.decode(unprocessedData as string) as PuzzleVerificationData)
+
+  local requestId = resultData.request_id
+  local segmentId = resultData.segment_id
+  local puzzleResult = resultData.puzzle_result
+
+  local validVerification, err = verifierManager.verifySegmentVerification(requestId, processId)
+  if not validVerification then
+    print("Failed to post Verification: " .. "not verified")
+    return false
+  end
+
+  if puzzleResult == nil or segmentId == nil or requestId == nil or not validVerification then
+    print("Failed to post Verification: " .. (err or "values not provided or malformed"))
+    return false
+  end
+  
+  local success, processError = verifierManager.processVerification(requestId, processId, segmentId, puzzleResult, true)
+
+  if success then
+    randomManager.decrementRequestedInputs(requestId)
+    return true
+  end
+
+  return success, processError
+end
+
+function randomManager.processTimelockPuzzle(requestId: string, input: string, modulus: string, p: string, q: string, providerId: string): boolean, string
+  print("entered randomManager.processTimelockPuzzle")
+  print("Processing timelock puzzle")
+  local availableVerifiers = verifierManager.getAvailableVerifiers()
+
+  if #availableVerifiers < 1 then
+    return false, "No verifiers available"
+  end
+  local timelockVerifierId = availableVerifiers[1].process_id
+  table.remove(availableVerifiers, 1)
+
+  local timelockId = requestId .. "_" .. providerId
+
+  local segmentId, _ = verifierManager.createSegment(timelockId, "timelock", providerId)
+
+  local segmentAssigned, _ = verifierManager.assignSegment(timelockVerifierId, segmentId)
+
+  if not segmentAssigned then
+    return false, "Failed to assign segment"
+  end
+
+  local timelockData: TimelockVerificationData = {
+    request_id = requestId,
+    segment_id = segmentId,
+    input = input,
+    modulus = modulus,
+    p = p,
+    q = q,
+  }
+  
+  return randomManager.verifyTimelockPuzzle(timelockVerifierId, timelockData)
+end
+
 function randomManager.revealPuzzleParams(userId: string, requestId: string, key: Key): boolean, string
   print("entered randomManager.revealPuzzleParams")
 
@@ -778,7 +846,8 @@ function randomManager.revealPuzzleParams(userId: string, requestId: string, key
     local modulus = puzzleRequest.modulus_value
     
     -- Call verifierManager.processProof function
-    local processResult, processError = verifierManager.processTimelockPuzzle(requestId, input, modulus, key.p, key.q, userId)
+    local processResult, processError = randomManager.processTimelockPuzzle(requestId, input, modulus, key.p, key.q, userId)
+    
     if not processResult then
       print("Processing proof failed: " .. tostring(processError))
       return false, "Processing proof failed: " .. tostring(processError)
