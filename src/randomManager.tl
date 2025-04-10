@@ -2,7 +2,6 @@ require "globals"
 local json            = require "json"
 local dbUtils         = require "dbUtils"
 local providerManager = require "providerManager"
-local verifierManager = require "verifierManager"
 
 -- Type definitions
 global record Key
@@ -14,7 +13,12 @@ global record Puzzle
   input: string
   modulus: string
 end
- 
+
+global record PhiResult
+  phi: string
+  n: string
+end
+
 global record RandomRequest
     request_id: string
     requester: string
@@ -276,7 +280,6 @@ function randomManager.getRandomRequest(requestId: string): RandomRequest, strin
   end
 end
 
--- TODO : Refactor with hashing instead of XOR
 function randomManager.processEntropy(requestId: string): string, string
   print("entered randomManager.processEntropy")
   
@@ -294,16 +297,9 @@ function randomManager.processEntropy(requestId: string): string, string
     table.insert(componentEntropy, result.output_value)
   end
   print("Component entropy: " .. json.encode(componentEntropy))
-  local entropy = ao.send({
-    Target = "NvbpDY3OZTqIL1UuCInByOD0DnmSBp3SXBRXZ_bkSqE",
-    Tags = {
-      Action = "Hash-Entropy",
-    },
-    Data = json.encode({
-      requestId = requestId, components = componentEntropy
-    }),
-  }).receive().Data
 
+  local entropy = entropy_hash_luaint(componentEntropy)
+  print("Data received from hashing service")
   print("Request " .. requestId .. " entropy: " .. entropy)
   
   -- Update request with entropy
@@ -727,78 +723,65 @@ function randomManager.commitPuzzle(userId: string, requestId: string, puzzle: P
   return execute_ok, execute_err
 end
 
+function randomManager.updateOutput(requestId: string, providerId: string, newOutput: string): boolean, string
+  print("Entered randomManager.updateOutput")
 
-
--- Function to verify timelock puzzle
-function randomManager.verifyTimelockPuzzle(processId: string, data: TimelockVerificationData): boolean, string
-  print("Sending verification request to process: " .. processId)
-  
-  local unprocessedData = ao.send({
-    Target = processId,
-    Action = "Validate-Puzzle",
-    Data = json.encode(data)
-  }).receive().Data
-  
-  print("Received verification response")
-
-  local resultData = (json.decode(unprocessedData as string) as PuzzleVerificationData)
-
-  local requestId = resultData.request_id
-  local segmentId = resultData.segment_id
-  local puzzleResult = resultData.puzzle_result
-
-  local validVerification, err = verifierManager.verifySegmentVerification(requestId, processId)
-  if not validVerification then
-    print("Failed to post Verification: " .. "not verified")
-    return false
+  local stmt = DB:prepare([[
+    UPDATE ProviderTimelockPuzzles
+    SET output_value = :output
+    WHERE request_id = :request_id
+    AND provider_id = :provider_id;
+  ]])
+  if not stmt then
+     return false, "Failed to prepare statement: " .. DB:errmsg()
+  end
+  stmt:bind_names({ output = newOutput, request_id = requestId, provider_id = providerId })
+  local execute_ok, execute_err = dbUtils.execute(stmt, "Update random request output")
+  if not execute_ok then
+     return false, "Failed to update random request output: " .. tostring(execute_err)
   end
 
-  if puzzleResult == nil or segmentId == nil or requestId == nil or not validVerification then
-    print("Failed to post Verification: " .. (err or "values not provided or malformed"))
-    return false
-  end
-  
-  local success, processError = verifierManager.processVerification(requestId, processId, segmentId, puzzleResult, true)
-
-  if success then
-    randomManager.decrementRequestedInputs(requestId)
-    return true
-  end
-
-  return success, processError
+  print("Random request output updated successfully to: " .. newOutput)
+  return true, ""
 end
 
 function randomManager.processTimelockPuzzle(requestId: string, input: string, modulus: string, p: string, q: string, providerId: string): boolean, string
   print("entered randomManager.processTimelockPuzzle")
-  print("Processing timelock puzzle")
-  local availableVerifiers = verifierManager.getAvailableVerifiers()
 
-  if #availableVerifiers < 1 then
-    return false, "No verifiers available"
-  end
-  local timelockVerifierId = availableVerifiers[1].process_id
-  table.remove(availableVerifiers, 1)
+  local phi = ""
+  local n = ""
+  local phiResult = compute_phi_and_n(p, q) as PhiResult
 
-  local timelockId = requestId .. "_" .. providerId
-
-  local segmentId, _ = verifierManager.createSegment(timelockId, "timelock", providerId)
-
-  local segmentAssigned, _ = verifierManager.assignSegment(timelockVerifierId, segmentId)
-
-  if not segmentAssigned then
-    return false, "Failed to assign segment"
+  if phiResult then
+    phi = phiResult.phi
+    n = phiResult.n
+    print("phi(N):" .. phi)
+    print("N = p * q:" .. n)
+  else
+    print("Failed to compute phi and n.")
+    return false
   end
 
-  local timelockData: TimelockVerificationData = {
-    request_id = requestId,
-    segment_id = segmentId,
-    input = input,
-    modulus = modulus,
-    p = p,
-    q = q,
-  }
+  if modulus ~= n then
+    print("N != p * q")
+    return false
+  end
+
+  local puzzleResult = solve_time_lock_puzzle(input, Squarings, modulus, n)
+
+  if puzzleResult == nil then
+    print("Failed to solve timelock puzzle")
+    return false
+  end
+
+  local postedOutput, postErr = randomManager.updateOutput(requestId, providerId, puzzleResult)
   
-  return randomManager.verifyTimelockPuzzle(timelockVerifierId, timelockData)
+  if postedOutput then
+    randomManager.decrementRequestedInputs(requestId)
+    return true
+  end
+
+  return postedOutput, postErr
 end
 
 function randomManager.revealPuzzleParams(userId: string, requestId: string, key: Key): boolean, string

@@ -80,7 +80,7 @@ local json = require "json"
 local database = require "database"
 local providerManager = require "providerManager"
 local randomManager = require "randomManager"
-local verifierManager = require "verifierManager"
+
 
 describe("InfoHandler", function()
   setup(function()

@@ -5,7 +5,6 @@ local database        = require "database"
 local providerManager = require "providerManager"
 local randomManager   = require "randomManager"
 local tokenManager    = require "tokenManager"
-local verifierManager = require "verifierManager"
 
 -- Type definitions
 global record ResponseData
@@ -102,12 +101,6 @@ if not initializeApplication() then
   print("Failed to initialize application")
   return
 end
-
--- Drop verifiers table
-verifierManager.dropVerifierTable()
-
--- Initialize the verifier manager
-verifierManager.initializeVerifierManager()
 
 -- Helper function to send a response
 global function sendResponse(target: string, action: string, data: any): ResponseData
@@ -320,56 +313,6 @@ global function revealPuzzleParamsHandler(msg: Message): boolean
     return true
   else
     ao.send(sendResponse(msg.From, "Verification-Error", {message = "Failed to Reveal Puzzle Params: " .. err}))
-    return false
-  end
-end
-
--- Handler for posting verifier verification of segment authenticity
-global function puzzleVerificationHandler(msg: Message): boolean
-  print("entered puzzleVerification")
-  assert(false)
-  local verifierId = msg.From
-
-  local data = (json.decode(msg.Data as string) as PuzzleVerificationData)
-
-  local requestId = data.request_id
-  local segmentId = data.segment_id
-  local puzzleResult = data.puzzle_result
-
-  local validVerification, err = verifierManager.verifySegmentVerification(requestId, verifierId)
-  if not validVerification then
-    print("Failed to post Verification: " .. "not verified")
-    ao.send(sendResponse(msg.From, "Error", {message = "Failed to post Verification: " .. "not verified"}))
-    return false
-  end
-
-  if puzzleResult == nil or segmentId == nil or requestId == nil or not validVerification then
-    print("Failed to post Verification: " .. (err or "values not provided or malformed"))
-    ao.send(sendResponse(msg.From, "Error", {message = "Failed to post Verification: " .. (err or "values not provided or malformed")}))
-    return false
-  end
-  
-  local success, _err = verifierManager.processVerification(requestId, verifierId, segmentId, puzzleResult, true)
-  
-  if success then
-    randomManager.decrementRequestedInputs(requestId)
-    return true
-  end
-
-  print("Failed to post Verification: " .. _err)
-  ao.send(sendResponse(msg.From, "Error", {message = "Failed to post Verification: " .. _err}))
-  return false
-end
-
--- Handler for posting verifier failed verification of segment authenticity
-global function failedPuzzleVerificationHandler(msg: Message): boolean
-  print("entered failedPuzzleVerification")
-  local verifierId = msg.From
-  local success, err = verifierManager.markAvailable(verifierId)
-  if success then
-    return true
-  else
-    print("Failed to mark verifier: " .. verifierId .. " as available: " .. err)
     return false
   end
 end
@@ -661,14 +604,6 @@ Handlers.add('revealPuzzleParams',
 Handlers.utils.hasMatchingTag('Action', 'Reveal-Puzzle-Params'),
 wrapHandler(revealPuzzleParamsHandler))
 
-Handlers.add('puzzleVerification', 
-Handlers.utils.hasMatchingTag('Action', 'Puzzle-Verification'),
-wrapHandler(puzzleVerificationHandler))
-
-Handlers.add('failedPuzzleVerification',
-Handlers.utils.hasMatchingTag('Action', 'Failed-Puzzle-Verification'),
-wrapHandler(failedPuzzleVerificationHandler))
-
 Handlers.add('creditNotice', 
 Handlers.utils.hasMatchingTag('Action', 'Credit-Notice'), 
 wrapHandler(creditNoticeHandler))
@@ -703,9 +638,3 @@ wrapHandler(reinitializeProviderHandler))
 
 -- Logging
 print("RandAO Process Initialized")
-
-global function Helper() 
-  print("Helper")
-  local verifiers, _ = verifierManager.getAvailableVerifiers() 
-  print("verifiers: " .. json.encode(verifiers))
-end

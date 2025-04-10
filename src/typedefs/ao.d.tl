@@ -18,6 +18,24 @@
 --   end
 -- end
 
+
+-- Global utility functions that will be available in Lua runtime
+global function compute_mod_exp(input: string, squarings: string, modulus: string, expected: string): boolean
+  
+end
+global function check_modulus_result(input: string, modulus: string, expected: string): boolean
+  
+end
+global function compute_phi_and_n(p: string, q: string): {string, string}
+  
+end
+global function solve_time_lock_puzzle(input: string, squarings: string, modulus: string, expected: string): string
+  
+end
+global function entropy_hash_luaint(input: {string}): string
+  
+end
+
 global record ao
   id: string
   record SendResult
