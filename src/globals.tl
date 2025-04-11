@@ -17,7 +17,7 @@ global NextRoundList                    = {}
 
 global Squarings: string = "3000000" 
 global Admin: string = "N90q65iT59dCo01-gtZRUlLMX0w6_ylFHv2uHaSUFNk"
-global StakingProcess: string = "GlFZwOR8-iqC449_TozPaqUCP-M3aq6mTVWXckxaaiY"
+global StakingProcess: string = "EIQJoqVWonlxsEe8xGpQZhh54wrmgE3q0tAsVIhKYQU"
 
 global Cost: number = 100
 

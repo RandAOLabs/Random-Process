@@ -506,7 +506,7 @@ global function cronTickHandler(msg: Message): boolean
               else
                 print("Provider list is empty, nothing to tombstone.")
               end
-            elseif category == "activeVerificationRequests" then -- and timestamp + (OverridePeriod * 2) < currentTimestamp then
+            elseif category == "activeVerificationRequests" then
               -- Rerequest random from approved providers
               print("Rerequesting random from approved providers for request_id: " .. request_id)
               randomManager.rerequestRandom(request_id)
