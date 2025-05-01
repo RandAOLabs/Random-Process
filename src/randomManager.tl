@@ -193,6 +193,61 @@ function randomManager.trimProviders(requestId: string): boolean, string
   return true, ""
 end
 
+-- Remove a verifier from the database
+function randomManager.trimDatabase(requestId: string): boolean, string
+  print("entered randomManager.trimDatabase")
+  
+  if not DB then
+    --print("Database connection not initialized")
+    return false, "Database connection is not initialized"
+  end
+  
+  local stmt = DB:prepare([[
+    DELETE FROM RandomRequests
+    WHERE request_id = :request_id
+  ]])
+
+
+  local stmt2 = DB:prepare([[
+    DELETE FROM ProviderTimelockPuzzles
+    WHERE request_id = :request_id
+  ]])
+  
+  if not stmt then
+    return false, "Failed to prepare statement: " .. DB:errmsg()
+  end
+  
+  if not stmt2 then
+    return false, "Failed to prepare statement: " .. DB:errmsg()
+  end
+  
+  local ok = false
+  ok = pcall(function()
+    stmt:bind_names({request_id = requestId})
+  end)
+
+  ok = pcall(function()
+    stmt2:bind_names({request_id = requestId})
+  end)
+  
+  if not ok then
+    return false, "Failed to bind parameters"
+  end
+  
+  local exec_ok, exec_err = dbUtils.execute(stmt, "Removed random request")
+  if not exec_ok then
+    return false, exec_err
+  end
+
+
+  local exec_2_ok, exec_2_err = dbUtils.execute(stmt2, "Removed random request")
+  if not exec_2_ok then
+    return false, exec_2_err
+  end
+  
+  return true, ""
+end
+
 function randomManager.updateCallbackId(requestId: string, newCallbackId: string): boolean, string
   print("Entered randomManager.updateCallbackId")
 
@@ -322,6 +377,8 @@ function randomManager.processEntropy(requestId: string): string, string
 
   print("Random request entropy updated successfully to: " .. entropy)
   
+  randomManager.trimDatabase(requestId)
+
   return entropy, ""
 end
 
@@ -560,6 +617,17 @@ function randomManager.getRoundRobinProviders(count: integer): string, string
   return json.encode(providerList), ""
 end
 
+function randomManager.hasRandomBalance(userId: string): boolean, string
+  print("entered randomManager.hasRandomBalance")
+
+  local provider, err = providerManager.getProvider(userId)
+  if err ~= "" then
+    return false, err
+  end
+
+  return provider.random_balance > 0, ""
+end
+
 function randomManager.createRandomRequest(userId: string, providers: string, callbackId: string, requestedInputs: string, useRoundRobin: boolean): boolean, string
   print("entered randomManager.createRandomRequest")
 
@@ -579,7 +647,7 @@ function randomManager.createRandomRequest(userId: string, providers: string, ca
   local staked = true
 
   for _, providerId in ipairs(providerList.provider_ids) do
-    local activeProvider, _ = providerManager.isActiveProvider(providerId)
+    local activeProvider, _ = randomManager.hasRandomBalance(providerId)
     if not activeProvider then
       staked = false
       break

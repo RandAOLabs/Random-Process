@@ -2,9 +2,11 @@
 require "globals"
 local json            = require "json"
 local database        = require "database"
+local dbUtils         = require "dbUtils"
 local providerManager = require "providerManager"
 local randomManager   = require "randomManager"
 local tokenManager    = require "tokenManager"
+--local memsnap         = require "memsnap"
 
 -- Type definitions
 global record ResponseData
@@ -25,6 +27,7 @@ end
 
 global record UpdateProviderRandomBalanceData
   availableRandomValues: integer
+  providerInfo: string
 end
 
 global record CommitPuzzleData
@@ -183,6 +186,12 @@ global function updateProviderBalanceHandler(msg: Message): boolean
 
   local data = (json.decode(msg.Data as string) as UpdateProviderRandomBalanceData)
   local balance = data.availableRandomValues
+  local providerInfo = data.providerInfo or nil
+  print("balance: " .. balance)
+  -- print("providerInfo: " .. providerInfo)
+  -- if providerInfo ~= nil then
+  --   providerManager.updateProviderInfo(userId, providerInfo)
+  -- end
   local success, _err = providerManager.updateProviderBalance(userId, balance)
 
   if success then
@@ -459,10 +468,12 @@ global function getActiveRequestsHandler(msg: Message): boolean
   print("entered getActiveRequests")
   sendResponse(msg.From, "Get-Active-Requests", ActiveRequests)
 end
-
+ 
 -- Handler for cron ticks that facilitate cracking and slashing
 global function cronTickHandler(msg: Message): boolean
   print("entered cronTick")
+
+  -- memsnap.cronTick(msg)
   -- Initiate next station request
   -- randomManager.nextStationRequest()
     
@@ -564,6 +575,33 @@ global function reinitializeProviderHandler(msg: Message): boolean
   end
   local providerId = msg.Tags["ProviderId"]
   providerManager.updateProviderBalance(providerId, 0)
+  return true
+end
+
+global function Helper(): boolean
+  
+  -- local stmt = DB:prepare([[
+  --   DELETE FROM RandomRequests;
+  --   DELETE FROM ProviderTimelockPuzzles;
+  -- ]])
+  
+  -- if not stmt then
+  --   --print("Failed to prepare statement: " .. DB:errmsg())
+  --   return false
+  -- end
+
+  -- local exec_ok = dbUtils.execute(stmt, "Remove table space")
+  -- if not exec_ok then
+  --   return false
+  -- end
+
+  local stmt2 = DB:prepare("SELECT * FROM RandomRequests")
+  local rows = dbUtils.queryMany(stmt2)
+  print("RandomRequests: " .. json.encode(rows))
+  
+  for _, row in ipairs(rows) do
+    print(json.encode(row))  -- or loop through keys
+  end
   return true
 end
 
