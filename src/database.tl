@@ -46,6 +46,7 @@ function database.initializeDatabase(): boolean
       [[
         CREATE TABLE IF NOT EXISTS Providers (
           provider_id TEXT PRIMARY KEY,
+          provider_info TEXT,
           active INTEGER,
           staked INTEGER,
           active_challenge_requests TEXT,
@@ -63,27 +64,6 @@ function database.initializeDatabase(): boolean
           FOREIGN KEY(provider_id) REFERENCES Providers(provider_id)
         );
       ]],
-      -- Verifiers DB Table
-      [[
-        CREATE TABLE IF NOT EXISTS Verifiers (
-          process_id TEXT PRIMARY KEY,
-          status TEXT NOT NULL,
-          current_segment TEXT
-        )
-      ]],
-      -- Verifier Segments DB Table
-      [[
-        CREATE TABLE IF NOT EXISTS VerifierSegments (
-          segment_id TEXT PRIMARY KEY,
-          proof_id TEXT NOT NULL,
-          verifier_id TEXT,
-          segment_data TEXT NOT NULL,
-          status TEXT NOT NULL,
-          timestamp INTEGER NOT NULL,
-          result TEXT,
-          FOREIGN KEY(verifier_id) REFERENCES Verifiers(process_id)
-        )
-      ]],
       [[
         CREATE TABLE IF NOT EXISTS RandomRequests (
           request_id TEXT PRIMARY KEY,
@@ -99,13 +79,14 @@ function database.initializeDatabase(): boolean
         );
       ]],
       [[
-        CREATE TABLE IF NOT EXISTS ProviderVDFResults (
+        CREATE TABLE IF NOT EXISTS ProviderTimelockPuzzles (
           request_id TEXT,                               
           provider_id TEXT,                              
           input_value TEXT,
           modulus_value TEXT,                       
-          output_value TEXT,                               
-          proof TEXT,         
+          output_value TEXT,  
+          p TEXT,
+          q TEXT,                             
           created_at INTEGER,                             
           PRIMARY KEY (request_id, provider_id),          
           FOREIGN KEY (request_id) REFERENCES RandomRequests(request_id)

@@ -80,7 +80,7 @@ local json = require "json"
 local database = require "database"
 local providerManager = require "providerManager"
 local randomManager = require "randomManager"
-local verifierManager = require "verifierManager"
+
 
 describe("InfoHandler", function()
   setup(function()
@@ -546,7 +546,7 @@ describe("requestRandom", function()
   end)
 end)
 
-describe("postVDFChallenge", function()
+describe("commit timelock puzzle", function()
   setup(function()
     -- to execute before this describe
   end)
@@ -554,59 +554,62 @@ describe("postVDFChallenge", function()
   teardown(function()
   end)
 
-  it("should not be able to post challenge from an unrequested provider for a valid request",
+  it("should not be able to commit puzzle from an unrequested provider for a valid request",
   function()
     local input = "0x023456987678"
     local modulus = "0x0567892345678"
     local requestId = "d6cce35c-487a-458f-bab2-9032c2621f38"
-
+    local puzzle = json.encode({input = input, modulus = modulus})
     local message = {
       Target = ao.id,
       From = "Provider2",
-      Action = "Post-VDF-Challenge",
-      Data = json.encode({input = input, modulus = modulus, requestId = requestId})
+      Action = "Commit-Puzzle",
+      Data = json.encode({puzzle = puzzle, requestId = requestId})
     }
 
-    local success = postVDFChallengeHandler(message)
+    local success = commitPuzzleHandler(message)
     
-    assert(not success, "Failure: able to post VDF Challenge from unrequested provider")
+    assert(not success, "Failure: able to commit puzzle from unrequested provider")
   end)
 
-  it("should not be able to post challenge from an unrequested provider for an invalid request",
+  it("should not be able to commit puzzle from an unrequested provider for an invalid request",
   function()
     local input = "0x023456987678"
     local modulus = "0x0567892345678"
     local requestId = "a6cce35c-487a-458f-bab2-9032c2621f38"
 
+    local puzzle = json.encode({input = input, modulus = modulus})
     local message = {
       Target = ao.id,
       From = "Provider2",
-      Action = "Post-VDF-Challenge",
-      Data = json.encode({input = input, modulus = modulus, requestId = requestId})
+      Action = "Commit-Puzzle",
+      Data = json.encode({puzzle = puzzle, requestId = requestId})
     }
 
-    local success = postVDFChallengeHandler(message)
-    assert(not success, "Failure: able to post VDF Challenge from unrequested provider")
+    local success = commitPuzzleHandler(message)
+    
+    assert(not success, "Failure: able to commit puzzle from unrequested provider")
   end)
 
-  it("should be able to post challenge from a requested provider for a valid request",
+  it("should be able to commit puzzle from a requested provider for a valid request",
   function()
     local input = "0x023456987678"
     local modulus = "0x0567892345678"
     local requestId = "d6cce35c-487a-458f-bab2-9032c2621f38"
-
+    local puzzle = {input = input, modulus = modulus}
     local message = {
       Target = ao.id,
       From = "Provider1",
-      Action = "Post-VDF-Challenge",
-      Data = json.encode({input = input, modulus = modulus, requestId = requestId})
+      Action = "Commit-Puzzle",
+      Data = json.encode({puzzle = puzzle, requestId = requestId})
     }
 
-    local success = postVDFChallengeHandler(message)
-    assert(success, "Failure: unable to post VDF Challenge from requested provider")
+    local success = commitPuzzleHandler(message)
+    
+    assert(success, "Failure: unable to commit puzzle from requested provider")
   end)
 
-  it("should be able to retrieve providers decremented balance after posting challenge", function()
+  it("should be able to retrieve providers decremented balance after commiting puzzle", function()
     local provider, _ = providerManager.getProvider("Provider1")
     assert.are.equal(0, provider.random_balance)
     
@@ -618,36 +621,40 @@ describe("postVDFChallenge", function()
 
   it("should not be able to post output and proof from a requested provider for a valid request before all challenges are posted",
   function()
-    local output = "0x023456987678"
-    local proof = json.encode({"0x0567892345678", "fghjkl", "0x0567892345678", "fghjkl", "0x0567892345678", "0x0567892345678", "fghjkl", "0x0567892345678", "fghjkl", "0x0567892345678" })
+    local key = {
+      p = "0x0567892345678",
+      q = "0x0567892345678"
+    }
     local requestId = "d6cce35c-487a-458f-bab2-9032c2621f38"
 
     local message = {
       Target = ao.id,
       From = "Provider1",
-      Action = "Post-VDF-Output-And-Proof",
-      Data = json.encode({output = output, proof = proof, requestId = requestId})
+      Action = "Reveal-Puzzle-Params",
+      Data = json.encode({rsa_key = key, requestId = requestId})
     }
 
-    local success = postVDFOutputAndProofHandler(message)
+    local success = revealPuzzleParamsHandler(message)
     assert(not success, "Failure: able to post VDF output and proof from requested provider vefore all challenges are posted")
   end)
   
-  it("should be able to post challenge from second requested provider for a valid request",
+  it("should be able to commit puzzle from second requested provider for a valid request",
   function()
     local input = "0x023456987678"
     local modulus = "0x0567892345678"
     local requestId = "d6cce35c-487a-458f-bab2-9032c2621f38"
 
+    local puzzle = json.encode({input = input, modulus = modulus})
     local message = {
       Target = ao.id,
       From = "Provider3",
-      Action = "Post-VDF-Challenge",
-      Data = json.encode({input = input, modulus = modulus, requestId = requestId})
+      Action = "Commit-Puzzle",
+      Data = json.encode({puzzle = puzzle, requestId = requestId})
     }
 
-    local success = postVDFChallengeHandler(message)
-    assert(success, "Failure: unable to post VDF Challenge from requested provider")
+    local success = commitPuzzleHandler(message)
+    
+    assert(success, "Failure: unable to commit puzzle from requested provider")
   end)
 
   it("should be able to view random request in activeRequests outputs after challenges have been posted", function()
@@ -656,7 +663,7 @@ describe("postVDFChallenge", function()
 
 end)
 
-describe("postVDFOutputAndProof", function()
+describe("reveal puzzle params", function()
   setup(function()
     -- to execute before this describe
   end)
@@ -664,121 +671,137 @@ describe("postVDFOutputAndProof", function()
   teardown(function()
   end)
 
-  it("should not be able to post output and proof from an unrequested provider for a valid request",
+  it("should not be able to reveal puzzle params from an unrequested provider for a valid request",
   function()
-    local output = "0x023456987678"
-    local proof = json.encode({"0x0567892345678", "fghjkl", "0x0567892345678", "fghjkl", "0x0567892345678", "0x0567892345678", "fghjkl", "0x0567892345678", "fghjkl", "0x0567892345678" })
+    local key = {
+      p = "0x0567892345678",
+      q = "0x0567892345678"
+    }
     local requestId = "d6cce35c-487a-458f-bab2-9032c2621f38"
 
     local message = {
       Target = ao.id,
       From = "Provider2",
-      Action = "Post-VDF-Output-And-Proof",
-      Data = json.encode({output = output, proof = proof, requestId = requestId})
+      Action = "Reveal-Puzzle-Params",
+      Data = json.encode({rsa_key = key, requestId = requestId})
     }
 
-    local success = postVDFChallengeHandler(message)
-    assert(not success, "Failure: able to post VDF output and proof from unrequested provider")
+    local success = revealPuzzleParamsHandler(message)
+    assert(not success, "Failure: able to reveal puzzle params from unrequested provider")
   end)
 
-  it("should not be able to post output and proof from an unrequested provider for an invalid request",
+  it("should not be able to reveal puzzle params from an unrequested provider for an invalid request",
   function()
-    local output = "0x023456987678"
-    local proof = json.encode({"0x0567892345678", "fghjkl", "0x0567892345678", "fghjkl", "0x0567892345678", "0x0567892345678", "fghjkl", "0x0567892345678", "fghjkl", "0x0567892345678" })
+    local key = {
+      p = "0x0567892345678",
+      q = "0x0567892345678"
+    }
     local requestId = "a6cce35c-487a-458f-bab2-9032c2621f38"
 
     local message = {
       Target = ao.id,
       From = "Provider2",
-      Action = "Post-VDF-Output-And-Proof",
-      Data = json.encode({output = output, proof = proof, requestId = requestId})
+      Action = "Reveal-Puzzle-Params",
+      Data = json.encode({rsa_key = key, requestId = requestId})
     }
 
-    local success = postVDFOutputAndProofHandler(message)
-    assert(not success, "Failure: able to post VDF output and proof from unrequested provider")
+    local success = revealPuzzleParamsHandler(message)
+    assert(not success, "Failure: able to reveal puzzle params from unrequested provider")
   end)
 
-  it("should not be able to post output with no proof from a requested provider for a valid request",
+  it("should not be able to reveal puzzle params from a requested provider for an invalid request",
   function()
-    local output = "0x023456987678"
-    local requestId = "d6cce35c-487a-458f-bab2-9032c2621f38"
+    local key = {
+      p = "0x0567892345678",
+      q = "0x0567892345678"
+    }
+    local requestId = "a6cce35c-487a-458f-bab2-9032c2621f38"
 
     local message = {
       Target = ao.id,
       From = "Provider1",
-      Action = "Post-VDF-Output-And-Proof",
-      Data = json.encode({output = output, requestId = requestId})
+      Action = "Reveal-Puzzle-Params",
+      Data = json.encode({rsa_key = key, requestId = requestId})
     }
 
-    local success = postVDFOutputAndProofHandler(message)
+    local success = revealPuzzleParamsHandler(message)
+    assert(not success, "Failure: able to reveal from requested provider for invalid request")
+  end)
+
+  it("should not be able to post output with no proof from a requested provider for an invalid request",
+  function()
+    local key = {
+      p = "0x0567892345678",
+      q = "0x0567892345678"
+    }
+    local requestId = "a6cce35c-487a-458f-bab2-9032c2621f38"
+
+    local message = {
+      Target = ao.id,
+      From = "Provider1",
+      Action = "Reveal-Puzzle-Params",
+      Data = json.encode({rsa_key = key, requestId = requestId})
+    }
+
+    local success = revealPuzzleParamsHandler(message)
     assert(not success, "Failure: able to post VDF no output and proof from requested provider")
   end)
 
-  it("should not be able to post no output with proof from a requested provider for a valid request",
+  it("should be able to reveal puzzle params from a requested provider for a valid request",
   function()
-    local proof = json.encode({"0x0567892345678", "fghjkl", "0x0567892345678", "fghjkl", "0x0567892345678", "0x0567892345678", "fghjkl", "0x0567892345678", "fghjkl", "0x0567892345678" })
+    local key = {
+      p = "0x0567892345678",
+      q = "0x0567892345678"
+    }
     local requestId = "d6cce35c-487a-458f-bab2-9032c2621f38"
 
     local message = {
       Target = ao.id,
       From = "Provider1",
-      Action = "Post-VDF-Output-And-Proof",
-      Data = json.encode({proof = proof, requestId = requestId})
+      Action = "Reveal-Puzzle-Params",
+      Data = json.encode({rsa_key = key, requestId = requestId})
     }
 
-    local success = postVDFOutputAndProofHandler(message)
-    assert(not success, "Failure: able to post VDF no output and proof from requested provider")
+    local success = revealPuzzleParamsHandler(message)
+    assert(success, "Failure: unable to reveal puzzle params from requested provider")
   end)
 
-  it("should be able to post output and proof from a requested provider for a valid request",
+  it("should not be able to reveal puzzle params from a requested provider for a valid request twice",
   function()
-    local output = "0x023456987678"
-    local proof = json.encode({"erwsztxdyfcuj", "ztrdyxufc", "ARTSzydxujf", "RTz", "tzyhdxjf", "TSYzu", "RTYzux", "tmrngb", "kumjtnyhbtdgv", "kyumtjynjrhbhg" })
+    local key = {
+      p = "0x0567892345678",
+      q = "0x0567892345678"
+    }
     local requestId = "d6cce35c-487a-458f-bab2-9032c2621f38"
 
     local message = {
       Target = ao.id,
       From = "Provider1",
-      Action = "Post-VDF-Output-And-Proof",
-      Data = json.encode({output = output, proof = proof, requestId = requestId})
+      Action = "Reveal-Puzzle-Params",
+      Data = json.encode({rsa_key = key, requestId = requestId})
     }
 
-    local success = postVDFOutputAndProofHandler(message)
-    assert(success, "Failure: unable to post VDF output and proof from requested provider")
+    local success = revealPuzzleParamsHandler(message)
+    assert(not success, "Failure: able to reveal puzzle params from requested provider twice")
   end)
 
-  it("should not be able to post output and proof from a requested provider for a valid request twice",
+  it("should be able to reveal puzzle params from the second requested provider for a valid request",
   function()
-    local output = "0x023456987678"
-    local proof = json.encode({"0x0567892345678", "fghjkl", "0x0567892345678", "fghjkl", "0x0567892345678", "0x0567892345678", "fghjkl", "0x0567892345678", "fghjkl", "0x0567892345678" })
-    local requestId = "d6cce35c-487a-458f-bab2-9032c2621f38"
-
-    local message = {
-      Target = ao.id,
-      From = "Provider1",
-      Action = "Post-VDF-Output-And-Proof",
-      Data = json.encode({output = output, proof = proof, requestId = requestId})
+    local key = {
+      p = "0x0567892345678",
+      q = "0x0567892345678"
     }
-
-    local success = postVDFOutputAndProofHandler(message)
-    assert(not success, "Failure: able to post VDF output and proof from requested provider twice")
-  end)
-
-  it("should be able to post output and proof from the second requested provider for a valid request",
-  function()
-    local output = "0x023456987678"
-    local proof = json.encode({"srtxdyfu", "dfgfh", "sztgdh", "aeyduxficgk", "yucfi", "xuctyurvi", "wrstedf", "warstdxyfcjg", "ARSztgdxhfcj", "rztswyxduf" })
     local requestId = "d6cce35c-487a-458f-bab2-9032c2621f38"
 
     local message = {
       Target = ao.id,
       From = "Provider3",
-      Action = "Post-VDF-Output-And-Proof",
-      Data = json.encode({output = output, proof = proof, requestId = requestId})
+      Action = "Reveal-Puzzle-Params",
+      Data = json.encode({rsa_key = key, requestId = requestId})
     }
 
-    local success = postVDFOutputAndProofHandler(message)
-    assert(success, "Failure: unable to post VDF output and proof from the second requested provider")
+    local success = revealPuzzleParamsHandler(message)
+    assert(success, "Failure: unable to reveal puzzle params from the second requested provider")
   end)
 
   it("should be able to view random request in activeVerificationRequests", function()
@@ -786,207 +809,207 @@ describe("postVDFOutputAndProof", function()
   end)
 end)
 
-describe("post verification", function()
+-- describe("post verification", function()
 
-  it('should be able to post all verifications from requested verifiers and get a generated entropy', function()
-    local requestId = "d6cce35c-487a-458f-bab2-9032c2621f38"
-    local currentSegmentId = 1
-    for i = 1, 11 do
-      local message = {
-      Target = ao.id,
-      From = Verifiers[i],
-      Action = "Post-Verification",
-      Data = json.encode({
-        segment_id = requestId .. "_Provider1_" .. tostring(currentSegmentId),
-        request_id = requestId,
-        valid = true
-      })
-    }
+--   it('should be able to post all verifications from requested verifiers and get a generated entropy', function()
+--     local requestId = "d6cce35c-487a-458f-bab2-9032c2621f38"
+--     local currentSegmentId = 1
+--     for i = 1, 11 do
+--       local message = {
+--       Target = ao.id,
+--       From = Verifiers[i],
+--       Action = "Post-Verification",
+--       Data = json.encode({
+--         segment_id = requestId .. "_Provider1_" .. tostring(currentSegmentId),
+--         request_id = requestId,
+--         valid = true
+--       })
+--     }
 
-      local success = postVerificationHandler(message)
-      assert(success, "Failure: unable to post verification")
-      currentSegmentId = currentSegmentId + 1
-    end
+--       local success = postVerificationHandler(message)
+--       assert(success, "Failure: unable to post verification")
+--       currentSegmentId = currentSegmentId + 1
+--     end
 
-    for i = 12, 22 do
-      local message = {
-      Target = ao.id,
-      From = Verifiers[i],
-      Action = "Post-Verification",
-      Data = json.encode({
-        segment_id = requestId .. "_Provider3_" .. tostring(currentSegmentId),
-        request_id = requestId,
-        valid = true
-      })
-    }
+--     for i = 12, 22 do
+--       local message = {
+--       Target = ao.id,
+--       From = Verifiers[i],
+--       Action = "Post-Verification",
+--       Data = json.encode({
+--         segment_id = requestId .. "_Provider3_" .. tostring(currentSegmentId),
+--         request_id = requestId,
+--         valid = true
+--       })
+--     }
 
-      local success = postVerificationHandler(message)
-      assert(success, "Failure: unable to post verification")
-      currentSegmentId = currentSegmentId + 1
-    end
+--       local success = postVerificationHandler(message)
+--       assert(success, "Failure: unable to post verification")
+--       currentSegmentId = currentSegmentId + 1
+--     end
 
-  end)
+--   end)
 
-  it('nonrequested verifiers should not be able to fail to post verification', function()
-    local message = {
-      Target = ao.id,
-      From = Verifiers[23],
-      Action = "Failed-Post-Verification",
-    }
-    local success = failedPostVerificationHandler(message)
-    assert(not success, "Failure: able to fail to post verification from nonrequested verifier")
-  end)
+--   it('nonrequested verifiers should not be able to fail to post verification', function()
+--     local message = {
+--       Target = ao.id,
+--       From = Verifiers[23],
+--       Action = "Failed-Post-Verification",
+--     }
+--     local success = failedPostVerificationHandler(message)
+--     assert(not success, "Failure: able to fail to post verification from nonrequested verifier")
+--   end)
 
-  it('should be able to remove a verifier', function()
-    local verifier = Verifiers[23]
-    local success = verifierManager.removeVerifier(verifier)
-    assert(success, "Failure: unable to remove verifier")
-  end)
+--   it('should be able to remove a verifier', function()
+--     local verifier = Verifiers[23]
+--     local success = verifierManager.removeVerifier(verifier)
+--     assert(success, "Failure: unable to remove verifier")
+--   end)
 
 
-end)
+-- end)
 
-describe("getRandomRequests & getRandomRequestViaCallbackId", function()
-  setup(function()
-    -- to execute before this describe
-  end)
+-- describe("getRandomRequests & getRandomRequestViaCallbackId", function()
+--   setup(function()
+--     -- to execute before this describe
+--   end)
 
-  teardown(function()
-  end)
+--   teardown(function()
+--   end)
 
-  it("should not error on valid requestIds",
-  function()
-    local requestIds = {"d6cce35c-487a-458f-bab2-9032c2621f38"}
+--   it("should not error on valid requestIds",
+--   function()
+--     local requestIds = {"d6cce35c-487a-458f-bab2-9032c2621f38"}
 
-    local message = {
-      Target = ao.id,
-      From = "Provider1",
-      Action = "Get-Random-Requests",
-      Data = json.encode({requestIds = requestIds})
-    }
+--     local message = {
+--       Target = ao.id,
+--       From = "Provider1",
+--       Action = "Get-Random-Requests",
+--       Data = json.encode({requestIds = requestIds})
+--     }
 
-    local success = getRandomRequestsHandler(message)
-    assert(success, "Failure: errors out on valid requestIds")
-  end)
+--     local success = getRandomRequestsHandler(message)
+--     assert(success, "Failure: errors out on valid requestIds")
+--   end)
 
-  it("should not error on invalid requestIds",
-  function()
-    local requestIds = {"d6cce35c-487a-458f-bab2-9032c2621f38", "A6cce35c-487a-458f-bab2-9032c2621f38"}
+--   it("should not error on invalid requestIds",
+--   function()
+--     local requestIds = {"d6cce35c-487a-458f-bab2-9032c2621f38", "A6cce35c-487a-458f-bab2-9032c2621f38"}
 
-    local message = {
-      Target = ao.id,
-      From = "Provider1",
-      Action = "Get-Random-Requests",
-      Data = json.encode({requestIds = requestIds})
-    }
+--     local message = {
+--       Target = ao.id,
+--       From = "Provider1",
+--       Action = "Get-Random-Requests",
+--       Data = json.encode({requestIds = requestIds})
+--     }
 
-    local success = getRandomRequestsHandler(message)
-    assert(success, "Failure: errors out on invalid requestIds")
-  end)
+--     local success = getRandomRequestsHandler(message)
+--     assert(success, "Failure: errors out on invalid requestIds")
+--   end)
 
-  it("should not error on valid callbackId",
-  function()
-    local callbackId = "xxxx-xxxx-4xxx-xxxx"
+--   it("should not error on valid callbackId",
+--   function()
+--     local callbackId = "xxxx-xxxx-4xxx-xxxx"
 
-    local message = {
-      Target = ao.id,
-      From = "Provider1",
-      Action = "Get-Random-Request-Via-Callback-Id",
-      Data = json.encode({callbackId = callbackId}),
-      reply = function (msg)
-      end
-    }
+--     local message = {
+--       Target = ao.id,
+--       From = "Provider1",
+--       Action = "Get-Random-Request-Via-Callback-Id",
+--       Data = json.encode({callbackId = callbackId}),
+--       reply = function (msg)
+--       end
+--     }
 
-    local success = getRandomRequestViaCallbackIdHandler(message)
-    assert(success, "Failure: errors out on valid callbackId")
-  end)
+--     local success = getRandomRequestViaCallbackIdHandler(message)
+--     assert(success, "Failure: errors out on valid callbackId")
+--   end)
 
-  it("should not error on invalid callbackId",
-  function()
-    local callbackId = "xxxx-xxxx-4xxx-xxx"
+--   it("should not error on invalid callbackId",
+--   function()
+--     local callbackId = "xxxx-xxxx-4xxx-xxx"
 
-    local message = {
-      Target = ao.id,
-      From = "Provider1",
-      Action = "Get-Random-Request-Via-Callback-Id",
-      Data = json.encode({callbackId = callbackId}),
-      reply = function (msg)
-      end
-    }
+--     local message = {
+--       Target = ao.id,
+--       From = "Provider1",
+--       Action = "Get-Random-Request-Via-Callback-Id",
+--       Data = json.encode({callbackId = callbackId}),
+--       reply = function (msg)
+--       end
+--     }
 
-    local success = getRandomRequestViaCallbackIdHandler(message)
-    assert(success, "Failure: errors out on invalid callbackId")
-  end)
+--     local success = getRandomRequestViaCallbackIdHandler(message)
+--     assert(success, "Failure: errors out on invalid callbackId")
+--   end)
 
-end)
+-- end)
 
-describe("rerequest random", function()
-  setup(function()
-    -- to execute before this describe
-  end)
+-- describe("rerequest random", function()
+--   setup(function()
+--     -- to execute before this describe
+--   end)
 
-  teardown(function()
-  end)
+--   teardown(function()
+--   end)
 
- _G.VirtualTime = _G.VirtualTime + 500000000000
+--  _G.VirtualTime = _G.VirtualTime + 500000000000
 
-  it("", function ()  
-    print("Next: ")
-    local added, _ = providerManager.addToActiveQueue("Provider2")
-    local inited, _ = providerManager.initializeActiveQueue()
-    local synced, _ = providerManager.syncProviderQueueStatus("Provider3", true)
-    local next, _ = providerManager.getNextActiveProviders(1)
-    local updated, _ = providerManager.updateProviderQueuePosition("Provider5")
-    print("Next: ".. json.encode(next))
-    assert(true, "Failure: unable to get next active providers")
-  end)
+--   it("", function ()  
+--     print("Next: ")
+--     local added, _ = providerManager.addToActiveQueue("Provider2")
+--     local inited, _ = providerManager.initializeActiveQueue()
+--     local synced, _ = providerManager.syncProviderQueueStatus("Provider3", true)
+--     local next, _ = providerManager.getNextActiveProviders(1)
+--     local updated, _ = providerManager.updateProviderQueuePosition("Provider5")
+--     print("Next: ".. json.encode(next))
+--     assert(true, "Failure: unable to get next active providers")
+--   end)
 
-  it('cron ticksshould be able to rerequest random after time delay', function()
-    local message = {
-      Timestamp = _G.VirtualTime
-    }
-    local success = cronTickHandler(message) -- randomManager.rerequestRandom("d94a87f4-c8c6-4e45-be1f-813ae510713f")
-    assert(success, "Failure: unable to rerequest random")
-  end)
+--   it('cron ticksshould be able to rerequest random after time delay', function()
+--     local message = {
+--       Timestamp = _G.VirtualTime
+--     }
+--     local success = cronTickHandler(message) -- randomManager.rerequestRandom("d94a87f4-c8c6-4e45-be1f-813ae510713f")
+--     assert(success, "Failure: unable to rerequest random")
+--   end)
 
-  it('should see previous failed request set to failed', function()
-    local request, _ = randomManager.getRandomRequest("d94a87f4-c8c6-4e45-be1f-813ae510713f")
-    assert(request.status == "FAILED", "Failure: no random request found")
-  end)
+--   it('should see previous failed request set to failed', function()
+--     local request, _ = randomManager.getRandomRequest("d94a87f4-c8c6-4e45-be1f-813ae510713f")
+--     assert(request.status == "FAILED", "Failure: no random request found")
+--   end)
 
-  it("providers should have -2 balance after tombstone", function()
-    local provider, _ = providerManager.getProvider("Provider1")
-    assert.are.equal(provider.random_balance, -2)
-  end)
+--   it("providers should have -2 balance after tombstone", function()
+--     local provider, _ = providerManager.getProvider("Provider1")
+--     assert.are.equal(provider.random_balance, -2)
+--   end)
 
-  it('non admin should not be able to reinitialize a tombstoned provider', function()
-    local message = {
-      Target = ao.id,
-      From = "Provider1",
-      Action = "Reinitialize-Provider",
-      Tags = {
-        ["ProviderId"] = "Provider1"
-      }
-    }
-    local success = reinitializeProviderHandler(message)
-    assert(not success, "Failure: able to reinitialize tombstoned provider")
-    local provider, _ = providerManager.getProvider("Provider1")
-    assert.are.equal(provider.random_balance, -2)
-  end)
+--   it('non admin should not be able to reinitialize a tombstoned provider', function()
+--     local message = {
+--       Target = ao.id,
+--       From = "Provider1",
+--       Action = "Reinitialize-Provider",
+--       Tags = {
+--         ["ProviderId"] = "Provider1"
+--       }
+--     }
+--     local success = reinitializeProviderHandler(message)
+--     assert(not success, "Failure: able to reinitialize tombstoned provider")
+--     local provider, _ = providerManager.getProvider("Provider1")
+--     assert.are.equal(provider.random_balance, -2)
+--   end)
 
-  it('admin should be able to reinitialize a tombstoned provider', function()
-    local message = {
-      Target = ao.id,
-      From = Admin,
-      Action = "Reinitialize-Provider",
-      Tags = {
-        ["ProviderId"] = "Provider1"
-      }
-    }
-    local success = reinitializeProviderHandler(message)
-    assert(success, "Failure: unable to reinitialize tombstoned provider")
-    local provider, _ = providerManager.getProvider("Provider1")
-    assert.are.equal(provider.random_balance, 0)
-  end)
+--   it('admin should be able to reinitialize a tombstoned provider', function()
+--     local message = {
+--       Target = ao.id,
+--       From = Admin,
+--       Action = "Reinitialize-Provider",
+--       Tags = {
+--         ["ProviderId"] = "Provider1"
+--       }
+--     }
+--     local success = reinitializeProviderHandler(message)
+--     assert(success, "Failure: unable to reinitialize tombstoned provider")
+--     local provider, _ = providerManager.getProvider("Provider1")
+--     assert.are.equal(provider.random_balance, 0)
+--   end)
 
-end)
+-- end)

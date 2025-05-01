@@ -2,19 +2,23 @@ require "globals"
 local json            = require "json"
 local dbUtils         = require "dbUtils"
 local providerManager = require "providerManager"
-local verifierManager = require "verifierManager"
 
 -- Type definitions
-global record ProviderVDFResult
-  request_id: string
-  provider_id: string
-  input_value: string
-  modulus_value: string
-  output_value: string
-  proof: string
-  created_at: integer
+global record Key
+  p: string
+  q: string
 end
- 
+
+global record Puzzle
+  input: string
+  modulus: string
+end
+
+global record PhiResult
+  phi: string
+  n: string
+end
+
 global record RandomRequest
     request_id: string
     requester: string
@@ -39,8 +43,19 @@ global record RequestedInputs
   requested_inputs: integer
 end
 
-global record ProviderVDFResults
-  requestResponses: {ProviderVDFResult}
+global record ProviderTimelockPuzzles
+  requestResponses: {ProviderTimelockPuzzle}
+end
+
+global record ProviderTimelockPuzzle
+  request_id: string
+  provider_id: string
+  input_value: string
+  modulus_value: string
+  output_value: string
+  p: string
+  q: string
+  created_at: integer
 end
 
 global record RandomResponseResponse 
@@ -115,25 +130,24 @@ function randomManager.updateRandomRequestStatus(requestId: string, newStatus: s
   return true, ""
 end
 
-function randomManager.getVDFResults(requestId: string): ProviderVDFResults, string
-  print("entered randomManager.getVDFResults")
+function randomManager.getTimelockPuzzles(requestId: string): ProviderTimelockPuzzles, string
+  print("entered randomManager.getTimelockPuzzles")
   
-  local stmt = DB:prepare("SELECT * FROM ProviderVDFResults WHERE request_id = :request_id")
+  local stmt = DB:prepare("SELECT * FROM ProviderTimelockPuzzles WHERE request_id = :request_id")
   stmt:bind_names({request_id = requestId})  
   local queryResult = dbUtils.queryMany(stmt)
-
-  local result: ProviderVDFResults = { 
+  local result: ProviderTimelockPuzzles = { 
     requestResponses = {}
   }
 
   for _, response in ipairs(queryResult) do
-    table.insert(result.requestResponses, response as ProviderVDFResult)
+    table.insert(result.requestResponses, response as ProviderTimelockPuzzle)
   end
 
   if result then
     return result, ""
   else
-    return {} as ProviderVDFResults, "RandomRequest not found"
+    return {} as ProviderTimelockPuzzles, "RandomRequest not found"
   end
 end
 
@@ -160,13 +174,13 @@ end
 
 function randomManager.trimProviders(requestId: string): boolean, string
   print("Entered randomManager.trimProviders")
-  local vdfResults = randomManager.getVDFResults(requestId)
+  local timelockPuzzles = randomManager.getTimelockPuzzles(requestId)
   local trimmedProviders: ProviderList = {
     provider_ids = {}
   }
 
-  for _, providerVDFResult in ipairs(vdfResults.requestResponses) do
-    table.insert(trimmedProviders.provider_ids, providerVDFResult.provider_id)
+  for _, providerTimelockPuzzle in ipairs(timelockPuzzles.requestResponses) do
+    table.insert(trimmedProviders.provider_ids, providerTimelockPuzzle.provider_id)
   end
 
   print("TRIMMED PROVIDERS: " .. json.encode(trimmedProviders))
@@ -176,6 +190,61 @@ function randomManager.trimProviders(requestId: string): boolean, string
     return false, err
   end
 
+  return true, ""
+end
+
+-- Remove a verifier from the database
+function randomManager.trimDatabase(requestId: string): boolean, string
+  print("entered randomManager.trimDatabase")
+  
+  if not DB then
+    --print("Database connection not initialized")
+    return false, "Database connection is not initialized"
+  end
+  
+  local stmt = DB:prepare([[
+    DELETE FROM RandomRequests
+    WHERE request_id = :request_id
+  ]])
+
+
+  local stmt2 = DB:prepare([[
+    DELETE FROM ProviderTimelockPuzzles
+    WHERE request_id = :request_id
+  ]])
+  
+  if not stmt then
+    return false, "Failed to prepare statement: " .. DB:errmsg()
+  end
+  
+  if not stmt2 then
+    return false, "Failed to prepare statement: " .. DB:errmsg()
+  end
+  
+  local ok = false
+  ok = pcall(function()
+    stmt:bind_names({request_id = requestId})
+  end)
+
+  ok = pcall(function()
+    stmt2:bind_names({request_id = requestId})
+  end)
+  
+  if not ok then
+    return false, "Failed to bind parameters"
+  end
+  
+  local exec_ok, exec_err = dbUtils.execute(stmt, "Removed random request")
+  if not exec_ok then
+    return false, exec_err
+  end
+
+
+  local exec_2_ok, exec_2_err = dbUtils.execute(stmt2, "Removed random request")
+  if not exec_2_ok then
+    return false, exec_2_err
+  end
+  
   return true, ""
 end
 
@@ -266,45 +335,26 @@ function randomManager.getRandomRequest(requestId: string): RandomRequest, strin
   end
 end
 
--- TODO : Refactor with hashing instead of XOR
 function randomManager.processEntropy(requestId: string): string, string
   print("entered randomManager.processEntropy")
   
-  local results, err = randomManager.getVDFResults(requestId)
+  local results, err = randomManager.getTimelockPuzzles(requestId)
   if err ~= "" then
     print("Failed to get VDF results: " .. err)
     return "", err
   end
 
-  local providers, providerErr = randomManager.getRandomProviderList(requestId)
-  if providerErr ~= "" then
-    print("Failed to get random request providers: " .. providerErr)
-    return "", providerErr
+  results = results as ProviderTimelockPuzzles
+
+  local componentEntropy = {}
+
+  for _, result in ipairs(results.requestResponses) do
+    table.insert(componentEntropy, result.output_value)
   end
+  print("Component entropy: " .. json.encode(componentEntropy))
 
-  results = results as ProviderVDFResults
-
-  local mixed: number = 0
-
-  for _, response in ipairs(results.requestResponses) do
-    local found = false
-    for _, id in ipairs(providers.provider_ids) do
-      if response.provider_id == id then
-        if mixed == 0 then
-          mixed = tonumber(response.output_value)
-        else
-          local value = tonumber(response.output_value)
-          mixed = (mixed ~ (value >> 32) ~ (value & 0xFFFFFFFF))
-          -- Combine with a prime multiplier and modulus to reduce overflow
-          mixed = (mixed * 0x5bd1e995 + value) % (2^31 - 1)
-        end
-        found = true
-        break
-      end
-    end
-  end 
-
-  local entropy = tostring(math.floor(mixed)) -- Convert to string representation of the mixed value
+  local entropy = entropy_hash_luaint(componentEntropy)
+  print("Data received from hashing service")
   print("Request " .. requestId .. " entropy: " .. entropy)
   
   -- Update request with entropy
@@ -327,6 +377,8 @@ function randomManager.processEntropy(requestId: string): string, string
 
   print("Random request entropy updated successfully to: " .. entropy)
   
+  randomManager.trimDatabase(requestId)
+
   return entropy, ""
 end
 
@@ -492,7 +544,7 @@ function randomManager.decrementRequestedInputs(requestId: string): boolean, str
       elseif status == Status[2] then
         print("Random request finished collecting outputs")
         local providerList  = randomManager.getRandomProviderList(requestId) as ProviderList
-        local requestedValue = #providerList.provider_ids * 11
+        local requestedValue = #providerList.provider_ids
         randomManager.resetRandomRequestRequestedInputs(requestId, requestedValue) -- multiply this number by segment count TODO non hardcode
         randomManager.updateRandomRequestStatus(requestId, Status[3])
 
@@ -529,16 +581,16 @@ function randomManager.getRandomRequestViaCallbackId(callbackId: string): Random
   end
 end
 
-function randomManager.getVDFResult(requestId: string, providerId: string): ProviderVDFResult, string
-  print("entered randomManager.getVDFResult")
+function randomManager.getTimelockPuzzle(requestId: string, providerId: string): ProviderTimelockPuzzle, string
+  print("entered randomManager.getTimelockPuzzle")
   
-  local stmt = DB:prepare("SELECT * FROM ProviderVDFResults WHERE request_id = :request_id AND provider_id = :provider_id")
+  local stmt = DB:prepare("SELECT * FROM ProviderTimelockPuzzles WHERE request_id = :request_id AND provider_id = :provider_id")
   stmt:bind_names({request_id = requestId, provider_id = providerId})  
   local result = dbUtils.queryOne(stmt)
   if result then
-    return result as ProviderVDFResult, ""
+    return result as ProviderTimelockPuzzle, ""
   else
-    return {} as ProviderVDFResult, "RandomRequest not found"
+    return {} as ProviderTimelockPuzzle, "RandomRequest not found"
   end
 end
 
@@ -565,6 +617,17 @@ function randomManager.getRoundRobinProviders(count: integer): string, string
   return json.encode(providerList), ""
 end
 
+function randomManager.hasRandomBalance(userId: string): boolean, string
+  print("entered randomManager.hasRandomBalance")
+
+  local provider, err = providerManager.getProvider(userId)
+  if err ~= "" then
+    return false, err
+  end
+
+  return provider.random_balance > 0, ""
+end
+
 function randomManager.createRandomRequest(userId: string, providers: string, callbackId: string, requestedInputs: string, useRoundRobin: boolean): boolean, string
   print("entered randomManager.createRandomRequest")
 
@@ -584,7 +647,7 @@ function randomManager.createRandomRequest(userId: string, providers: string, ca
   local staked = true
 
   for _, providerId in ipairs(providerList.provider_ids) do
-    local activeProvider, _ = providerManager.isActiveProvider(providerId)
+    local activeProvider, _ = randomManager.hasRandomBalance(providerId)
     if not activeProvider then
       staked = false
       break
@@ -684,8 +747,8 @@ function randomManager.nextStationRequest()
   randomManager.createRandomRequest(ao.id, nil, "", "", true)
 end
 
-function randomManager.postVDFChallenge(userId: string, requestId: string, inputValue: string, modulusValue: string): boolean, string
-  print("entered randomManager.postVDFChallenge")
+function randomManager.commitPuzzle(userId: string, requestId: string, puzzle: Puzzle): boolean, string
+  print("entered randomManager.commitPuzzle")
 
   local timestamp = os.time()
 
@@ -696,7 +759,7 @@ function randomManager.postVDFChallenge(userId: string, requestId: string, input
 
   print("Preparing SQL statement for provider request response creation")
   local stmt = DB:prepare([[
-    INSERT OR IGNORE INTO ProviderVDFResults (request_id, provider_id, input_value, modulus_value, created_at)
+    INSERT OR IGNORE INTO ProviderTimelockPuzzles (request_id, provider_id, input_value, modulus_value, created_at)
     VALUES (:request_id, :provider_id, :input_value, :modulus_value, :created_at);
   ]])
   
@@ -707,7 +770,7 @@ function randomManager.postVDFChallenge(userId: string, requestId: string, input
   
   print("Binding parameters for provider request response creation")
   local bind_ok, bind_err = pcall(function(): string
-    stmt:bind_names({request_id = requestId, provider_id = userId, input_value = inputValue, modulus_value = modulusValue, created_at = timestamp})
+    stmt:bind_names({request_id = requestId, provider_id = userId, input_value = puzzle.input, modulus_value = puzzle.modulus, created_at = timestamp})
   end)
   
   if not bind_ok then
@@ -728,8 +791,69 @@ function randomManager.postVDFChallenge(userId: string, requestId: string, input
   return execute_ok, execute_err
 end
 
-function randomManager.postVDFOutputAndProof(userId: string, requestId: string, outputValue: string, proof: string): boolean, string
-  print("entered randomManager.postVDFOutputAndProof")
+function randomManager.updateOutput(requestId: string, providerId: string, newOutput: string): boolean, string
+  print("Entered randomManager.updateOutput")
+
+  local stmt = DB:prepare([[
+    UPDATE ProviderTimelockPuzzles
+    SET output_value = :output
+    WHERE request_id = :request_id
+    AND provider_id = :provider_id;
+  ]])
+  if not stmt then
+     return false, "Failed to prepare statement: " .. DB:errmsg()
+  end
+  stmt:bind_names({ output = newOutput, request_id = requestId, provider_id = providerId })
+  local execute_ok, execute_err = dbUtils.execute(stmt, "Update random request output")
+  if not execute_ok then
+     return false, "Failed to update random request output: " .. tostring(execute_err)
+  end
+
+  print("Random request output updated successfully to: " .. newOutput)
+  return true, ""
+end
+
+function randomManager.processTimelockPuzzle(requestId: string, input: string, modulus: string, p: string, q: string, providerId: string): boolean, string
+  print("entered randomManager.processTimelockPuzzle")
+
+  local phi = ""
+  local n = ""
+  local phiResult = compute_phi_and_n(p, q) as PhiResult
+
+  if phiResult then
+    phi = phiResult.phi
+    n = phiResult.n
+    print("phi(N):" .. phi)
+    print("N = p * q:" .. n)
+  else
+    print("Failed to compute phi and n.")
+    return false
+  end
+
+  if modulus ~= n then
+    print("N != p * q")
+    return false
+  end
+
+  local puzzleResult = solve_time_lock_puzzle(input, Squarings, modulus, n)
+
+  if puzzleResult == nil then
+    print("Failed to solve timelock puzzle")
+    return false
+  end
+
+  local postedOutput, postErr = randomManager.updateOutput(requestId, providerId, puzzleResult)
+  
+  if postedOutput then
+    randomManager.decrementRequestedInputs(requestId)
+    return true
+  end
+
+  return postedOutput, postErr
+end
+
+function randomManager.revealPuzzleParams(userId: string, requestId: string, key: Key): boolean, string
+  print("entered randomManager.revealPuzzleParams")
 
   if not DB then
     print("Database connection not initialized")
@@ -738,8 +862,8 @@ function randomManager.postVDFOutputAndProof(userId: string, requestId: string, 
 
   print("Preparing SQL statement for provider request response creation")
   local stmt = DB:prepare([[
-    UPDATE ProviderVDFResults
-    SET output_value = :output_value, proof = :proof
+    UPDATE ProviderTimelockPuzzles
+    SET p = :p, q = :q
     WHERE request_id = :request_id AND provider_id = :provider_id;
   ]])
   
@@ -750,7 +874,7 @@ function randomManager.postVDFOutputAndProof(userId: string, requestId: string, 
   
   print("Binding parameters for provider request response creation")
   local bind_ok, bind_err = pcall(function(): string
-    stmt:bind_names({request_id = requestId, provider_id = userId, output_value = outputValue, proof = proof})
+    stmt:bind_names({request_id = requestId, provider_id = userId, p = key.p, q = key.q})
   end)
   
   if not bind_ok then
@@ -759,21 +883,22 @@ function randomManager.postVDFOutputAndProof(userId: string, requestId: string, 
     return false, "Failed to bind parameters: " .. tostring(bind_err)
   end
   
-  print("Executing post vdf output and proof statement")
-  local execute_ok, execute_err = dbUtils.execute(stmt, "Post vdf output and proof")
+  print("Executing reveal puzzle params statement")
+  local execute_ok, execute_err = dbUtils.execute(stmt, "Reveal puzzle params")
   
   if not execute_ok then
-    print("Post VDF Output and Proof failed: " .. execute_err)
+    print("Reveal puzzle params failed: " .. execute_err)
   else
-    print("VDF Output and Proof posted successfully")
+    print("P and Q posted successfully")
 
     -- Fetch VDF input and modulus
-    local vdfRequest = randomManager.getVDFResult(requestId, userId)
-    local input = vdfRequest.input_value
-    local modulus = vdfRequest.modulus_value
+    local puzzleRequest = randomManager.getTimelockPuzzle(requestId, userId)
+    local input = puzzleRequest.input_value
+    local modulus = puzzleRequest.modulus_value
     
     -- Call verifierManager.processProof function
-    local processResult, processError = verifierManager.processProof(requestId, input, modulus, proof, userId, outputValue)
+    local processResult, processError = randomManager.processTimelockPuzzle(requestId, input, modulus, key.p, key.q, userId)
+    
     if not processResult then
       print("Processing proof failed: " .. tostring(processError))
       return false, "Processing proof failed: " .. tostring(processError)

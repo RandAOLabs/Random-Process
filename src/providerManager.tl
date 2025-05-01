@@ -12,6 +12,7 @@ global record Provider
   active_output_requests: string
   random_balance: integer
   created_at: integer
+  provider_info: string
 end
 
 global record ProviderList
@@ -228,7 +229,6 @@ function providerManager.removeActiveRequest(provider_id: string, requestId: str
       for i, id in ipairs(active_challenge_requests.request_ids) do
           if id == requestId then
               table.remove(active_challenge_requests.request_ids, i)
-              break
           end
       end
 
@@ -259,7 +259,6 @@ function providerManager.removeActiveRequest(provider_id: string, requestId: str
       for i, id in ipairs(active_output_requests.request_ids) do
           if id == requestId then
               table.remove(active_output_requests.request_ids, i)
-              break
           end
       end
 
@@ -365,6 +364,27 @@ function providerManager.updateProviderStatus(providerId: string, status: string
   end
 end
 
+function providerManager.updateProviderInfo(userId: string, providerInfo: string): boolean, string
+  print("entered providerManager.updateProviderInfo")
+
+  local stmt = DB:prepare[[
+    UPDATE Providers
+    SET provider_info = :provider_info
+    WHERE provider_id = :provider_id;
+  ]]
+  stmt:bind_names({provider_id = userId, provider_info = providerInfo})
+
+  local ok = pcall(function()
+  dbUtils.execute(stmt, "Failed to update provider info")
+  end)
+
+  if ok then
+    return true, ""
+  else
+    return false, "Failed to update provider info"
+  end
+end
+
 function providerManager.updateProviderBalance(userId: string, balance: integer): boolean, string
   print("entered providerManager.updateProviderBalance")
 
@@ -430,10 +450,11 @@ function providerManager.decrementProviderBalance(userId: string): boolean, stri
     dbUtils.execute(stmt, "Failed to decrement provider balance")
   end)
 
+  -- TODO more intricait system for activity management
   -- If new balance is 0, mark provider inactive
-  if newBalance == 0 then 
-    providerManager.updateProviderStatus(userId, "inactive")
-  end
+  -- if newBalance == 0 then 
+  --   providerManager.updateProviderStatus(userId, "inactive")
+  -- end
 
   if ok then
     return true, ""

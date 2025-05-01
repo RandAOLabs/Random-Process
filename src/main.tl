@@ -2,10 +2,11 @@
 require "globals"
 local json            = require "json"
 local database        = require "database"
+local dbUtils         = require "dbUtils"
 local providerManager = require "providerManager"
 local randomManager   = require "randomManager"
 local tokenManager    = require "tokenManager"
-local verifierManager = require "verifierManager"
+--local memsnap         = require "memsnap"
 
 -- Type definitions
 global record ResponseData
@@ -26,24 +27,17 @@ end
 
 global record UpdateProviderRandomBalanceData
   availableRandomValues: integer
+  providerInfo: string
 end
 
-global record PostVDFChallengeData
+global record CommitPuzzleData
+  puzzle: Puzzle
   requestId: string
-  input: string
-  modulus: string
 end
 
-global record PostVDFOutputAndProofData
+global record RevealPuzzleData
+  rsa_key: Key
   requestId: string
-  output: string
-  proof: string
-end
-
-global record CheckpointResponseData
-  request_id: string
-  segment_id: string
-  valid: boolean
 end
 
 global record GetRandomRequestsData
@@ -77,7 +71,7 @@ end
 
 global record RandomRequestResponse
   randomRequest: RandomRequest
-  providerVDFResults: ProviderVDFResults
+  providerTimelockPuzzles: ProviderTimelockPuzzles
 end
 
 global record GetRandomRequestsResponse
@@ -110,12 +104,6 @@ if not initializeApplication() then
   print("Failed to initialize application")
   return
 end
-
--- Drop verifiers table
-verifierManager.dropVerifierTable()
-
--- Initialize the verifier manager
-verifierManager.initializeVerifierManager()
 
 -- Helper function to send a response
 global function sendResponse(target: string, action: string, data: any): ResponseData
@@ -198,6 +186,12 @@ global function updateProviderBalanceHandler(msg: Message): boolean
 
   local data = (json.decode(msg.Data as string) as UpdateProviderRandomBalanceData)
   local balance = data.availableRandomValues
+  local providerInfo = data.providerInfo or nil
+  print("balance: " .. balance)
+  -- print("providerInfo: " .. providerInfo)
+  -- if providerInfo ~= nil then
+  --   providerManager.updateProviderInfo(userId, providerInfo)
+  -- end
   local success, _err = providerManager.updateProviderBalance(userId, balance)
 
   if success then
@@ -253,9 +247,9 @@ global function getAllProvidersHandler(msg: Message): boolean
   end
 end
 
--- Handler for posting VDF input
-global function postVDFChallengeHandler(msg: Message): boolean
-  print("entered postVDFChallenge")
+-- Handler for committing timelock puzzle
+global function commitPuzzleHandler(msg: Message): boolean
+  print("entered commitPuzzle")
   
   local userId = msg.From
   local active, _ = providerManager.isActiveProvider(userId)
@@ -266,19 +260,18 @@ global function postVDFChallengeHandler(msg: Message): boolean
     return false
   end
 
-  local data = (json.decode(msg.Data as string) as PostVDFChallengeData)
+  local data = (json.decode(msg.Data as string) as CommitPuzzleData)
+  local puzzle = data.puzzle as Puzzle
   local requestId = data.requestId
-  local modulus = data.modulus
-  local input = data.input
 
   local requested = providerManager.hasActiveRequest(userId, requestId, true)
   
   if not requested then
-    ao.send(sendResponse(msg.From, "Error", {message = "Failed to post VDF Input: " .. "not requested"}))
+    ao.send(sendResponse(msg.From, "Error", {message = "Failed to commit puzzle: " .. "not requested"}))
     return false
   end
 
-  local success, err = randomManager.postVDFChallenge(userId, requestId, input, modulus)
+  local success, err = randomManager.commitPuzzle(userId, requestId, puzzle)
 
   if success then
     providerManager.removeActiveRequest(userId, requestId, true, false)
@@ -286,14 +279,14 @@ global function postVDFChallengeHandler(msg: Message): boolean
     providerManager.decrementProviderBalance(userId)
     return true
   else
-    ao.send(sendResponse(msg.From, "Error", {message = "Failed to post VDF Input: " .. err}))
+    ao.send(sendResponse(msg.From, "Error", {message = "Failed to commit puzzle: " .. err}))
     return false
   end
 end
 
--- Handler for posting VDF output and proof
-global function postVDFOutputAndProofHandler(msg: Message): boolean
-  print("entered postVDFOutputAndProof")
+-- Handler for revealing timelock puzzle params
+global function revealPuzzleParamsHandler(msg: Message): boolean
+  print("entered revealPuzzleParams")
   
   local userId = msg.From
 
@@ -305,85 +298,30 @@ global function postVDFOutputAndProofHandler(msg: Message): boolean
     return false
   end
 
-  local data = (json.decode(msg.Data as string) as PostVDFOutputAndProofData)
-  local output = data.output
-  local proof = data.proof
+  local data = (json.decode(msg.Data as string) as RevealPuzzleData)
+  local key = data.rsa_key as Key
+  local requestId = data.requestId
 
-  local function validateInputs(_output: string, _proof: string): boolean
-    return true
-  end
 
-  if output == nil or proof == nil or not validateInputs(output, proof) then
-    ao.send(sendResponse(msg.From, "Error", {message = "Failed to post VDF Output: " .. "values not provided"}))
+  if key == nil or requestId == nil then
+    ao.send(sendResponse(msg.From, "Error", {message = "Failed to Reveal Puzzle Params: " .. "values not provided"}))
     return false
   end
 
-  local requestId = data.requestId
-
   local requested = providerManager.hasActiveRequest(userId, requestId, false)
   if not requested then
-    ao.send(sendResponse(msg.From, "Error", {message = "Failed to post VDF Output: " .. "not requested"}))
+    ao.send(sendResponse(msg.From, "Error", {message = "Failed to Reveal Puzzle Params: " .. "not requested"}))
     return false
   end
   providerManager.removeActiveRequest(userId, requestId, false, false)
 
-  local success, err = randomManager.postVDFOutputAndProof(userId, requestId, output, proof)
+  local success, err = randomManager.revealPuzzleParams(userId, requestId, key)
 
   if success then
     randomManager.decrementRequestedInputs(requestId)
     return true
   else
-    ao.send(sendResponse(msg.From, "Verification-Error", {message = "Failed to post VDF Output and Proof: " .. err}))
-    return false
-  end
-end
-
--- Handler for posting verifier verification of segment authenticity
-global function postVerificationHandler(msg: Message): boolean
-  print("entered postVerification")
-
-  local verifierId = msg.From
-
-  local data = (json.decode(msg.Data as string) as CheckpointResponseData)
-
-  local valid = data.valid
-  local requestId = data.request_id
-  local segmentId = data.segment_id
-
-  local validVerification, err = verifierManager.verifySegmentVerification(requestId, verifierId)
-  if not validVerification then
-    print("Failed to post Verification: " .. "not verified")
-    ao.send(sendResponse(msg.From, "Error", {message = "Failed to post Verification: " .. "not verified"}))
-    return false
-  end
-
-  if valid == nil or segmentId == nil or requestId == nil or not validVerification then
-    print("Failed to post Verification: " .. (err or "values not provided or malformed"))
-    ao.send(sendResponse(msg.From, "Error", {message = "Failed to post Verification: " .. (err or "values not provided or malformed")}))
-    return false
-  end
-  
-  local success, _err = verifierManager.processVerification(verifierId, segmentId, valid)
-  
-  if success then
-    randomManager.decrementRequestedInputs(requestId)
-    return true
-  end
-
-  print("Failed to post Verification: " .. _err)
-  ao.send(sendResponse(msg.From, "Error", {message = "Failed to post Verification: " .. _err}))
-  return false
-end
-
--- Handler for posting verifier failed verification of segment authenticity
-global function failedPostVerificationHandler(msg: Message): boolean
-  print("entered failedPostVerification")
-  local verifierId = msg.From
-  local success, err = verifierManager.markAvailable(verifierId)
-  if success then
-    return true
-  else
-    print("Failed to mark verifier: " .. verifierId .. " as available: " .. err)
+    ao.send(sendResponse(msg.From, "Verification-Error", {message = "Failed to Reveal Puzzle Params: " .. err}))
     return false
   end
 end
@@ -479,14 +417,14 @@ global function getRandomRequestsHandler(msg: Message): boolean
   for _, request_id in ipairs(data.requestIds) do
     local requestResponse: RandomRequestResponse = {   
       randomRequest: RandomRequest = nil,
-      providerVDFResults: ProviderVDFResults = nil
+      providerTimelockPuzzles: ProviderTimelockPuzzles = nil,
     }
     local request, requestErr = randomManager.getRandomRequest(request_id)
     if requestErr == "" then
       requestResponse.randomRequest = request
-      local providerVDFResults, resultsErr = randomManager.getVDFResults(request_id)
+      local providerTimelockPuzzles, resultsErr = randomManager.getTimelockPuzzles(request_id)
       if resultsErr == "" then 
-        requestResponse.providerVDFResults = providerVDFResults
+        requestResponse.providerTimelockPuzzles = providerTimelockPuzzles
       end
     end
     table.insert(responseData.randomRequestResponses, requestResponse)
@@ -506,16 +444,16 @@ global function getRandomRequestViaCallbackIdHandler(msg: Message): boolean
 
   local requestResponse: RandomRequestResponse = {   
     randomRequest: RandomRequest = nil,
-    providerVDFResults: ProviderVDFResults = nil
+    providerTimelockPuzzles: ProviderTimelockPuzzles = nil
   }
   local request, requestErr = randomManager.getRandomRequestViaCallbackId(callback_id)
   local request_id = request.request_id
 
   if requestErr == "" then
     requestResponse.randomRequest = request
-    local providerVDFResults, resultsErr = randomManager.getVDFResults(request_id)
+    local requestTimelockPuzzles, resultsErr = randomManager.getTimelockPuzzles(request_id)
     if resultsErr == "" then 
-      requestResponse.providerVDFResults = providerVDFResults
+      requestResponse.providerTimelockPuzzles = requestTimelockPuzzles
     end
   end
   table.insert(responseData.randomRequestResponses, requestResponse)
@@ -530,12 +468,14 @@ global function getActiveRequestsHandler(msg: Message): boolean
   print("entered getActiveRequests")
   sendResponse(msg.From, "Get-Active-Requests", ActiveRequests)
 end
-
+ 
 -- Handler for cron ticks that facilitate cracking and slashing
 global function cronTickHandler(msg: Message): boolean
   print("entered cronTick")
+
+  -- memsnap.cronTick(msg)
   -- Initiate next station request
-  -- TODO randomManager.nextStationRequest()
+  -- randomManager.nextStationRequest()
     
   -- Loop through each category of requests
   for category, data in pairs(ActiveRequests as {string: RequestList}) do
@@ -577,7 +517,7 @@ global function cronTickHandler(msg: Message): boolean
               else
                 print("Provider list is empty, nothing to tombstone.")
               end
-            elseif category == "activeVerificationRequests" then -- and timestamp + (OverridePeriod * 2) < currentTimestamp then
+            elseif category == "activeVerificationRequests" then
               -- Rerequest random from approved providers
               print("Rerequesting random from approved providers for request_id: " .. request_id)
               randomManager.rerequestRandom(request_id)
@@ -638,6 +578,33 @@ global function reinitializeProviderHandler(msg: Message): boolean
   return true
 end
 
+global function Helper(): boolean
+  
+  -- local stmt = DB:prepare([[
+  --   DELETE FROM RandomRequests;
+  --   DELETE FROM ProviderTimelockPuzzles;
+  -- ]])
+  
+  -- if not stmt then
+  --   --print("Failed to prepare statement: " .. DB:errmsg())
+  --   return false
+  -- end
+
+  -- local exec_ok = dbUtils.execute(stmt, "Remove table space")
+  -- if not exec_ok then
+  --   return false
+  -- end
+
+  local stmt2 = DB:prepare("SELECT * FROM RandomRequests")
+  local rows = dbUtils.queryMany(stmt2)
+  print("RandomRequests: " .. json.encode(rows))
+  
+  for _, row in ipairs(rows) do
+    print(json.encode(row))  -- or loop through keys
+  end
+  return true
+end
+
 -- Add handlers
 Handlers.add('info', 
 Handlers.utils.hasMatchingTag('Action', 'Info'), 
@@ -667,21 +634,13 @@ Handlers.add('getOpenRandomRequests',
 Handlers.utils.hasMatchingTag('Action', 'Get-Open-Random-Requests'), 
 wrapHandler(getOpenRandomRequestsHandler))
 
-Handlers.add('postVDFChallenge', 
-Handlers.utils.hasMatchingTag('Action', 'Post-VDF-Challenge'), 
-wrapHandler(postVDFChallengeHandler))
+Handlers.add('commitPuzzle', 
+Handlers.utils.hasMatchingTag('Action', 'Commit-Puzzle'), 
+wrapHandler(commitPuzzleHandler))
 
-Handlers.add('postVDFOutputAndProof', 
-Handlers.utils.hasMatchingTag('Action', 'Post-VDF-Output-And-Proof'), 
-wrapHandler(postVDFOutputAndProofHandler))
-
-Handlers.add('postVerification',
-Handlers.utils.hasMatchingTag('Action', 'Post-Verification'),
-wrapHandler(postVerificationHandler))
-
-Handlers.add('failedPostVerification',
-Handlers.utils.hasMatchingTag('Action', 'Failed-Post-Verification'),
-wrapHandler(failedPostVerificationHandler))
+Handlers.add('revealPuzzleParams',
+Handlers.utils.hasMatchingTag('Action', 'Reveal-Puzzle-Params'),
+wrapHandler(revealPuzzleParamsHandler))
 
 Handlers.add('creditNotice', 
 Handlers.utils.hasMatchingTag('Action', 'Credit-Notice'), 
