@@ -7,10 +7,10 @@
 At the core of RandAO is a **multi-party commit-and-reveal scheme** that ensures the integrity and unpredictability of the generated random numbers.
 
 1. **Hash Commitment Phase**:  
-   All **randomness providers** submit a hashed version of their input. These commitments are collected without revealing the actual inputs.
+   All **randomness providers** submit and commit a timelock puzzle locking in their inputs. These commitments are collected without revealing the actual puzzle result.
 
 2. **Reveal Phase**:  
-   After all providers commit, each reveals their original input. These inputs are hashed again to verify the correctness of the commitments.
+   After all providers commit, each reveals their key to the puzzle. These keys are checked against their puzzles and used to reveal the output value for each provider.
 
 3. **Final Random Number Generation**:  
    Once all inputs are verified, the revealed values are **hashed together** to produce the final, verifiably random number.
@@ -24,7 +24,7 @@ This process guarantees:
 
 ## 🔒 Security Model
 
-RandAO uses a **commit-and-reveal scheme** to protect against premature revelation or tampering. The final random number is based on the hashed combination of all revealed inputs, ensuring:
+RandAO uses a **commit-and-reveal scheme** to protect against premature revelation or tampering. The final random number is based on the hashed combination of all revealed outputs, ensuring:
 
 - **Resistance to Bias**: No single participant can influence the result.
 - **Verifiability**: Anyone can verify that the inputs match the original commitments.
