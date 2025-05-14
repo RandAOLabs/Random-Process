@@ -223,7 +223,15 @@ describe("provider specific tests", function()
 
   it("values should be updated post balance update", function()
     local availableRandomValues = 11
-    local message = { Target = ao.id, From = "Provider3", Action = "Update-Providers-Random-Balance", Data = json.encode({availableRandomValues = availableRandomValues}) }
+    local message = { 
+      Target = ao.id, 
+      From = "Provider3", 
+      Tags = {
+        Action = "Update-Providers-Random-Balance", 
+        ProviderInfo = "ProviderInfo"
+      },
+      Data = json.encode({availableRandomValues = availableRandomValues}) 
+    }
     local success = updateProviderBalanceHandler(message)
     assert(success, "Failure: failed to update")
     local provider, _ = providerManager.getProvider("Provider3")
@@ -232,7 +240,10 @@ describe("provider specific tests", function()
 
   it("should update the provider balance after update", function()
     local availableRandomValues = 10
-    local message = { Target = ao.id, From = "Provider1", Action = "Update-Providers-Random-Balance", Data = json.encode({availableRandomValues = availableRandomValues}) }
+    local message = { Target = ao.id, From = "Provider1", Tags = {
+      Action = "Update-Providers-Random-Balance", 
+      ProviderInfo = "ProviderInfo"
+    }, Data = json.encode({availableRandomValues = availableRandomValues}) }
     local success = updateProviderBalanceHandler(message)
     assert(success, "Failure: failed to update")
     -- Retrieve the provider and check for errors
@@ -257,27 +268,42 @@ describe("provider specific tests", function()
 
   it("should be able to see inactive status after updating balance to 0", function()
     local availableRandomValues = 0
-    local message = { Target = ao.id, From = "Provider1", Action = "Update-Providers-Random-Balance", Data = json.encode({availableRandomValues = availableRandomValues}) }
+    local message = { Target = ao.id, From = "Provider1",       Tags = {
+      Action = "Update-Providers-Random-Balance", 
+      ProviderInfo = "ProviderInfo"
+    }, Data = json.encode({availableRandomValues = availableRandomValues}) }
     local success = updateProviderBalanceHandler(message)
     assert(success, "Failure: failed to update")
     local status, _ = providerManager.isActiveProvider("Provider1")
     assert(not status, "Failure: wrong status found")
     availableRandomValues = 1
-    message = { Target = ao.id, From = "Provider1", Action = "Update-Providers-Random-Balance", Data = json.encode({availableRandomValues = availableRandomValues}) }
+    message = { Target = ao.id, From = "Provider1",       Tags = {
+      Action = "Update-Providers-Random-Balance", 
+      ProviderInfo = "ProviderInfo"
+    }, Data = json.encode({availableRandomValues = availableRandomValues}) }
     updateProviderBalanceHandler(message)
   end)
 
   it("should be able to see active status after updating balance to 1", function()
     local availableRandomValues = 1
-    local message = { Target = ao.id, From = "Provider1", Action = "Update-Providers-Random-Balance", Data = json.encode({availableRandomValues = availableRandomValues}) }
+    local message = { Target = ao.id, From = "Provider1",       Tags = {
+      Action = "Update-Providers-Random-Balance", 
+      ProviderInfo = "ProviderInfo"
+    }, Data = json.encode({availableRandomValues = availableRandomValues}) }
     local success = updateProviderBalanceHandler(message)
     assert(success, "Failure: failed to update")
     local status, _ = providerManager.isActiveProvider("Provider1")
     assert(status, "Failure: wrong status found")
     availableRandomValues = 5
-    message = { Target = ao.id, From = "Provider1", Action = "Update-Providers-Random-Balance", Data = json.encode({availableRandomValues = availableRandomValues}) }
+    message = { Target = ao.id, From = "Provider1",       Tags = {
+      Action = "Update-Providers-Random-Balance", 
+      ProviderInfo = "ProviderInfo"
+    }, Data = json.encode({availableRandomValues = availableRandomValues}) }
     updateProviderBalanceHandler(message)
-    message = { Target = ao.id, From = "Provider5", Action = "Update-Providers-Random-Balance", Data = json.encode({availableRandomValues = availableRandomValues}) }
+    message = { Target = ao.id, From = "Provider5",       Tags = {
+      Action = "Update-Providers-Random-Balance", 
+      ProviderInfo = "ProviderInfo"
+    }, Data = json.encode({availableRandomValues = availableRandomValues}) }
     updateProviderBalanceHandler(message)
   end)
 
@@ -311,16 +337,25 @@ describe("provider specific tests", function()
 
 
     local availableRandomValues = 1
-    message = { Target = ao.id, From = "Provider1", Action = "Update-Providers-Random-Balance", Data = json.encode({availableRandomValues = availableRandomValues}) }
+    message = { Target = ao.id, From = "Provider1",       Tags = {
+      Action = "Update-Providers-Random-Balance", 
+      ProviderInfo = "ProviderInfo"
+    }, Data = json.encode({availableRandomValues = availableRandomValues}) }
     success = updateProviderBalanceHandler(message)
     assert(success, "Failure: failed to update")
 
 
-    message = { Target = ao.id, From = "XUo8jZtUDBFLtp5okR12oLrqIZ4ewNlTpqnqmriihJE", Action = "Update-Providers-Random-Balance", Data = json.encode({availableRandomValues = availableRandomValues}) }
+    message = { Target = ao.id, From = "XUo8jZtUDBFLtp5okR12oLrqIZ4ewNlTpqnqmriihJE",       Tags = {
+      Action = "Update-Providers-Random-Balance", 
+      ProviderInfo = "ProviderInfo"
+    }, Data = json.encode({availableRandomValues = availableRandomValues}) }
     success = updateProviderBalanceHandler(message)
     assert(success, "Failure: failed to update")
 
-    message = { Target = ao.id, From = "Sr3HVH0Nh6iZzbORLpoQFOEvmsuKjXsHswSWH760KAk", Action = "Update-Providers-Random-Balance", Data = json.encode({availableRandomValues = availableRandomValues}) }
+    message = { Target = ao.id, From = "Sr3HVH0Nh6iZzbORLpoQFOEvmsuKjXsHswSWH760KAk",       Tags = {
+      Action = "Update-Providers-Random-Balance", 
+      ProviderInfo = "ProviderInfo"
+    }, Data = json.encode({availableRandomValues = availableRandomValues}) }
     success = updateProviderBalanceHandler(message)
     assert(success, "Failure: failed to update")
   end)
@@ -379,7 +414,7 @@ describe("requestRandom", function()
       Target = ao.id,
       From = "Not the token in use",
       Action = "Credit-Notice",
-      Quantity = "100",
+      Quantity = "1000000000",
       Tags = {
         ["X-Providers"] = providers,
         ["X-CallbackId"] = callbackId,
@@ -398,7 +433,7 @@ describe("requestRandom", function()
       Target = ao.id,
       From = TokenInUse,
       Action = "Credit-Notice",
-      Quantity = "100",
+      Quantity = "1000000000",
       Tags = {
         ["X-Providers"] = providers,
         Sender = userId,
@@ -417,7 +452,7 @@ describe("requestRandom", function()
       Target = ao.id,
       From = TokenInUse,
       Action = "Credit-Notice",
-      Quantity = "100",
+      Quantity = "1000000000",
       Tags = {
         ["X-Providers"] = providers,
         ["X-CallbackId"] = callbackId,
@@ -439,7 +474,7 @@ describe("requestRandom", function()
       Target = ao.id,
       From = TokenInUse,
       Action = "Credit-Notice",
-      Quantity = "100",
+      Quantity = "1000000000",
       Tags = {
         ["X-Providers"] = providers,
         ["X-CallbackId"] = callbackId,
@@ -466,7 +501,7 @@ describe("requestRandom", function()
       Target = ao.id,
       From = TokenInUse,
       Action = "Credit-Notice",
-      Quantity = "100",
+      Quantity = "1000000000",
       Tags = {
         ["X-Providers"] = providers,
         ["X-CallbackId"] = callbackId,
@@ -556,8 +591,8 @@ describe("commit timelock puzzle", function()
 
   it("should not be able to commit puzzle from an unrequested provider for a valid request",
   function()
-    local input = "0x023456987678"
-    local modulus = "0x0567892345678"
+    local input = "0x2dc1c123598b7126188bb51aeab9f010bf925c6c4eed9ecccb89b398aeac52a43fed5f1081799900152e8bdcbe43fec9c2696b9a2695ed9db8e03a2b6e9af2a3a553d9cd98b5c499c3190e82e3d568cad03cc5d68ca3544de66a6d8d3516d28f8fb66b7ab09554a172e39f1b3c227ee84e71b3b84b458b41750d06c84f8c0e6fe7bb86328939f17ba3246da8fb521cbd1cea44c90c7b089ca8c061a46a2dd04511a59ccdf3c8d6cccf9814f865c22e941cbfcfa4aab02947a971793d28517d5e872e47dfff04957c162074134b4a75455ad2d65257a9dd5279dc82a65cd41d10fd165367c91d05f4bb6a2d6462f127e5c4bde3ba3067cde96d2af3a424d1e404"
+    local modulus = "0x1551017a3dc330141c6131344c28faba879b768d64212ea3426369c7303bd039d0b983ed83d78c42fdea5534cd285ffd78cfcd140c202d43d19e07e77eaf344fd4fb2a73fe333487f4fc5ba2588786b524e84098bda4eac41375a13816e863f9e74fc62218c99910bc237cc58cdc12923edf0c95d986c8623d18ebd202339d5cad07d3c5e71d4d50f693f71443bae6f29419d0a51700bee147f5f3aa8381fc336b8003f86f04effb577fdc38b0440cdc1b162efa64e640f45606deff9e37cdbcc1df8a941588031fe65aaecf97deae092f3e8771f80f45435a52d6f483bc435a2ffc8559b859c0dd2e7c81c5ec701f179b57d9c22b6d40222bdde852682b995b"
     local requestId = "d6cce35c-487a-458f-bab2-9032c2621f38"
     local puzzle = json.encode({input = input, modulus = modulus})
     local message = {
@@ -574,8 +609,8 @@ describe("commit timelock puzzle", function()
 
   it("should not be able to commit puzzle from an unrequested provider for an invalid request",
   function()
-    local input = "0x023456987678"
-    local modulus = "0x0567892345678"
+    local input = "0x2dc1c123598b7126188bb51aeab9f010bf925c6c4eed9ecccb89b398aeac52a43fed5f1081799900152e8bdcbe43fec9c2696b9a2695ed9db8e03a2b6e9af2a3a553d9cd98b5c499c3190e82e3d568cad03cc5d68ca3544de66a6d8d3516d28f8fb66b7ab09554a172e39f1b3c227ee84e71b3b84b458b41750d06c84f8c0e6fe7bb86328939f17ba3246da8fb521cbd1cea44c90c7b089ca8c061a46a2dd04511a59ccdf3c8d6cccf9814f865c22e941cbfcfa4aab02947a971793d28517d5e872e47dfff04957c162074134b4a75455ad2d65257a9dd5279dc82a65cd41d10fd165367c91d05f4bb6a2d6462f127e5c4bde3ba3067cde96d2af3a424d1e404"
+    local modulus = "0x1551017a3dc330141c6131344c28faba879b768d64212ea3426369c7303bd039d0b983ed83d78c42fdea5534cd285ffd78cfcd140c202d43d19e07e77eaf344fd4fb2a73fe333487f4fc5ba2588786b524e84098bda4eac41375a13816e863f9e74fc62218c99910bc237cc58cdc12923edf0c95d986c8623d18ebd202339d5cad07d3c5e71d4d50f693f71443bae6f29419d0a51700bee147f5f3aa8381fc336b8003f86f04effb577fdc38b0440cdc1b162efa64e640f45606deff9e37cdbcc1df8a941588031fe65aaecf97deae092f3e8771f80f45435a52d6f483bc435a2ffc8559b859c0dd2e7c81c5ec701f179b57d9c22b6d40222bdde852682b995b"
     local requestId = "a6cce35c-487a-458f-bab2-9032c2621f38"
 
     local puzzle = json.encode({input = input, modulus = modulus})
@@ -593,8 +628,8 @@ describe("commit timelock puzzle", function()
 
   it("should be able to commit puzzle from a requested provider for a valid request",
   function()
-    local input = "0x023456987678"
-    local modulus = "0x0567892345678"
+    local input = "0x2dc1c123598b7126188bb51aeab9f010bf925c6c4eed9ecccb89b398aeac52a43fed5f1081799900152e8bdcbe43fec9c2696b9a2695ed9db8e03a2b6e9af2a3a553d9cd98b5c499c3190e82e3d568cad03cc5d68ca3544de66a6d8d3516d28f8fb66b7ab09554a172e39f1b3c227ee84e71b3b84b458b41750d06c84f8c0e6fe7bb86328939f17ba3246da8fb521cbd1cea44c90c7b089ca8c061a46a2dd04511a59ccdf3c8d6cccf9814f865c22e941cbfcfa4aab02947a971793d28517d5e872e47dfff04957c162074134b4a75455ad2d65257a9dd5279dc82a65cd41d10fd165367c91d05f4bb6a2d6462f127e5c4bde3ba3067cde96d2af3a424d1e404"
+    local modulus = "0x1551017a3dc330141c6131344c28faba879b768d64212ea3426369c7303bd039d0b983ed83d78c42fdea5534cd285ffd78cfcd140c202d43d19e07e77eaf344fd4fb2a73fe333487f4fc5ba2588786b524e84098bda4eac41375a13816e863f9e74fc62218c99910bc237cc58cdc12923edf0c95d986c8623d18ebd202339d5cad07d3c5e71d4d50f693f71443bae6f29419d0a51700bee147f5f3aa8381fc336b8003f86f04effb577fdc38b0440cdc1b162efa64e640f45606deff9e37cdbcc1df8a941588031fe65aaecf97deae092f3e8771f80f45435a52d6f483bc435a2ffc8559b859c0dd2e7c81c5ec701f179b57d9c22b6d40222bdde852682b995b"
     local requestId = "d6cce35c-487a-458f-bab2-9032c2621f38"
     local puzzle = {input = input, modulus = modulus}
     local message = {
@@ -614,7 +649,9 @@ describe("commit timelock puzzle", function()
     assert.are.equal(0, provider.random_balance)
     
     local availableRandomValues = 11
-    message = { Target = ao.id, From = "Provider1", Action = "Update-Providers-Random-Balance", Data = json.encode({availableRandomValues = availableRandomValues}) }
+    message = { Target = ao.id, From = "Provider1",       Tags = {
+      Action = "Update-Providers-Random-Balance", 
+    }, Data = json.encode({availableRandomValues = availableRandomValues}) }
     success = updateProviderBalanceHandler(message)
     assert(success, "Failure: failed to update")
   end)
@@ -622,8 +659,8 @@ describe("commit timelock puzzle", function()
   it("should not be able to post output and proof from a requested provider for a valid request before all challenges are posted",
   function()
     local key = {
-      p = "0x0567892345678",
-      q = "0x0567892345678"
+      p = "0x3313c679051a03bf31d552fe70a0c2d19f11704fa2a46f309b221ae0c8c63e51a0c1d8ac74baaf98c086865735bb8e09dc008a711f6ad14036d9685940d0280ff8e2073452cccf84625995f0ad1f83d59b395887adfcc98e048808a9e0fbfe8744a177ab2a39cef14149468e7bb481d9c3ff31de9ad6ca36ef088aea7c6670a1",
+      q = "0x6ad69a33bf376aa082fe4fb68424fa2097e060adfbb10334763441c13aefd6894987e57306a911ea8ec7cf57e91166f12abf79a0d3ca84ecac819496cc3f0899b55582eeab44464909e358971b02b1108788c0a6c74c4dbc1a786823ee6530d530a5b40270523b543cb068fe1d4eaede086237749bbc8349ad8705d0c2f5fc7b"
     }
     local requestId = "d6cce35c-487a-458f-bab2-9032c2621f38"
 
@@ -637,11 +674,11 @@ describe("commit timelock puzzle", function()
     local success = revealPuzzleParamsHandler(message)
     assert(not success, "Failure: able to post VDF output and proof from requested provider vefore all challenges are posted")
   end)
-  
+
   it("should be able to commit puzzle from second requested provider for a valid request",
   function()
-    local input = "0x023456987678"
-    local modulus = "0x0567892345678"
+  local input = "0x2dc1c123598b7126188bb51aeab9f010bf925c6c4eed9ecccb89b398aeac52a43fed5f1081799900152e8bdcbe43fec9c2696b9a2695ed9db8e03a2b6e9af2a3a553d9cd98b5c499c3190e82e3d568cad03cc5d68ca3544de66a6d8d3516d28f8fb66b7ab09554a172e39f1b3c227ee84e71b3b84b458b41750d06c84f8c0e6fe7bb86328939f17ba3246da8fb521cbd1cea44c90c7b089ca8c061a46a2dd04511a59ccdf3c8d6cccf9814f865c22e941cbfcfa4aab02947a971793d28517d5e872e47dfff04957c162074134b4a75455ad2d65257a9dd5279dc82a65cd41d10fd165367c91d05f4bb6a2d6462f127e5c4bde3ba3067cde96d2af3a424d1e404"
+    local modulus = "0x1551017a3dc330141c6131344c28faba879b768d64212ea3426369c7303bd039d0b983ed83d78c42fdea5534cd285ffd78cfcd140c202d43d19e07e77eaf344fd4fb2a73fe333487f4fc5ba2588786b524e84098bda4eac41375a13816e863f9e74fc62218c99910bc237cc58cdc12923edf0c95d986c8623d18ebd202339d5cad07d3c5e71d4d50f693f71443bae6f29419d0a51700bee147f5f3aa8381fc336b8003f86f04effb577fdc38b0440cdc1b162efa64e640f45606deff9e37cdbcc1df8a941588031fe65aaecf97deae092f3e8771f80f45435a52d6f483bc435a2ffc8559b859c0dd2e7c81c5ec701f179b57d9c22b6d40222bdde852682b995b"
     local requestId = "d6cce35c-487a-458f-bab2-9032c2621f38"
 
     local puzzle = json.encode({input = input, modulus = modulus})
@@ -653,7 +690,9 @@ describe("commit timelock puzzle", function()
     }
 
     local success = commitPuzzleHandler(message)
-    
+    local puzzle = randomManager.getTimelockPuzzle(requestId, "Provider3")
+    print("xxx: " .. json.encode(puzzle))
+
     assert(success, "Failure: unable to commit puzzle from requested provider")
   end)
 
@@ -674,8 +713,8 @@ describe("reveal puzzle params", function()
   it("should not be able to reveal puzzle params from an unrequested provider for a valid request",
   function()
     local key = {
-      p = "0x0567892345678",
-      q = "0x0567892345678"
+      p = "0x3313c679051a03bf31d552fe70a0c2d19f11704fa2a46f309b221ae0c8c63e51a0c1d8ac74baaf98c086865735bb8e09dc008a711f6ad14036d9685940d0280ff8e2073452cccf84625995f0ad1f83d59b395887adfcc98e048808a9e0fbfe8744a177ab2a39cef14149468e7bb481d9c3ff31de9ad6ca36ef088aea7c6670a1",
+      q = "0x6ad69a33bf376aa082fe4fb68424fa2097e060adfbb10334763441c13aefd6894987e57306a911ea8ec7cf57e91166f12abf79a0d3ca84ecac819496cc3f0899b55582eeab44464909e358971b02b1108788c0a6c74c4dbc1a786823ee6530d530a5b40270523b543cb068fe1d4eaede086237749bbc8349ad8705d0c2f5fc7b"
     }
     local requestId = "d6cce35c-487a-458f-bab2-9032c2621f38"
 
@@ -693,8 +732,8 @@ describe("reveal puzzle params", function()
   it("should not be able to reveal puzzle params from an unrequested provider for an invalid request",
   function()
     local key = {
-      p = "0x0567892345678",
-      q = "0x0567892345678"
+      p = "0x3313c679051a03bf31d552fe70a0c2d19f11704fa2a46f309b221ae0c8c63e51a0c1d8ac74baaf98c086865735bb8e09dc008a711f6ad14036d9685940d0280ff8e2073452cccf84625995f0ad1f83d59b395887adfcc98e048808a9e0fbfe8744a177ab2a39cef14149468e7bb481d9c3ff31de9ad6ca36ef088aea7c6670a1",
+      q = "0x6ad69a33bf376aa082fe4fb68424fa2097e060adfbb10334763441c13aefd6894987e57306a911ea8ec7cf57e91166f12abf79a0d3ca84ecac819496cc3f0899b55582eeab44464909e358971b02b1108788c0a6c74c4dbc1a786823ee6530d530a5b40270523b543cb068fe1d4eaede086237749bbc8349ad8705d0c2f5fc7b"
     }
     local requestId = "a6cce35c-487a-458f-bab2-9032c2621f38"
 
@@ -712,8 +751,8 @@ describe("reveal puzzle params", function()
   it("should not be able to reveal puzzle params from a requested provider for an invalid request",
   function()
     local key = {
-      p = "0x0567892345678",
-      q = "0x0567892345678"
+      p = "0x3313c679051a03bf31d552fe70a0c2d19f11704fa2a46f309b221ae0c8c63e51a0c1d8ac74baaf98c086865735bb8e09dc008a711f6ad14036d9685940d0280ff8e2073452cccf84625995f0ad1f83d59b395887adfcc98e048808a9e0fbfe8744a177ab2a39cef14149468e7bb481d9c3ff31de9ad6ca36ef088aea7c6670a1",
+      q = "0x6ad69a33bf376aa082fe4fb68424fa2097e060adfbb10334763441c13aefd6894987e57306a911ea8ec7cf57e91166f12abf79a0d3ca84ecac819496cc3f0899b55582eeab44464909e358971b02b1108788c0a6c74c4dbc1a786823ee6530d530a5b40270523b543cb068fe1d4eaede086237749bbc8349ad8705d0c2f5fc7b"
     }
     local requestId = "a6cce35c-487a-458f-bab2-9032c2621f38"
 
@@ -731,8 +770,8 @@ describe("reveal puzzle params", function()
   it("should not be able to post output with no proof from a requested provider for an invalid request",
   function()
     local key = {
-      p = "0x0567892345678",
-      q = "0x0567892345678"
+      p = "0x3313c679051a03bf31d552fe70a0c2d19f11704fa2a46f309b221ae0c8c63e51a0c1d8ac74baaf98c086865735bb8e09dc008a711f6ad14036d9685940d0280ff8e2073452cccf84625995f0ad1f83d59b395887adfcc98e048808a9e0fbfe8744a177ab2a39cef14149468e7bb481d9c3ff31de9ad6ca36ef088aea7c6670a1",
+      q = "0x6ad69a33bf376aa082fe4fb68424fa2097e060adfbb10334763441c13aefd6894987e57306a911ea8ec7cf57e91166f12abf79a0d3ca84ecac819496cc3f0899b55582eeab44464909e358971b02b1108788c0a6c74c4dbc1a786823ee6530d530a5b40270523b543cb068fe1d4eaede086237749bbc8349ad8705d0c2f5fc7b"
     }
     local requestId = "a6cce35c-487a-458f-bab2-9032c2621f38"
 
@@ -750,8 +789,8 @@ describe("reveal puzzle params", function()
   it("should be able to reveal puzzle params from a requested provider for a valid request",
   function()
     local key = {
-      p = "0x0567892345678",
-      q = "0x0567892345678"
+      p = "0x3313c679051a03bf31d552fe70a0c2d19f11704fa2a46f309b221ae0c8c63e51a0c1d8ac74baaf98c086865735bb8e09dc008a711f6ad14036d9685940d0280ff8e2073452cccf84625995f0ad1f83d59b395887adfcc98e048808a9e0fbfe8744a177ab2a39cef14149468e7bb481d9c3ff31de9ad6ca36ef088aea7c6670a1",
+      q = "0x6ad69a33bf376aa082fe4fb68424fa2097e060adfbb10334763441c13aefd6894987e57306a911ea8ec7cf57e91166f12abf79a0d3ca84ecac819496cc3f0899b55582eeab44464909e358971b02b1108788c0a6c74c4dbc1a786823ee6530d530a5b40270523b543cb068fe1d4eaede086237749bbc8349ad8705d0c2f5fc7b"
     }
     local requestId = "d6cce35c-487a-458f-bab2-9032c2621f38"
 
@@ -769,8 +808,8 @@ describe("reveal puzzle params", function()
   it("should not be able to reveal puzzle params from a requested provider for a valid request twice",
   function()
     local key = {
-      p = "0x0567892345678",
-      q = "0x0567892345678"
+      p = "0x3313c679051a03bf31d552fe70a0c2d19f11704fa2a46f309b221ae0c8c63e51a0c1d8ac74baaf98c086865735bb8e09dc008a711f6ad14036d9685940d0280ff8e2073452cccf84625995f0ad1f83d59b395887adfcc98e048808a9e0fbfe8744a177ab2a39cef14149468e7bb481d9c3ff31de9ad6ca36ef088aea7c6670a1",
+      q = "0x6ad69a33bf376aa082fe4fb68424fa2097e060adfbb10334763441c13aefd6894987e57306a911ea8ec7cf57e91166f12abf79a0d3ca84ecac819496cc3f0899b55582eeab44464909e358971b02b1108788c0a6c74c4dbc1a786823ee6530d530a5b40270523b543cb068fe1d4eaede086237749bbc8349ad8705d0c2f5fc7b"
     }
     local requestId = "d6cce35c-487a-458f-bab2-9032c2621f38"
 
@@ -781,6 +820,7 @@ describe("reveal puzzle params", function()
       Data = json.encode({rsa_key = key, requestId = requestId})
     }
 
+
     local success = revealPuzzleParamsHandler(message)
     assert(not success, "Failure: able to reveal puzzle params from requested provider twice")
   end)
@@ -788,8 +828,8 @@ describe("reveal puzzle params", function()
   it("should be able to reveal puzzle params from the second requested provider for a valid request",
   function()
     local key = {
-      p = "0x0567892345678",
-      q = "0x0567892345678"
+      p = "0x3313c679051a03bf31d552fe70a0c2d19f11704fa2a46f309b221ae0c8c63e51a0c1d8ac74baaf98c086865735bb8e09dc008a711f6ad14036d9685940d0280ff8e2073452cccf84625995f0ad1f83d59b395887adfcc98e048808a9e0fbfe8744a177ab2a39cef14149468e7bb481d9c3ff31de9ad6ca36ef088aea7c6670a1",
+      q = "0x6ad69a33bf376aa082fe4fb68424fa2097e060adfbb10334763441c13aefd6894987e57306a911ea8ec7cf57e91166f12abf79a0d3ca84ecac819496cc3f0899b55582eeab44464909e358971b02b1108788c0a6c74c4dbc1a786823ee6530d530a5b40270523b543cb068fe1d4eaede086237749bbc8349ad8705d0c2f5fc7b"
     }
     local requestId = "d6cce35c-487a-458f-bab2-9032c2621f38"
 
@@ -799,12 +839,16 @@ describe("reveal puzzle params", function()
       Action = "Reveal-Puzzle-Params",
       Data = json.encode({rsa_key = key, requestId = requestId})
     }
+    local puzzle = randomManager.getTimelockPuzzle(requestId, "Provider3")
+    print("xxx: " .. json.encode(puzzle))
 
     local success = revealPuzzleParamsHandler(message)
     assert(success, "Failure: unable to reveal puzzle params from the second requested provider")
   end)
 
   it("should be able to view random request in activeVerificationRequests", function()
+
+    print("ActiveRequests xx: " .. json.encode(ActiveRequests.activeVerificationRequests))
     assert(ActiveRequests.activeVerificationRequests.request_ids["d6cce35c-487a-458f-bab2-9032c2621f38"], "Failure: random request not found in activeRequests")
   end)
 end)

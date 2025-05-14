@@ -285,7 +285,10 @@ end
 
 function providerManager.getActiveRequests(userId: string, challenge: boolean): string, string
   print("entered providerManager.getActiveRequests")
-  local provider = providerManager.getProvider(userId)
+  local provider, err = providerManager.getProvider(userId)
+  if err ~= "" then
+    return "", err
+  end
   if challenge then
     if provider.active_challenge_requests then
       return provider.active_challenge_requests, ""
@@ -301,7 +304,7 @@ function providerManager.getActiveRequests(userId: string, challenge: boolean): 
   end
 end
 
-function providerManager.hasActiveRequest(userId: string, requestId: string, challenge: boolean): boolean
+function providerManager.hasActiveRequest(userId: string, requestId: string, challenge: boolean): boolean, string
   print("entered providerManager.hasActiveRequest")
 
   local activeRequests, err = providerManager.getActiveRequests(userId, challenge) 
@@ -309,12 +312,12 @@ function providerManager.hasActiveRequest(userId: string, requestId: string, cha
     local requestIds = json.decode(activeRequests) as RequestList
     for _, request_id in ipairs(requestIds.request_ids) do
       if request_id == requestId then
-        return true
+        return true, ""
       end
     end
-    return false
+    return false, "Request ID not found"
   else
-    return false
+    return false, err
   end
 end
 

@@ -639,7 +639,8 @@ function randomManager.createRandomRequest(userId: string, providers: string, ca
        return false, "Failed to get round-robin providers: " .. err
     end
     providers = roundRobinProviders
- end
+  end
+
   -- Decode providers JSON
   local providerList = json.decode(providers) as ProviderList
   print("providerList: " .. providers)
@@ -831,7 +832,8 @@ function randomManager.processTimelockPuzzle(requestId: string, input: string, m
   end
 
   if modulus ~= n then
-    print("N != p * q")
+    print("modulus(N) != N" .. modulus .. " != " .. n)
+    print("N != p * q" .. n .. " != " .. p .. " * " .. q)
     return false
   end
 

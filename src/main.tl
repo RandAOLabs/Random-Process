@@ -2,11 +2,10 @@
 require "globals"
 local json            = require "json"
 local database        = require "database"
-local dbUtils         = require "dbUtils"
 local providerManager = require "providerManager"
 local randomManager   = require "randomManager"
 local tokenManager    = require "tokenManager"
---local memsnap         = require "memsnap"
+local userManager     = require "userManager"
 
 -- Type definitions
 global record ResponseData
@@ -27,7 +26,6 @@ end
 
 global record UpdateProviderRandomBalanceData
   availableRandomValues: integer
-  providerInfo: string
 end
 
 global record CommitPuzzleData
@@ -186,12 +184,12 @@ global function updateProviderBalanceHandler(msg: Message): boolean
 
   local data = (json.decode(msg.Data as string) as UpdateProviderRandomBalanceData)
   local balance = data.availableRandomValues
-  local providerInfo = data.providerInfo or nil
-  print("balance: " .. balance)
-  -- print("providerInfo: " .. providerInfo)
-  -- if providerInfo ~= nil then
-  --   providerManager.updateProviderInfo(userId, providerInfo)
-  -- end
+  local providerInfo = msg.Tags.ProviderInfo or nil
+  
+  if providerInfo ~= nil then
+    providerManager.updateProviderInfo(userId, providerInfo)
+  end
+
   local success, _err = providerManager.updateProviderBalance(userId, balance)
 
   if success then
@@ -252,22 +250,15 @@ global function commitPuzzleHandler(msg: Message): boolean
   print("entered commitPuzzle")
   
   local userId = msg.From
-  local active, _ = providerManager.isActiveProvider(userId)
-
-  -- Check if active
-  if not active then 
-    ao.send(sendResponse(msg.From, "Error", {message = "Post failed: Provider not active"}))
-    return false
-  end
 
   local data = (json.decode(msg.Data as string) as CommitPuzzleData)
   local puzzle = data.puzzle as Puzzle
   local requestId = data.requestId
 
-  local requested = providerManager.hasActiveRequest(userId, requestId, true)
+  local requested, reqErr = providerManager.hasActiveRequest(userId, requestId, true)
   
-  if not requested then
-    ao.send(sendResponse(msg.From, "Error", {message = "Failed to commit puzzle: " .. "not requested"}))
+  if not requested or reqErr ~= "" then
+    ao.send(sendResponse(msg.From, "Error", {message = "Failed to commit puzzle: " .. reqErr}))
     return false
   end
 
@@ -290,29 +281,21 @@ global function revealPuzzleParamsHandler(msg: Message): boolean
   
   local userId = msg.From
 
-  local active, _ = providerManager.isActiveProvider(userId)
-
-  -- Check if active
-  if not active then 
-    ao.send(sendResponse(msg.From, "Error", {message = "Post failed: Provider not active"}))
-    return false
-  end
-
   local data = (json.decode(msg.Data as string) as RevealPuzzleData)
   local key = data.rsa_key as Key
   local requestId = data.requestId
-
 
   if key == nil or requestId == nil then
     ao.send(sendResponse(msg.From, "Error", {message = "Failed to Reveal Puzzle Params: " .. "values not provided"}))
     return false
   end
 
-  local requested = providerManager.hasActiveRequest(userId, requestId, false)
-  if not requested then
-    ao.send(sendResponse(msg.From, "Error", {message = "Failed to Reveal Puzzle Params: " .. "not requested"}))
+  local requested, reqErr = providerManager.hasActiveRequest(userId, requestId, false)
+  if not requested or reqErr ~= "" then
+    ao.send(sendResponse(msg.From, "Error", {message = "Failed to Reveal Puzzle Params: " .. reqErr}))
     return false
   end
+  
   providerManager.removeActiveRequest(userId, requestId, false, false)
 
   local success, err = randomManager.revealPuzzleParams(userId, requestId, key)
@@ -358,6 +341,14 @@ global function creditNoticeHandler(msg: Message): boolean
   local userId            = msg.Sender
   local providers         = msg.Tags["X-Providers"] or nil
   local requestedInputs   = msg.Tags["X-RequestedInputs"] or ""
+  local prepayment        = msg.Tags["X-Prepayment"] or nil
+  
+  if prepayment ~= nil then
+    if prepayment == "true" then
+      userManager.creditUser(userId, value)
+      return true
+    end
+  end
 
   -- Use round-robin if no providers specified
   local useRoundRobin = providers == nil
@@ -578,30 +569,22 @@ global function reinitializeProviderHandler(msg: Message): boolean
   return true
 end
 
-global function Helper(): boolean
-  
-  -- local stmt = DB:prepare([[
-  --   DELETE FROM RandomRequests;
-  --   DELETE FROM ProviderTimelockPuzzles;
-  -- ]])
-  
-  -- if not stmt then
-  --   --print("Failed to prepare statement: " .. DB:errmsg())
-  --   return false
-  -- end
+global function redeemRandomCreditHandler(msg: Message): boolean
+  print("entered redeemCreditHandler")
+  local userId = msg.From
+  local callbackId = msg.Tags["CallbackId"] or nil
+  local providers = msg.Tags["Providers"] or nil
 
-  -- local exec_ok = dbUtils.execute(stmt, "Remove table space")
-  -- if not exec_ok then
-  --   return false
-  -- end
+  local success, err = userManager.redeemCredit(userId, callbackId, providers)
 
-  local stmt2 = DB:prepare("SELECT * FROM RandomRequests")
-  local rows = dbUtils.queryMany(stmt2)
-  print("RandomRequests: " .. json.encode(rows))
-  
-  for _, row in ipairs(rows) do
-    print(json.encode(row))  -- or loop through keys
+  if success then
+    ao.send(sendResponse(userId, "Redeemed Random Credit Created New Random Request", SuccessMessage))
+    return true
+  else
+    ao.send(sendResponse(userId, "Error", {message = "Failed to redeem credit: " .. err}))
+    return false
   end
+
   return true
 end
 
@@ -669,6 +652,10 @@ wrapHandler(cronTickHandler))
 Handlers.add('requestNextStationNumber', 
 Handlers.utils.hasMatchingTag('Action', 'Request-Next-Station-Number'), 
 wrapHandler(requestNextStationNumberHandler))
+
+Handlers.add('redeemRandomCredit', 
+Handlers.utils.hasMatchingTag('Action', 'Redeem-Random-Credit'), 
+wrapHandler(redeemRandomCreditHandler))
 
 Handlers.add('reinitializeProvider', 
 Handlers.utils.hasMatchingTag('Action', 'Reinitialize-Provider'), 

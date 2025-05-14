@@ -13,8 +13,8 @@ cyan build -u
 cd build
 
 amalg.lua -s main.lua -o ../process.lua \
-    globals dbUtils database providerManager randomManager tokenManager #membuddy memsnap
-
+    globals dbUtils database providerManager randomManager tokenManager userManager
+    
 # FINAL RESULT is build/main.lua
 
 # Run tests immediately after building
