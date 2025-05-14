@@ -2,6 +2,7 @@
 require "globals"
 local json            = require "json"
 local database        = require "database"
+local dbUtils         = require "dbUtils"
 local providerManager = require "providerManager"
 local randomManager   = require "randomManager"
 local tokenManager    = require "tokenManager"
@@ -26,6 +27,7 @@ end
 
 global record UpdateProviderRandomBalanceData
   availableRandomValues: integer
+  providerInfo: string
 end
 
 global record CommitPuzzleData

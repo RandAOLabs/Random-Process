@@ -674,7 +674,6 @@ describe("commit timelock puzzle", function()
     local success = revealPuzzleParamsHandler(message)
     assert(not success, "Failure: able to post VDF output and proof from requested provider vefore all challenges are posted")
   end)
-
   it("should be able to commit puzzle from second requested provider for a valid request",
   function()
   local input = "0x2dc1c123598b7126188bb51aeab9f010bf925c6c4eed9ecccb89b398aeac52a43fed5f1081799900152e8bdcbe43fec9c2696b9a2695ed9db8e03a2b6e9af2a3a553d9cd98b5c499c3190e82e3d568cad03cc5d68ca3544de66a6d8d3516d28f8fb66b7ab09554a172e39f1b3c227ee84e71b3b84b458b41750d06c84f8c0e6fe7bb86328939f17ba3246da8fb521cbd1cea44c90c7b089ca8c061a46a2dd04511a59ccdf3c8d6cccf9814f865c22e941cbfcfa4aab02947a971793d28517d5e872e47dfff04957c162074134b4a75455ad2d65257a9dd5279dc82a65cd41d10fd165367c91d05f4bb6a2d6462f127e5c4bde3ba3067cde96d2af3a424d1e404"
@@ -819,7 +818,6 @@ describe("reveal puzzle params", function()
       Action = "Reveal-Puzzle-Params",
       Data = json.encode({rsa_key = key, requestId = requestId})
     }
-
 
     local success = revealPuzzleParamsHandler(message)
     assert(not success, "Failure: able to reveal puzzle params from requested provider twice")
