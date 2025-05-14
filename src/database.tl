@@ -42,6 +42,14 @@ function database.initializeDatabase(): boolean
   if not Configured then
     print("Setting up database schema")
     local tables: {string} = {
+      -- Users DB Table
+      [[
+        CREATE TABLE IF NOT EXISTS Users (
+          user_id TEXT PRIMARY KEY,
+          balance INTEGER,
+          created_at INTEGER
+        );
+      ]],
       -- Providers DB Table
       [[
         CREATE TABLE IF NOT EXISTS Providers (
