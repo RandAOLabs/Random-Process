@@ -8,6 +8,10 @@ global record User
     created_at: integer
 end
 
+global record UserList
+    users: {User}
+end
+
 local userManager = {}
 
 function userManager.createUser(userId: string, balance: integer, timestamp: number): boolean, string
@@ -63,14 +67,31 @@ function userManager.getUser(userId: string): User, string
     end
 end
 
-function userManager.updateUserBalance(userId: string, change: integer, increment: boolean): integer, string    print("entered updateUserBalance")
+
+function userManager.getAllUsers(): UserList, string
+    print("entered userManager.getAllUsers")
+    
+    local stmt = DB:prepare("SELECT * FROM Users")
+    local result = dbUtils.queryMany(stmt)
+  
+    if result then
+      return result as UserList, ""
+    else
+      return {} as UserList, "Unable to retrieve users"
+    end
+end
+
+function userManager.updateUserBalance(userId: string, change: integer, increment: boolean): integer, string    
+    print("entered updateUserBalance")
     
     local user, err = userManager.getUser(userId)
+    print("user balance: " .. tostring(user.balance))
     if err ~= "" and increment then
         userManager.createUser(userId, change, os.time())
         return change, ""
-    elseif err ~= "" or user.balance < change then
-        return 0, err
+    elseif not increment and user.balance < change then
+        print("minimum balance not met")
+        return 0, "Minimum balance not met"
     end
 
     local newBalance = user.balance
@@ -103,21 +124,23 @@ function userManager.creditUser(userId: string, amount: integer): boolean, strin
     end
 end
 
-function userManager.redeemCredit(userId: string, callbackId: string, providers: string): boolean, string
+function userManager.redeemCredit(userId: string, callbackId: string, providers: string, requestedInputs: string): boolean, string
     print("entered redeemCredit")
     
     local _, err = userManager.updateUserBalance(userId, math.floor(Cost), false)
     if err ~= "" then
+        print("Error redeeming credit: " .. err)
         return false, err
     end
-
+    print("Credit redeemed successfully: " .. err)
     local useRoundRobin = false
-    if providers == nil then
+    if providers == "" then
         useRoundRobin = true
+        requestedInputs = ""
     end
 
     local success, update_err = 
-        randomManager.createRandomRequest(userId, providers, callbackId, "", useRoundRobin)
+        randomManager.createRandomRequest(userId, providers, callbackId, requestedInputs, useRoundRobin)
 
     if success then
         return true, ""

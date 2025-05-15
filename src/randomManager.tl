@@ -377,8 +377,6 @@ function randomManager.processEntropy(requestId: string): string, string
 
   print("Random request entropy updated successfully to: " .. entropy)
   
-  randomManager.trimDatabase(requestId)
-
   return entropy, ""
 end
 
@@ -407,6 +405,7 @@ function randomManager.forwardFulfillmentRewards(requestId: string): boolean, st
       json.encode({providerIds = providers, rewards = rewards})
     },
   })
+  randomManager.trimDatabase(requestId)
 
   return true, ""
 end

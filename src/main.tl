@@ -2,7 +2,6 @@
 require "globals"
 local json            = require "json"
 local database        = require "database"
-local dbUtils         = require "dbUtils"
 local providerManager = require "providerManager"
 local randomManager   = require "randomManager"
 local tokenManager    = require "tokenManager"
@@ -42,6 +41,10 @@ end
 
 global record GetRandomRequestsData
   requestIds: {string}
+end
+
+global record GetUserData
+  userId: string
 end
 
 global record GetProviderData
@@ -212,6 +215,34 @@ global function getProviderRandomBalanceHandler(msg: Message): boolean
   if err == "" then
     local responseData: GetProviderRandomBalanceResponse = { providerId = providerId, availibleRandomValues = randomBalance }
     ao.send(sendResponse(msg.From, "Get-Providers-Random-Balance-Response", responseData))
+    return true
+  else
+    ao.send(sendResponse(msg.From, "Error", {message = "Provider not found: " .. err}))
+    return false
+  end
+end
+
+-- Handler for getting a users info
+global function getUserInfoHandler(msg: Message): boolean
+  print("entered getUserInfoHandler")
+  local data = (json.decode(msg.Data as string) as GetUserData)
+  local userId = data.userId
+  local userInfo, err = userManager.getUser(userId)
+  if err == "" then
+    ao.send(sendResponse(msg.From, "Get-User-Response", userInfo))
+    return true
+  else
+    ao.send(sendResponse(msg.From, "Error", {message = "Provider not found: " .. err}))
+    return false
+  end
+end
+
+-- Handler for getting a users info
+global function getAllUserInfoHandler(msg: Message): boolean
+  print("entered getAllUserInfoHandler")
+  local userInfo, err = userManager.getAllUsers()
+  if err == "" then
+    ao.send(sendResponse(msg.From, "Get-User-Response", userInfo))
     return true
   else
     ao.send(sendResponse(msg.From, "Error", {message = "Provider not found: " .. err}))
@@ -575,9 +606,15 @@ global function redeemRandomCreditHandler(msg: Message): boolean
   print("entered redeemCreditHandler")
   local userId = msg.From
   local callbackId = msg.Tags["CallbackId"] or nil
-  local providers = msg.Tags["Providers"] or nil
+  if callbackId == nil then
+    ao.send(sendResponse(userId, "Error", {message = "Failure: No Callback ID provided"}))
+    return false
+  end
 
-  local success, err = userManager.redeemCredit(userId, callbackId, providers)
+  local providers = msg.Tags["Providers"] or ""
+  local requestedInputs = msg.Tags["RequestedInputs"] or ""
+
+  local success, err = userManager.redeemCredit(userId, callbackId, providers, requestedInputs)
 
   if success then
     ao.send(sendResponse(userId, "Redeemed Random Credit Created New Random Request", SuccessMessage))
@@ -606,6 +643,14 @@ wrapHandler(updateProviderBalanceHandler))
 Handlers.add('getProviderRandomBalance', 
 Handlers.utils.hasMatchingTag('Action', 'Get-Providers-Random-Balance'), 
 wrapHandler(getProviderRandomBalanceHandler))
+
+Handlers.add('getUserInfo', 
+Handlers.utils.hasMatchingTag('Action', 'Get-User-Info'), 
+wrapHandler(getUserInfoHandler))
+
+Handlers.add('getAllUserInfo', 
+Handlers.utils.hasMatchingTag('Action', 'Get-All-User-Info'), 
+wrapHandler(getAllUserInfoHandler))
 
 Handlers.add('getProvider',
 Handlers.utils.hasMatchingTag('Action', 'Get-Provider'),
