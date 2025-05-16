@@ -67,7 +67,6 @@ function userManager.getUser(userId: string): User, string
     end
 end
 
-
 function userManager.getAllUsers(): UserList, string
     print("entered userManager.getAllUsers")
     
