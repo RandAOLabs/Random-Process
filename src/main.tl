@@ -265,6 +265,33 @@ global function getProviderHandler(msg: Message): boolean
   end
 end
 
+global function claimFulfillmentRewards(msg: Message): boolean
+  print("entered claimFulfillmentRewards")
+  
+  local userId = msg.From
+
+  local provider, err = providerManager.getProvider(userId)
+  local fulfillmentRewards = provider.fulfillment_rewards or 0
+
+  if err ~= "" then
+    ao.send(sendResponse(msg.From, "Error", {message = "Failed to claim provider fulfillment rewards: " .. err}))
+  end
+
+  if not (fulfillmentRewards > 0) then 
+    ao.send(sendResponse(msg.From, "Error", {message = "Failed to claim provider fulfillment rewards: you have no rewards to claim"}))
+  end
+
+  local success, claimErr = providerManager.claimFulfillmentRewards(userId, fulfillmentRewards)
+
+  if success then
+    ao.send(sendResponse(userId, "Claimed fulfillment rewards", SuccessMessage))
+    return true
+  else
+    ao.send(sendResponse(msg.From, "Error", {message = "Failed to claim fulfillment rewards: " .. claimErr}))
+    return false
+  end
+end
+
 -- Handler for getting all providers
 global function getAllProvidersHandler(msg: Message): boolean
   print("entered getAllProvidersHandler")
@@ -494,10 +521,9 @@ global function getActiveRequestsHandler(msg: Message): boolean
 end
  
 -- Handler for cron ticks that facilitate cracking and slashing
-global function cronTickHandler(msg: Message): boolean
-  print("entered cronTick")
+global function crankHandler(msg: Message): boolean
+  print("entered crank")
 
-  -- memsnap.cronTick(msg)
   -- Initiate next station request
   -- randomManager.nextStationRequest()
     
@@ -541,11 +567,6 @@ global function cronTickHandler(msg: Message): boolean
               else
                 print("Provider list is empty, nothing to tombstone.")
               end
-            elseif category == "activeVerificationRequests" then
-              -- Rerequest random from approved providers
-              print("Rerequesting random from approved providers for request_id: " .. request_id)
-              randomManager.rerequestRandom(request_id)
-              ActiveRequests.activeVerificationRequests.request_ids[request_id] = nil
             end
           end
         end
@@ -692,9 +713,13 @@ Handlers.add('getRequestsToCrack',
 Handlers.utils.hasMatchingTag('Action', 'Get-Requests-To-Crack'), 
 wrapHandler(getRequestsToCrackHandler))
 
-Handlers.add('cronTick', 
-Handlers.utils.hasMatchingTag('Action', 'Cron'), 
-wrapHandler(cronTickHandler))
+Handlers.add('crank', 
+Handlers.utils.hasMatchingTag('Action', 'Crank'), 
+wrapHandler(crankHandler))
+
+Handlers.add('claimFulfillmentRewards', 
+Handlers.utils.hasMatchingTag('Action', 'Claim-Fulfillment-Rewards'), 
+wrapHandler(claimFulfillmentRewards))
 
 Handlers.add('requestNextStationNumber', 
 Handlers.utils.hasMatchingTag('Action', 'Request-Next-Station-Number'), 

@@ -843,10 +843,4 @@ describe("reveal puzzle params", function()
     local success = revealPuzzleParamsHandler(message)
     assert(success, "Failure: unable to reveal puzzle params from the second requested provider")
   end)
-
-  it("should be able to view random request in activeVerificationRequests", function()
-
-    print("ActiveRequests xx: " .. json.encode(ActiveRequests.activeVerificationRequests))
-    assert(ActiveRequests.activeVerificationRequests.request_ids["d6cce35c-487a-458f-bab2-9032c2621f38"], "Failure: random request not found in activeRequests")
-  end)
 end)

@@ -39,7 +39,7 @@ function dbUtils.execute(stmt: statement, statementHint: string | nil): boolean,
   end
 
   -- Logging
-  -- print("dbUtils.execute: Executing SQL statement")
+  -- print("dbUtils.execute: Executing SQL statement") 
 
   if stmt then
     local step_ok, step_err = pcall(function(): string stmt:step() end)

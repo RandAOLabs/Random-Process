@@ -60,6 +60,7 @@ function database.initializeDatabase(): boolean
           active_challenge_requests TEXT,
           active_output_requests TEXT,
           random_balance INTEGER,
+          fulfillment_rewards INTEGER,
           created_at INTEGER
         );
       ]],

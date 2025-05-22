@@ -2,6 +2,7 @@ require "globals"
 
 local dbUtils = require "dbUtils"
 local json = require "json"
+local tokenManager    = require "tokenManager"
 
 -- Type definitions
 global record Provider
@@ -13,6 +14,7 @@ global record Provider
   random_balance: integer
   created_at: integer
   provider_info: string
+  fulfillment_rewards: integer
 end
 
 global record ProviderList
@@ -39,8 +41,8 @@ function providerManager.createProvider(providerId: string, staked: number, time
   
   print("Preparing SQL statement for provider creation")
   local stmt = DB:prepare([[
-    INSERT OR IGNORE INTO Providers (provider_id, active, staked, random_balance, created_at)
-    VALUES (:provider_id, 0, :staked, :random_balance, :created_at);
+    INSERT OR IGNORE INTO Providers (provider_id, active, staked, random_balance, fulfillment_rewards, created_at)
+    VALUES (:provider_id, 0, :staked, :random_balance, 0, :created_at);
   ]])
   
   if not stmt then
@@ -711,7 +713,7 @@ function providerManager.tombstoneProviders(providerList: ProviderList): boolean
       providerManager.syncProviderQueueStatus(providerId, false)
       ao.send({
         Target = StakingProcess,
-        Action = "Slash-Provider",
+        Action = "Slash",
         Data = json.encode({providerId = providerId})
       })
     else
@@ -719,6 +721,38 @@ function providerManager.tombstoneProviders(providerList: ProviderList): boolean
     end
   end
 
+  return true, ""
+end
+
+function providerManager.resetFulfillmentRewards(providerId: string): boolean, string
+  print("entered providerManager.resetFulfillmentRewards")
+
+  local stmt: statement 
+
+  stmt = DB:prepare[[
+    UPDATE Providers
+    SET fulfillment_rewards = :fulfillment_rewards
+    WHERE provider_id = :provider_id;
+  ]]
+  
+  stmt:bind_names({provider_id = providerId, fulfillment_rewards = 0})
+  
+  local ok = pcall(function()
+  dbUtils.execute(stmt, "Failed to reset providers fulfillment rewards")
+  end)
+
+  if ok then
+    return true, ""
+  else
+    return false, "Failed to update providers fulfillment rewards"
+  end
+end
+
+function providerManager.claimFulfillmentRewards(providerId: string, fulfillmentRewards: integer): boolean, string
+  
+  tokenManager.sendTokens(TokenInUse, providerId, tostring(fulfillmentRewards), "Claimed fulfillment rewards")
+  providerManager.resetFulfillmentRewards(providerId)
+  
   return true, ""
 end
 

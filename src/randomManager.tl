@@ -2,7 +2,7 @@ require "globals"
 local json            = require "json"
 local dbUtils         = require "dbUtils"
 local providerManager = require "providerManager"
-
+local tokenManager    = require "tokenManager"
 -- Type definitions
 global record Key
   p: string
@@ -193,7 +193,6 @@ function randomManager.trimProviders(requestId: string): boolean, string
   return true, ""
 end
 
--- Remove a verifier from the database
 function randomManager.trimDatabase(requestId: string): boolean, string
   print("entered randomManager.trimDatabase")
   
@@ -390,23 +389,36 @@ function randomManager.forwardFulfillmentRewards(requestId: string): boolean, st
   end
 
   local providers = (json.decode(randomRequest.providers) as ProviderList).provider_ids
-  local rewards   = {}
+  local rewards = math.floor((Cost - 100000000) / #providers)
+  for _, providerId in ipairs(providers) do
+    
+    -- Prepare the SQL statement to update the status
+    local stmt = DB:prepare([[
+      UPDATE Providers
+      SET fulfillment_rewards = fulfillment_rewards + :delta
+      WHERE provider_id = :provider_id;
+    ]])
 
-  for _, _ in ipairs(providers) do
-    rewards[#rewards + 1] = tostring(math.floor(Cost / #providers))
+    if not stmt then
+      return false, "Failed to prepare statement: " .. DB:errmsg()
+    end
+
+    -- Bind the parameters
+    stmt:bind_names({delta = rewards, provider_id = providerId})
+
+    -- Execute the statement
+    local execute_ok, execute_err = dbUtils.execute(stmt, "Distribute fulfillment rewards")
+
+    if not execute_ok then
+      return false, "Failed to distribute fulfillment rewards: " .. tostring(execute_err)
+    end
+    print("Updated: " .. providerId .. " rewards'")
   end
+  
+  tokenManager.sendTokens(TokenInUse, Admin, tostring(100000000), "Protocol-Payout")
 
-  ao.send({
-    Target = StakingProcess,
-    Tags = {
-      Action = "Fulfillment-Rewaards",
-    },
-    Data = {
-      json.encode({providerIds = providers, rewards = rewards})
-    },
-  })
   randomManager.trimDatabase(requestId)
-
+  
   return true, ""
 end
 
@@ -548,15 +560,12 @@ function randomManager.decrementRequestedInputs(requestId: string): boolean, str
         randomManager.updateRandomRequestStatus(requestId, Status[3])
 
         ActiveRequests.activeOutputRequests.request_ids[requestId] = nil
-        ActiveRequests.activeVerificationRequests.request_ids[requestId] = os.time()
 
       -- Finished verifying send random response
       elseif status == Status[3] then
         print("Random request finished successfully")
         randomManager.deliverRandomResponse(requestId)
         randomManager.updateRandomRequestStatus(requestId, Status[5])
-        
-        ActiveRequests.activeVerificationRequests.request_ids[requestId] = nil
       end
     else
       return false, err
