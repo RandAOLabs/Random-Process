@@ -415,7 +415,7 @@ global function creditNoticeHandler(msg: Message): boolean
   local success, err = randomManager.createRandomRequest(userId, providers or "", callbackId, requestedInputs, useRoundRobin)
 
   if success then
-    ao.send(sendResponse(userId, "Created New Random Request", SuccessMessage))
+    -- ao.send(sendResponse(userId, "Created New Random Request", SuccessMessage))
     return true
   else
     ao.send(sendResponse(userId, "Error", {message = "Failed to create new random request: " .. err}))
