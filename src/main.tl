@@ -390,6 +390,23 @@ global function creditNoticeHandler(msg: Message): boolean
     tokenManager.returnTokens(msg, err)
     return false
   end
+
+  local userId            = msg.Sender
+  local providers         = msg.Tags["X-Providers"] or nil
+  local requestedInputs   = msg.Tags["X-RequestedInputs"] or ""
+  local prepayment        = msg.Tags["X-Prepayment"] or nil
+  local prepaymentUser    = msg.Tags["X-PrepaymentUser"] or nil
+
+  if prepayment ~= nil then
+    if prepayment == "true" then
+      if prepaymentUser ~= nil then
+        userId = prepaymentUser
+      end
+      userManager.creditUser(userId, value)
+      return true
+    end
+  end
+
   if callbackId == nil then
     local err = "Failure: No Callback ID provided"
     print(err)
@@ -397,19 +414,7 @@ global function creditNoticeHandler(msg: Message): boolean
     tokenManager.returnTokens(msg, err)
     return false
   end
-
-  local userId            = msg.Sender
-  local providers         = msg.Tags["X-Providers"] or nil
-  local requestedInputs   = msg.Tags["X-RequestedInputs"] or ""
-  local prepayment        = msg.Tags["X-Prepayment"] or nil
   
-  if prepayment ~= nil then
-    if prepayment == "true" then
-      userManager.creditUser(userId, value)
-      return true
-    end
-  end
-
   -- Use round-robin if no providers specified
   local useRoundRobin = providers == nil
   local success, err = randomManager.createRandomRequest(userId, providers or "", callbackId, requestedInputs, useRoundRobin)

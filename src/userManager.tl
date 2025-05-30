@@ -144,6 +144,8 @@ function userManager.redeemCredit(userId: string, callbackId: string, providers:
     if success then
         return true, ""
     else
+        print("Error creating random request: " .. update_err)
+        userManager.updateUserBalance(userId, math.floor(Cost), true)
         return false, update_err
     end
 end

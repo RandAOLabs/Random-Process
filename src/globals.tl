@@ -12,12 +12,14 @@ if not Configured then
     global Round                            = 1
 end
 
+global ProtocolPayout: string = "0"
+
 global RoundXList                       = {}
 global NextRoundList                    = {}
 
 global Squarings: string = "3000000" 
 global Admin: string = "N90q65iT59dCo01-gtZRUlLMX0w6_ylFHv2uHaSUFNk"
-global StakingProcess: string = "Y3Zd1EvSoHV5Ddmqh7SiZTyFj0vcfhNhTk972AemukI" -- "wBVNMO7KLGBZxHIRL6Kl1MJhm3ipCF351w4hv72SEY8"
+global StakingProcess: string = "wBVNMO7KLGBZxHIRL6Kl1MJhm3ipCF351w4hv72SEY8" -- "wBVNMO7KLGBZxHIRL6Kl1MJhm3ipCF351w4hv72SEY8"
 
 global RNGDecimals: integer = 9
 global Cost: number = 1 * 10 ^ RNGDecimals

@@ -2,7 +2,10 @@ require "globals"
 local json            = require "json"
 local dbUtils         = require "dbUtils"
 local providerManager = require "providerManager"
-local tokenManager    = require "tokenManager"
+-- local tokenManager    = require "tokenManager"
+
+ProtocolPayout = ProtocolPayout or "0"
+
 -- Type definitions
 global record Key
   p: string
@@ -415,7 +418,9 @@ function randomManager.forwardFulfillmentRewards(requestId: string): boolean, st
     print("Updated: " .. providerId .. " rewards'")
   end
   
-  tokenManager.sendTokens(TokenInUse, Admin, tostring(100000000), "Protocol-Payout")
+  --tokenManager.sendTokens(TokenInUse, Admin, tostring(100000000), "Protocol-Payout")
+
+  ProtocolPayout = tostring(tonumber(ProtocolPayout) + 100000000)
 
   randomManager.trimDatabase(requestId)
   
