@@ -623,8 +623,15 @@ global function reinitializeProviderHandler(msg: Message): boolean
   if msg.From ~= Admin then
     return false
   end
-  local providerId = msg.Tags["ProviderId"]
-  providerManager.updateProviderBalance(providerId, 0)
+  local providerId = msg.Tags["ProviderId"] or nil
+  local statusCode = tonumber(msg.Tags["Target-Value"])
+  
+  if providerId == nil or statusCode == nil then
+    return false
+  end
+
+  providerManager.updateProviderBalance(providerId, math.floor(statusCode))
+  
   return true
 end
 
