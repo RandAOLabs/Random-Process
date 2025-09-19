@@ -1,0 +1,23 @@
+{
+  "name": "random-process",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "build": "./scripts/build.sh",
+    "test": "bash ./scripts/test.sh"
+  },
+  "type": "module",
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@types/bun": "latest",
+    "aoform": "latest",
+    "@permaweb/aoconnect": "^0.0.56",
+    "arweave": "^1.15.1",
+    "fs": "^0.0.1-security",
+    "node-fetch": "^3.3.2",
+    "path": "^0.12.7"
+  }
+}
