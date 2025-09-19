@@ -7,6 +7,7 @@ local tokenManager    = require "tokenManager"
 -- Type definitions
 global record Provider
   provider_id: string
+  owner_id: string
   active: integer
   staked: integer
   active_challenge_requests: string
@@ -31,7 +32,7 @@ end
 
 local providerManager = {}
 
-function providerManager.createProvider(providerId: string, staked: number, timestamp: number): boolean, string
+function providerManager.createProvider(providerId: string, ownerId: string, staked: number, timestamp: number): boolean, string
   print("entered providerManager.createProvider")
     
   if not DB then
@@ -41,8 +42,8 @@ function providerManager.createProvider(providerId: string, staked: number, time
   
   print("Preparing SQL statement for provider creation")
   local stmt = DB:prepare([[
-    INSERT OR IGNORE INTO Providers (provider_id, active, staked, random_balance, fulfillment_rewards, created_at)
-    VALUES (:provider_id, 0, :staked, :random_balance, 0, :created_at);
+    INSERT OR IGNORE INTO Providers (provider_id, owner_id, active, staked, random_balance, fulfillment_rewards, created_at)
+    VALUES (:provider_id, :owner_id, 0, :staked, :random_balance, 0, :created_at);
   ]])
   
   if not stmt then
@@ -52,7 +53,7 @@ function providerManager.createProvider(providerId: string, staked: number, time
   
   print("Binding parameters for provider creation")
   local bind_ok, bind_err = pcall(function(): string
-    stmt:bind_names({provider_id = providerId, staked = staked, random_balance = 0, created_at = timestamp})
+    stmt:bind_names({provider_id = providerId, owner_id = ownerId, staked = staked, random_balance = 0, created_at = timestamp})
   end)
   
   if not bind_ok then
@@ -78,6 +79,20 @@ function providerManager.getProvider(providerId: string): Provider, string
   
   local stmt = DB:prepare("SELECT * FROM Providers WHERE provider_id = :provider_id")
   stmt:bind_names({provider_id = providerId})  
+  local result = dbUtils.queryOne(stmt)
+
+  if result then
+    return result as Provider, ""
+  else
+    return {} as Provider, "Unable to retrieve provider"
+  end
+end
+
+function providerManager.getProviderByOwner(ownerId: string): Provider, string
+  print("entered providerManager.getProviderByOwner")
+  
+  local stmt = DB:prepare("SELECT * FROM Providers WHERE owner_id = :owner_id")
+  stmt:bind_names({owner_id = ownerId})  
   local result = dbUtils.queryOne(stmt)
 
   if result then
@@ -468,25 +483,25 @@ function providerManager.decrementProviderBalance(userId: string): boolean, stri
   end
 end
 
-function providerManager.updateProviderStakedStatus(providerId: string, status: string, timestamp: number): boolean, string
+function providerManager.updateProviderStakedStatus(providerId: string, ownerId: string, status: string, timestamp: number): boolean, string
   print("entered providerManager.updateProviderStakedStatus")
 
   local stmt: statement 
   local staked: integer = status == "active" and 1 or 0
 
-  local _, err = providerManager.getProvider(providerId)
+  local _, err = providerManager.getProviderByOwner(ownerId)
   if err ~= "" then
-    providerManager.createProvider(providerId, 1, timestamp)
+    providerManager.createProvider(providerId, ownerId, 1, timestamp)
     return true, ""
   end
 
   stmt = DB:prepare[[
     UPDATE Providers
-    SET staked = :staked
-    WHERE provider_id = :provider_id;
+    SET staked = :staked, provider_id = :provider_id
+    WHERE owner_id = :owner_id;
   ]]
   
-  stmt:bind_names({provider_id = providerId, staked = staked})
+  stmt:bind_names({owner_id = ownerId, staked = staked, provider_id = providerId})
   
   local ok = pcall(function()
   dbUtils.execute(stmt, "Failed to update Provider staked status")
@@ -528,6 +543,29 @@ function providerManager.isStakedProvider(userId: string): boolean, string
   end
 
   if provider.staked == 1 then
+    return true, ""
+  else
+    return false, ""
+  end
+end
+
+function providerManager.isActiveOwner(ownerId: string, providerId: string): boolean, string
+  print("entered providerManager.isActiveOwner")
+
+  local provider, err = providerManager.getProvider(providerId)
+
+  print("provider: " .. json.encode(provider))
+
+  if err ~= "" then
+    return false, err
+  end
+
+  if provider.staked == 0 then
+    return false, ""
+  end
+  print("provider.owner_id: " .. provider.owner_id)
+  print("ownerId: " .. ownerId)
+  if provider.owner_id == ownerId then
     return true, ""
   else
     return false, ""
@@ -724,7 +762,7 @@ function providerManager.tombstoneProviders(providerList: ProviderList): boolean
   return true, ""
 end
 
-function providerManager.resetFulfillmentRewards(providerId: string): boolean, string
+function providerManager.resetFulfillmentRewards(ownerId: string): boolean, string
   print("entered providerManager.resetFulfillmentRewards")
 
   local stmt: statement 
@@ -732,10 +770,10 @@ function providerManager.resetFulfillmentRewards(providerId: string): boolean, s
   stmt = DB:prepare[[
     UPDATE Providers
     SET fulfillment_rewards = :fulfillment_rewards
-    WHERE provider_id = :provider_id;
+    WHERE owner_id = :owner_id;
   ]]
   
-  stmt:bind_names({provider_id = providerId, fulfillment_rewards = 0})
+  stmt:bind_names({owner_id = ownerId, fulfillment_rewards = 0})
   
   local ok = pcall(function()
   dbUtils.execute(stmt, "Failed to reset providers fulfillment rewards")
@@ -748,10 +786,10 @@ function providerManager.resetFulfillmentRewards(providerId: string): boolean, s
   end
 end
 
-function providerManager.claimFulfillmentRewards(providerId: string, fulfillmentRewards: integer): boolean, string
+function providerManager.claimFulfillmentRewards(ownerId: string, fulfillmentRewards: integer): boolean, string
   
-  tokenManager.sendTokens(TokenInUse, providerId, tostring(fulfillmentRewards), "Claimed fulfillment rewards")
-  providerManager.resetFulfillmentRewards(providerId)
+  tokenManager.sendTokens(TokenInUse, ownerId, tostring(fulfillmentRewards), "Claimed fulfillment rewards")
+  providerManager.resetFulfillmentRewards(ownerId)
   
   return true, ""
 end

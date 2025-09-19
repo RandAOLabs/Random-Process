@@ -54,6 +54,7 @@ function database.initializeDatabase(): boolean
       [[
         CREATE TABLE IF NOT EXISTS Providers (
           provider_id TEXT PRIMARY KEY,
+          owner_id TEXT,
           provider_info TEXT,
           active INTEGER,
           staked INTEGER,

@@ -21,6 +21,7 @@ end
 
 global record StakeUpdateData
   providerId: string
+  ownerId: string
   status: string
 end
 
@@ -162,9 +163,10 @@ global function updateProviderStakeHandler(msg: Message): boolean
 
   local data = (json.decode(msg.Data as string) as StakeUpdateData)
   local providerId = data.providerId
+  local ownerId = data.ownerId
   local status = data.status
 
-  local success, _err = providerManager.updateProviderStakedStatus(providerId, status, msg.Timestamp) 
+  local success, _err = providerManager.updateProviderStakedStatus(providerId, ownerId, status, msg.Timestamp) 
 
   if success then
     return true
@@ -178,9 +180,19 @@ global function updateProviderBalanceHandler(msg: Message): boolean
   print("entered updateProviderBalance")
   
   local userId = msg.From
- 
-  local stakedStatus, statusErr = providerManager.isStakedProvider(userId)
 
+  local providerId = msg.Tags.ProviderId
+
+  if providerId ~= nil then
+    local ownerStatus, ownerErr = providerManager.isActiveOwner(userId, providerId)
+    print("Owner status: " .. tostring(ownerStatus) .. " Owner error: " .. ownerErr)
+    if ownerErr == "" and ownerStatus == true then
+      userId = providerId
+    end
+  end
+
+  local stakedStatus, statusErr = providerManager.isStakedProvider(userId)
+  
   -- Check if staked
   if stakedStatus == false or statusErr ~= "" then 
     ao.send(sendResponse(msg.From, "Error", {message = "Update failed: Provider status is not active"}))
@@ -270,7 +282,7 @@ global function claimFulfillmentRewards(msg: Message): boolean
   
   local userId = msg.From
 
-  local provider, err = providerManager.getProvider(userId)
+  local provider, err = providerManager.getProviderByOwner(userId)
   local fulfillmentRewards = provider.fulfillment_rewards or 0
 
   if err ~= "" then
@@ -305,7 +317,7 @@ global function getAllProvidersHandler(msg: Message): boolean
   end
 end
 
--- Handler for committing timelock puzzle
+-- Handler for commiting timelock puzzles 
 global function commitPuzzleHandler(msg: Message): boolean
   print("entered commitPuzzle")
   
