@@ -1,0 +1,2 @@
+paralith-mono commit c4d8308
+files: backend/native/{json.lua,jsonenc.lua,hbclient.mjs}, packages/rune-ao/src/lib/slot-settle.mjs (import path adjusted)

@@ -1,0 +1,29 @@
+{
+  "owner": "DA9qhP25ZPz6MHIhO-7aNHDN3LsTAL7yCKYIkqr13Z8",
+  "retired": [
+    "3K_0gcFJixOwe5vsewbHztrzTyfImWxjHRfHwmbtz6A",
+    "2SIbZKP8AFPCDpkBrKFZu4SgVlwQwyxPpVxpNsV_ZVM",
+    "9VLwxCO2BQGpNGWu9ge3n9gja4ha_w1TY0yUl4tgWU8",
+    "OeBBOO-Dvvv3B9cT2L4UuHx47CUWHczF-ksnjlAkuq8",
+    "WgZABhnMkmzpwktePLhAgvQDgwcyHqj7JN0wAw3336U",
+    "orYuZ9nhkErYuN523LyGD1UrRY6Nhdxd-6P7OEc5TE4"
+  ],
+  "retiredTokens": [
+    "fZ6LdDKFVurqwtrK4AnRdJDRjRWPb_7cPiNe1plkbTw",
+    "rbMHAew1okpwvCrO2Oi9QeIe5kQ_UwXlpevX8t5g6UY"
+  ],
+  "token": "STG1iiKp6B8WEgL7-Md7OvyJxQwiozZrySonrww7Abw",
+  "beacon": "Fvy9TgEWG9zy2JijUBqj4_kiB4xozAbNjYbKVD3o3PE",
+  "groupKey": "8085ed55cb08a9193f3ef23ee16b3212033aa5f228402508502667d381d0b4e665ef32948a248634faa796a37e3a4658",
+  "committee": [
+    "mLw9gcjBKLekLhNDOrejq6l0MvQ9AOMFiMFDajFvvSI",
+    "AsQvMA7NYngw6rDw4D2CBcFDnOsWDXh0FOn0ZpiyRJw",
+    "ujHrIEF34b7IZ4vPMA7d4OX-ZknETCwG3uxk51Wqvm4"
+  ],
+  "verification": "attestations",
+  "sharePublicKeys": [
+    "b051c160372d5c6c36dbbcdc19636340b1f895f9222f8b0b42792090207b21d80f8377a173de2a17ca78f9a20ab85ede",
+    "8fb09dcf0b3d6c44931415861192d738356cf9f8a0bfa9969d49ce355388cc4668b35fd22d333d2b35cac733b0b8690e",
+    "b2168205a8d3b24a231d2c1d2c0efebbedb355248f5d754423849109f281265c3de977c380585696f1fb46459868f73c"
+  ]
+}
