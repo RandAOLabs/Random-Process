@@ -1,0 +1,16 @@
+{
+  "node-host": "randao.net",
+  "scheduling-mode": "local_confirmation",
+  "scheduler-lookahead": false,
+  "scheduler-publish-remote": false,
+  "scheduler-default-commitment-spec": "ans104@1.0",
+  "force-signed": false,
+  "store-all-signed": false,
+  "store": [
+    {
+      "store-module": "hb_store_fs",
+      "name": "/app/cache-mainnet",
+      "ao-types": "store-module=\"atom\""
+    }
+  ]
+}

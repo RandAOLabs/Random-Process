@@ -10,8 +10,8 @@
 //   node deploy/deploy.mjs verify [round]              verify a finalized round from state
 //   node deploy/deploy.mjs info                       print the beacon's published info
 //
-// Env: HB_NODE (HyperBEAM endpoint), HB_WALLET (owner/deployer wallet).
-// State: deploy/testnet.json.
+// Env: HB_NODE (HyperBEAM endpoint), HB_WALLET (owner/deployer wallet),
+//      RNG_STATE (optional deployment-state path; defaults to testnet.json).
 import fs from 'node:fs';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
@@ -29,7 +29,9 @@ const VERIFICATION = process.env.RNG_VERIFICATION || 'attestations';
 const WALLET = process.env.HB_WALLET;
 if (!NODE) throw new Error('HB_NODE is required');
 if (!WALLET) throw new Error('HB_WALLET is required');
-const STATE = path.join(HERE, 'testnet.json');
+const STATE = process.env.RNG_STATE
+  ? path.resolve(process.env.RNG_STATE)
+  : path.join(HERE, 'testnet.json');
 const jwk = JSON.parse(fs.readFileSync(WALLET, 'utf8'));
 const me = jwkToAddress(jwk);
 const state = fs.existsSync(STATE) ? JSON.parse(fs.readFileSync(STATE, 'utf8')) : {};

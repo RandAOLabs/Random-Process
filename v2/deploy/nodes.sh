@@ -4,6 +4,7 @@
 #   deploy/nodes.sh install  <tgz>   copy an archive containing app/ to every node
 #   deploy/nodes.sh init             create each node's provider wallet + DKG key
 #   deploy/nodes.sh beacon <id>      point existing committee keys at a new beacon
+#   deploy/nodes.sh node <url>       point providers at a HyperBEAM endpoint
 #   deploy/nodes.sh dkg-unsafe-http  development only; unauthenticated peer transport
 #   deploy/nodes.sh dkg-offline      same ceremony, deals relayed through this machine over SSH
 #   deploy/nodes.sh start            start the daemon (docker, restart unless-stopped)
@@ -54,6 +55,16 @@ case "${1:-}" in
         fs.writeFileSync(\"/srv/config.json\", JSON.stringify(cfg));
       ' '$2'"
       echo "$name beacon updated"
+    done ;;
+  node)
+    for n in "${NODES[@]}"; do read -r i name ip <<<"$n"
+      ssh_ "$ip" "docker run --rm -v $BASE:/srv $IMAGE node -e '
+        const fs = require(\"fs\");
+        const cfg = JSON.parse(fs.readFileSync(\"/srv/config.json\", \"utf8\"));
+        cfg.hbNode = process.argv[1];
+        fs.writeFileSync(\"/srv/config.json\", JSON.stringify(cfg));
+      ' '$2'"
+      echo "$name HyperBEAM endpoint updated"
     done ;;
   dkg-unsafe-http)
     for n in "${NODES[@]}"; do read -r i name ip <<<"$n"
