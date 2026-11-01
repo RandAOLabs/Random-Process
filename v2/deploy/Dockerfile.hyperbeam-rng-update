@@ -1,4 +1,5 @@
-FROM hyperbeam-rng-prod:staging
+ARG RNG_BUILD_IMAGE=hyperbeam-rng-prod:staging
+FROM ${RNG_BUILD_IMAGE}
 COPY src/preloaded/crypto/dev_rng.erl /app/src/preloaded/crypto/dev_rng.erl
-COPY src/preloaded/crypto/dev_timelock_test_vectors.erl /app/src/preloaded/crypto/dev_timelock_test_vectors.erl
-RUN rebar3 compile
+COPY src/preloaded/crypto/dev_rng_timelock_test_vectors.erl /app/src/preloaded/crypto/dev_rng_timelock_test_vectors.erl
+RUN rm -f /app/src/preloaded/crypto/dev_timelock_test_vectors.erl && rebar3 compile
