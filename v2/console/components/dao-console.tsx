@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { useLivePoll } from "../hooks/use-live-poll";
 import { connectWallet, sendMessage } from "../lib/wallet";
 import { SiteFooter, SiteHeader } from "./site-header";
 
@@ -32,11 +33,7 @@ export function DaoConsole() {
     setBeacon(await beaconResponse.json() as AnyHonestStatus);
   }
 
-  useEffect(() => {
-    const initial = window.setTimeout(() => void refresh().catch(() => undefined), 0);
-    const timer = window.setInterval(() => void refresh().catch(() => undefined), 10_000);
-    return () => { window.clearTimeout(initial); window.clearInterval(timer); };
-  }, []);
+  useLivePoll(refresh);
 
   async function action(label: string, run: () => Promise<void>) {
     setBusy(label); setError(null);
@@ -70,7 +67,7 @@ export function DaoConsole() {
 
   return (
     <main className="shell compact-page dao-page">
-      <SiteHeader live={Boolean(dao.configured)} network={dao.configured ? "ADVISORY" : "SETUP"} active="dao" />
+      <SiteHeader active="dao" />
       <section className="page-titlebar container"><div><p className="kicker">[ 04 // DAO ]</p><h1>Vote. Admins execute.</h1></div><p>Governance is advisory by design. Passed proposals never move funds or upgrade contracts automatically.</p></section>
       <section className="dao-board container">
         <div className="dao-column"><p className="board-label">PROTOCOL_FUNDS</p><dl className="dao-metrics"><div><dt>FOUNDATION_RESERVE</dt><dd>{rng(beacon.foundationReserveAtoms)} RNG</dd></div><div><dt>DAO_TREASURY</dt><dd>{rng(beacon.treasuryAtoms)} RNG</dd></div><div><dt>BEACON_ROUND</dt><dd>{beacon.round ?? "—"}</dd></div><div><dt>STAKED_VOTING_POWER</dt><dd>{dao.totalStaked ?? 0} RNG</dd></div></dl><p className="dao-rule">Foundation pays heartbeat rounds. Treasury receives subscriptions and pays 10 RNG crack bounties.</p></div>

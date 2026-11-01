@@ -17,7 +17,7 @@ const surfaces = [
 export default function WhyPage() {
   return (
     <main className="shell compact-page">
-      <SiteHeader live network="Native-Testnet" active="why" />
+      <SiteHeader active="why" />
       <section className="page-titlebar container"><div><p className="kicker">[ 01 // WHY ]</p><h1>Random is not automatically fair.</h1></div><p>A blockchain must replay exactly and resist whoever benefits from predicting the result.</p></section>
       <section className="why-board container">
         <div className="why-failures"><p className="board-label">FAILURE_MODES</p>{failures.map(([index, title, body]) => <article key={index}><span>{index}</span><div><h2>{title}</h2><p>{body}</p></div></article>)}</div>

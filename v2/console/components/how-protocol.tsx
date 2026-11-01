@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { useLivePoll } from "../hooks/use-live-poll";
 import { SiteFooter, SiteHeader } from "./site-header";
 
 type Status = {
@@ -19,21 +20,16 @@ const surfaces = [
 export function HowProtocol() {
   const [status, setStatus] = useState<Status | null>(null);
 
-  useEffect(() => {
-    const tick = async () => {
-      try {
-        const response = await fetch("/api/status", { cache: "no-store" });
-        if (response.ok) setStatus(await response.json() as Status);
-      } catch { /* The device map remains useful offline. */ }
-    };
-    const initial = window.setTimeout(() => void tick(), 0);
-    const timer = window.setInterval(() => void tick(), 10_000);
-    return () => { window.clearTimeout(initial); window.clearInterval(timer); };
-  }, []);
+  useLivePoll(async () => {
+    try {
+      const response = await fetch("/api/status", { cache: "no-store" });
+      if (response.ok) setStatus(await response.json() as Status);
+    } catch { /* The device map remains useful offline. */ }
+  });
 
   return (
     <main className="shell compact-page">
-      <SiteHeader live={Boolean(status?.verified)} network={status?.network} active="how" />
+      <SiteHeader active="how" />
       <section className="page-titlebar container"><div><p className="kicker">[ 02 // HOW ]</p><h1>Five surfaces. One device.</h1></div><p>The library and beacon processes handle delivery. <code>~rng@1.0</code> handles deterministic cryptography.</p></section>
       <section className="how-board container">
         <div className="how-surface-table"><div className="table-head"><span>#</span><span>SURFACE</span><span>STATUS</span><span>DEVICE OP</span><span>COST</span></div>{surfaces.map(([index, name, state, operation, cost]) => <div className="table-row" key={name}><span>{index}</span><b>{name}</b><span>{state}</span><code>/{operation}</code><span>{name === "THRESHOLD" && status ? `${status.price} TEST-RNG` : cost}</span></div>)}</div>

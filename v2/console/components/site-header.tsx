@@ -2,7 +2,7 @@
 import Image from "next/image";
 
 type ActivePage = "why" | "how" | "try" | "dao";
-type Props = { live?: boolean; network?: string; active?: ActivePage };
+type Props = { active?: ActivePage };
 
 const navigation: Array<{ key: ActivePage; index: string; label: string; href: string }> = [
   { key: "why", index: "01", label: "WHY", href: "/why" },
@@ -11,12 +11,12 @@ const navigation: Array<{ key: ActivePage; index: string; label: string; href: s
   { key: "dao", index: "04", label: "DAO", href: "/dao" },
 ];
 
-export function SiteHeader({ live = false, network = "connecting", active }: Props) {
+export function SiteHeader({ active }: Props) {
   return (
     <header className="topbar">
       <a className="brand" href="/" aria-label="RNG Labs home">
         <Image className="brand-logo" src="/rng.png" width={48} height={48} alt="" priority unoptimized />
-        <span className="brand-copy"><strong>RNG_LABS</strong><small>CIPHERPLAY::HYPERBEAM</small></span>
+        <span className="brand-copy"><strong>RNG_LABS</strong></span>
       </a>
       <nav className="nav-rail" aria-label="Main navigation">
         {navigation.map((item) => (
@@ -25,7 +25,6 @@ export function SiteHeader({ live = false, network = "connecting", active }: Pro
           </a>
         ))}
       </nav>
-      <a className="status-chip" href="/how#live"><span className={live ? "signal on" : "signal"} /><span><strong>~rng@1.0</strong><small>{network}</small></span></a>
     </header>
   );
 }

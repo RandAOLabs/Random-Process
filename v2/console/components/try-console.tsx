@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useLivePoll } from "../hooks/use-live-poll";
 import { connectWallet, hasWallet, sendMessage } from "../lib/wallet";
 import { SiteFooter, SiteHeader } from "./site-header";
 
@@ -60,12 +61,11 @@ export function TryConsole() {
     return body;
   }
 
+  useLivePoll(() => Promise.all([refreshStatus(), refreshAnyHonest()]).then(() => setStatusError(null)).catch((problem) => setStatusError(problem instanceof Error ? problem.message : "status unavailable")));
+
   useEffect(() => {
-    const tick = () => void Promise.all([refreshStatus(), refreshAnyHonest()]).then(() => setStatusError(null)).catch((problem) => setStatusError(problem instanceof Error ? problem.message : "status unavailable"));
-    const initial = window.setTimeout(tick, 0);
-    const timer = window.setInterval(tick, 10_000);
     const wallet = window.setTimeout(() => setWalletPresent(hasWallet()), 0);
-    return () => { window.clearTimeout(initial); window.clearTimeout(wallet); window.clearInterval(timer); };
+    return () => window.clearTimeout(wallet);
   }, []);
 
   async function derive() {
@@ -148,7 +148,7 @@ export function TryConsole() {
 
   return (
     <main className="shell try-page">
-      <SiteHeader live={Boolean(status?.verified)} network={status?.network} active="try" />
+      <SiteHeader active="try" />
       <section className="container product-switcher" aria-label="RNG products">{modes.map((item, index) => <button key={item.key} className={mode === item.key ? "product-option selected" : "product-option"} onClick={() => { setMode(item.key); setError(null); }} aria-pressed={mode === item.key}><span className="product-index">0{index + 1}</span><span className={item.state === "LIVE" ? "product-state live" : "product-state"}>{item.state}</span><strong>{item.title}</strong><small>{item.line}</small><code>$ rng {item.command}</code></button>)}</section>
 
       <section className="try-workspace container"><div className="mode-workbench">
