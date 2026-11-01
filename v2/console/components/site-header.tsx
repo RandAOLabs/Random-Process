@@ -1,13 +1,14 @@
 /* eslint-disable @next/next/no-html-link-for-pages -- full reloads avoid broken Vinext client navigation */
 import Image from "next/image";
 
-type ActivePage = "why" | "how" | "try";
+type ActivePage = "why" | "how" | "try" | "dao";
 type Props = { live?: boolean; network?: string; active?: ActivePage };
 
 const navigation: Array<{ key: ActivePage; index: string; label: string; href: string }> = [
   { key: "why", index: "01", label: "WHY", href: "/why" },
   { key: "how", index: "02", label: "HOW", href: "/how" },
   { key: "try", index: "03", label: "TRY", href: "/try" },
+  { key: "dao", index: "04", label: "DAO", href: "/dao" },
 ];
 
 export function SiteHeader({ live = false, network = "connecting", active }: Props) {

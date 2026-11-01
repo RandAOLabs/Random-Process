@@ -29,10 +29,81 @@ export function networkConfig() {
   return { node: node.replace(/\/$/, ""), beacon, token, label: env.RNG_NETWORK_LABEL || "Testnet" };
 }
 
+export function extendedNetworkConfig() {
+  const cfg = networkConfig();
+  return { ...cfg, anyHonest: env.RNG_ANYHONEST_ID || "", dao: env.RNG_DAO_ID || "" };
+}
+
 async function readJson<T>(url: string): Promise<T> {
-  const response = await fetch(url, { cache: "no-store", signal: AbortSignal.timeout(8_000) });
+  const response = await fetch(url, { cache: "no-store", headers: { accept: "application/json" }, signal: AbortSignal.timeout(8_000) });
   if (!response.ok) throw new Error(`HyperBEAM returned HTTP ${response.status}`);
   return response.json() as Promise<T>;
+}
+
+export async function getAnyHonestStatus() {
+  const cfg = extendedNetworkConfig();
+  if (!cfg.anyHonest) return { configured: false, status: "not-deployed" };
+  const base = `${cfg.node}/${cfg.anyHonest}~process@1.0/now`;
+  type Output = { y: string; via: "reveal" | "crack"; alpha?: string; proof?: string };
+  type Record = { T: number; h: string; commits: { [address: string]: string };
+    outputs: { [address: string]: Output }; value: string };
+  type Info = { round: number; unit: number; validators: Array<{ suspended?: boolean; exiting?: boolean }>;
+    foundationReserveAtoms: string; treasuryAtoms: string; activeSubscriptions: number;
+    priceSchedule: { round: number; request: number; subscription: number; subscriptionRounds: number; crackBounty: number } };
+  type State = { rounds: { [round: string]: Record } };
+  const [info, state] = await Promise.all([
+    readJson<Info>(`${base}/beaconinfo`),
+    readJson<State>(`${base}/timelockstate`),
+  ]);
+  const record = state.rounds[String(info.round)];
+  let proofValid = Boolean(record);
+  if (record) {
+    const addresses = Object.keys(record.commits).sort();
+    for (const address of addresses) {
+      const output = record.outputs[address];
+      if (!output) { proofValid = false; break; }
+      const url = new URL(`${cfg.node}/~rng@1.0/${output.via === "reveal" ? "verify-reveal" : "verify-crack"}`);
+      if (output.via === "reveal") {
+        url.searchParams.set("c", record.commits[address]);
+        url.searchParams.set("alpha", output.alpha ?? "");
+        url.searchParams.set("h", record.h);
+      } else {
+        url.searchParams.set("x", record.commits[address]);
+        url.searchParams.set("t", String(record.T));
+        url.searchParams.set("y", output.y);
+        url.searchParams.set("proof", output.proof ?? "");
+      }
+      const result = await readJson<{ valid?: boolean | string; y?: string }>(url.toString());
+      if (!([true, "true"].includes(result.valid ?? false)) || result.y !== output.y) { proofValid = false; break; }
+    }
+    const ys = addresses.map((address) => record.outputs[address].y).join("|");
+    const expected = await sha256Hex(`hyperbeam/rng/any-honest/v1/round|${cfg.anyHonest}|${info.round}|${ys}`);
+    proofValid = proofValid && expected === record.value;
+  }
+  return { configured: true, process: cfg.anyHonest, ...info, latest: record,
+    proofValid, checkedAt: new Date().toISOString() };
+}
+
+export async function getGovernanceStatus() {
+  const cfg = extendedNetworkConfig();
+  if (!cfg.dao) return { configured: false, status: "not-deployed", proposals: [] };
+  type ProposalState = { id?: number | string; eligible?: Record<string, unknown>;
+    voters?: Record<string, unknown>; [key: string]: unknown };
+  const state = await readJson<{
+    totalStaked?: number; quorumBps?: number; votingPeriodMs?: number;
+    minProposalStake?: number; proposals?: Record<string, ProposalState>;
+  }>(`${cfg.node}/${cfg.dao}~process@1.0/now/daostate`);
+  const proposals = Object.values(state.proposals ?? {}).map((proposal) => {
+    const voters = proposal.voters && typeof proposal.voters === "object"
+      ? Object.keys(proposal.voters as Record<string, unknown>).length : 0;
+    const { eligible: _eligible, voters: _voters, ...publicProposal } = proposal;
+    void _eligible; void _voters;
+    return { ...publicProposal, voters };
+  }).sort((a, b) => Number(b.id ?? 0) - Number(a.id ?? 0));
+  return { configured: true, process: cfg.dao, token: cfg.token, unit: 1000000,
+    totalStaked: state.totalStaked ?? 0,
+    quorumBps: state.quorumBps ?? 0, votingPeriodMs: state.votingPeriodMs ?? 0,
+    minProposalStake: state.minProposalStake ?? 0, proposals };
 }
 
 export async function sha256Hex(bytes: Uint8Array | string) {

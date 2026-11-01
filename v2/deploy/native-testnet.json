@@ -13,5 +13,12 @@
     "8fb09dcf0b3d6c44931415861192d738356cf9f8a0bfa9969d49ce355388cc4668b35fd22d333d2b35cac733b0b8690e",
     "b2168205a8d3b24a231d2c1d2c0efebbedb355248f5d754423849109f281265c3de977c380585696f1fb46459868f73c"
   ],
-  "verification": "device"
+  "verification": "device",
+  "anyHonest": "wKbfFswhCWvm6AhsUF_8kHDVvZMJnspqlnVDgZyq3AY",
+  "anyHonestValidators": [
+    "apkIrBZxqKh1oyUVJtCXOrHMviL3vtQaD7j0DTfJ0KY",
+    "JZeSPxl06ay3HsZKJWz2l_HbPs03uJj1WcB1tUnctcQ",
+    "G8nfKNw1wKnCd9bGYnr-3Os1j3a-pnWU7ovtLq5bPqU"
+  ],
+  "dao": "I4kC2K3GFvuQfFlR0d2Qnaes0I4YG85IJ2mYJkY_Ql0"
 }

@@ -9,6 +9,14 @@
 //   node deploy/deploy.mjs request [id]               ask for one beacon value
 //   node deploy/deploy.mjs verify [round]              verify a finalized round from state
 //   node deploy/deploy.mjs info                       print the beacon's published info
+//   node deploy/deploy.mjs spawn-anyhonest            spawn the Any-Honest beacon
+//   node deploy/deploy.mjs configure-anyhonest <validators.json>
+//   node deploy/deploy.mjs mint-creator               mint 1B TEST-RNG to owner
+//   node deploy/deploy.mjs fund-anyhonest [foundation] [treasury]
+//   node deploy/deploy.mjs spawn-dao                  spawn advisory governance
+//   node deploy/deploy.mjs stake-dao [rng]
+//   node deploy/deploy.mjs propose-dao <proposal.json>
+//   node deploy/deploy.mjs vote-dao <id> <yes|no|abstain>
 //
 // Env: HB_NODE (HyperBEAM endpoint), HB_WALLET (owner/deployer wallet),
 //      RNG_STATE (optional deployment-state path; defaults to testnet.json).
@@ -44,6 +52,8 @@ const json = () => [
 ];
 const tokenSource = () => [...json(), read('token/rng-token.lua')].join('\n');
 const beaconSource = () => [...json(), 'rng = (function()', read('lib/rng.lua'), 'end)()', read('beacon/beacon.lua')].join('\n');
+const anyHonestSource = () => [...json(), 'rng = (function()', read('lib/rng.lua'), 'end)()', read('beacon/anyhonest.lua')].join('\n');
+const daoSource = () => [...json(), read('governance/dao.lua')].join('\n');
 
 async function send(pid, action, { tags = {}, data } = {}) {
   const { slot } = await sendMessage({ node: NODE, jwk, process: pid, action, tags, data });
@@ -62,6 +72,12 @@ async function beaconInfo() {
 async function beaconState() {
   const r = await readState({ node: NODE, process: state.beacon, path: 'now/beaconstate' });
   if (r.status !== 200) throw new Error(`beaconstate: HTTP ${r.status}`);
+  return JSON.parse(r.value);
+}
+
+async function anyHonestInfo() {
+  const r = await readState({ node: NODE, process: state.anyHonest, path: 'now/beaconinfo' });
+  if (r.status !== 200) throw new Error(`any-honest beaconinfo: HTTP ${r.status}`);
   return JSON.parse(r.value);
 }
 
@@ -177,4 +193,108 @@ if (cmd === 'verify') {
   console.log(JSON.stringify(await verifyRound(round), null, 1));
 }
 
+if (cmd === 'spawn-anyhonest') {
+  if (state.anyHonest) throw new Error(`Any-Honest beacon already deployed (${state.anyHonest})`);
+  state.anyHonest = await spawnProcess({ node: NODE, jwk, lua: anyHonestSource(), name: 'RNG-Any-Honest-Beacon' });
+  save();
+  console.log('any-honest', state.anyHonest);
+  console.log('info', (await send(state.anyHonest, 'Get-Info')).output);
+}
+
+if (cmd === 'configure-anyhonest') {
+  if (!state.anyHonest || !state.token) throw new Error('spawn the token and Any-Honest beacon first');
+  const validators = JSON.parse(fs.readFileSync(args[0], 'utf8'));
+  if (!Array.isArray(validators) || validators.length < 2) throw new Error('validators.json must contain at least two addresses');
+  const table = JSON.parse(read('deploy/anyhonest-h.json'));
+  const T = 134217728;
+  const puzzle = table[String(T)];
+  const configured = await send(state.anyHonest, 'Configure', { data: JSON.stringify({
+    self: state.anyHonest, token: state.token, unit: 1000000,
+    T, h: puzzle.h, hProof: puzzle.hProof,
+    commitWindowMs: 3000, revealWindowMs: 10000,
+    abandonAfterMs: 1800000, minCommits: 2, cadenceMs: 1000,
+    heartbeat: 1, roundPrice: 3, requestPrice: 4,
+    subscriptionPrice: 1, subscriptionRounds: 1000, crackBounty: 10,
+    suspendAfter: 3, slash: 1000, rejoinAfter: 0,
+  }) });
+  console.log('configure', configured.output);
+  for (const address of validators) {
+    console.log('validator', address, (await send(state.anyHonest, 'Admin.Add-Validator', {
+      data: JSON.stringify({ address }),
+    })).output);
+  }
+  state.anyHonestValidators = validators;
+  save();
+}
+
+if (cmd === 'mint-creator') {
+  if (!state.token || !state.owner) throw new Error('token and owner are required');
+  const atoms = '1000000000000000';
+  console.log((await send(state.token, 'Admin.Mint', {
+    tags: { Recipient: state.owner, Quantity: atoms },
+  })).output);
+}
+
+if (cmd === 'fund-anyhonest') {
+  if (!state.anyHonest || !state.token) throw new Error('token and Any-Honest beacon are required');
+  const foundation = Number(args[0] || 100000000);
+  const treasury = Number(args[1] || 1000000);
+  for (const [amount, tag] of [[foundation, 'X-Foundation'], [treasury, 'X-Treasury']]) {
+    if (!Number.isSafeInteger(amount) || amount < 1) throw new Error(`invalid ${tag} amount`);
+    console.log(tag, (await send(state.token, 'Transfer', {
+      tags: { Recipient: state.anyHonest, Quantity: String(amount * 1000000),
+        'X-For': state.owner, [tag]: 'true' },
+    })).output);
+  }
+  for (const address of state.anyHonestValidators || []) {
+    console.log('bond', address, (await send(state.token, 'Transfer', {
+      tags: { Recipient: state.anyHonest, Quantity: String(25000 * 1000000),
+        'X-For': address, 'X-Bond': 'true' },
+    })).output);
+  }
+  console.log(JSON.stringify(await anyHonestInfo(), null, 1));
+}
+
+if (cmd === 'spawn-dao') {
+  if (state.dao) throw new Error(`DAO already deployed (${state.dao})`);
+  state.dao = await spawnProcess({ node: NODE, jwk, lua: daoSource(), name: 'RNG-DAO-Advisory' });
+  save();
+  console.log('dao', state.dao);
+  console.log('configure', (await send(state.dao, 'Configure', { data: JSON.stringify({
+    self: state.dao, token: state.token, unit: 1000000,
+    votingPeriodMs: 604800000, quorumBps: 2000, minProposalStake: 1000,
+  }) })).output);
+  console.log('info', (await send(state.dao, 'Info')).output);
+}
+
+if (cmd === 'stake-dao') {
+  if (!state.dao) throw new Error('spawn the DAO first');
+  const amount = Number(args[0] || 10000);
+  if (!Number.isSafeInteger(amount) || amount < 1) throw new Error('stake must be a positive whole RNG amount');
+  console.log((await send(state.token, 'Transfer', { tags: {
+    Recipient: state.dao, Quantity: String(amount * 1000000),
+    'X-For': me, 'X-Governance': 'true',
+  } })).output);
+}
+
+if (cmd === 'propose-dao') {
+  if (!state.dao) throw new Error('spawn the DAO first');
+  const proposal = JSON.parse(fs.readFileSync(args[0], 'utf8'));
+  console.log((await send(state.dao, 'Propose', { data: JSON.stringify(proposal) })).output);
+}
+
+if (cmd === 'vote-dao') {
+  if (!state.dao) throw new Error('spawn the DAO first');
+  const id = Number(args[0]);
+  const choice = args[1];
+  if (!Number.isSafeInteger(id) || !['yes', 'no', 'abstain'].includes(choice)) throw new Error('vote-dao needs an id and yes, no, or abstain');
+  console.log((await send(state.dao, 'Vote', { data: JSON.stringify({ id, choice }) })).output);
+}
+
+if (cmd === 'info-dao') {
+  const r = await readState({ node: NODE, process: state.dao, path: 'now/daostate' });
+  console.log(r.value);
+}
+
 if (cmd === 'info') console.log(JSON.stringify(await beaconInfo(), null, 1));
+if (cmd === 'info-anyhonest') console.log(JSON.stringify(await anyHonestInfo(), null, 1));

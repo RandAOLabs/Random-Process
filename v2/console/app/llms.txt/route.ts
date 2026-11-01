@@ -18,10 +18,9 @@ Network: ${cfg.label}
 
 - Local: live; deterministic and predictable to the sender.
 - Threshold: live; paid request-bound 2-of-3 BLS randomness.
-- Beacon: not deployed; a real beacon must advance continuously. The current
-  2-of-3 Threshold service advances only when a paid request is pending.
-- Any-Honest: restoring; the earlier time-lock implementation is not live on
-  the current testnet and must not be presented as executable.
+- Beacon: live; Foundation-funded Any-Honest rounds advance continuously.
+- Any-Honest: live; time-lock commits, reveals, and cracks are verified by
+  ~rng@1.0 on the native testnet.
 - Proof Explorer: live; independently verifies retained rounds.
 
 All five surfaces converge on the ~rng@1.0 device namespace. The device owns

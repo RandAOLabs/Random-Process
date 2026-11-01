@@ -10,7 +10,7 @@ const surfaces = [
   ["LOCAL", "Replay-safe; sender-predictable."],
   ["THRESHOLD", "Fast, request-bound 2-of-3 BLS."],
   ["BEACON", "Shared public rounds; free to read."],
-  ["ANY-HONEST", "Time-lock fairness; restoring."],
+  ["ANY-HONEST", "Live time-lock fairness with native proofs."],
   ["PROOF", "Independent retained-round checks."],
 ];
 

@@ -67,6 +67,11 @@ function runTokenTests()
     Action = "Admin.Mint", Recipient = F.process, Quantity = "25",
   }))
   eq("owner mint succeeds", r.Action, "Mint-Success")
+  r = send(wallet(F.owner, {
+    Action = "Admin.Mint", Recipient = F.owner, Quantity = "1000000000000000",
+  }))
+  check("creator allocation supports one billion six-decimal RNG",
+    r.Action == "Mint-Success" and r.Quantity == "1000000000000000")
 
   local outbox
   r, outbox = send(delivery(F.process, {

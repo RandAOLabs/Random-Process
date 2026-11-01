@@ -1,0 +1,4 @@
+FROM hyperbeam-rng-prod:staging
+COPY src/preloaded/crypto/dev_rng.erl /app/src/preloaded/crypto/dev_rng.erl
+COPY src/preloaded/crypto/dev_timelock_test_vectors.erl /app/src/preloaded/crypto/dev_timelock_test_vectors.erl
+RUN rebar3 compile

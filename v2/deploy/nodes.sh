@@ -9,6 +9,10 @@
 #   deploy/nodes.sh dkg-offline      same ceremony, deals relayed through this machine over SSH
 #   deploy/nodes.sh start            start the daemon (docker, restart unless-stopped)
 #   deploy/nodes.sh status | logs    health and recent logs
+#   deploy/nodes.sh anyhonest-install <tgz>  build the Any-Honest image
+#   deploy/nodes.sh anyhonest-init           create validator wallets
+#   deploy/nodes.sh anyhonest-start <beacon> <hbNode>
+#   deploy/nodes.sh anyhonest-status | anyhonest-logs
 #
 # The daemon runs in node:22-slim with host networking, so each host's own
 # firewall decides who can reach port $PORT. Files live in /opt/rng-provider.
@@ -103,6 +107,32 @@ case "${1:-}" in
   logs)
     for n in "${NODES[@]}"; do read -r i name ip <<<"$n"
       echo "== $name"; ssh_ "$ip" "docker logs --tail ${2:-15} rng-provider 2>&1"
+    done ;;
+  anyhonest-install)
+    for n in "${NODES[@]}"; do read -r i name ip <<<"$n"
+      scp -i "$KEY" -o BatchMode=yes -o IdentitiesOnly=yes "$2" "root@$ip:/tmp/rng-anyhonest.tgz"
+      ssh_ "$ip" "mkdir -p /opt/rng-anyhonest/data && chmod 700 /opt/rng-anyhonest/data && rm -rf /opt/rng-anyhonest/src && mkdir -p /opt/rng-anyhonest/src && tar -C /opt/rng-anyhonest/src -xzf /tmp/rng-anyhonest.tgz && cd /opt/rng-anyhonest/src && docker build -q -t rng-anyhonest -f provider/Dockerfile.anyhonest . >/dev/null && echo $name built" &
+    done
+    wait ;;
+  anyhonest-init)
+    for n in "${NODES[@]}"; do read -r i name ip <<<"$n"
+      echo "$name $(ssh_ "$ip" "echo '{\"dataDir\":\"/data\"}' > /opt/rng-anyhonest/data/init.json && docker run --rm -v /opt/rng-anyhonest/data:/data rng-anyhonest provider/anyhonest-validator.mjs init /data/init.json")"
+    done ;;
+  anyhonest-start)
+    for n in "${NODES[@]}"; do read -r i name ip <<<"$n"
+      ssh_ "$ip" "echo '{\"beacon\":\"$2\",\"hbNode\":\"$3\",\"dataDir\":\"/data\",\"listen\":7478}' > /opt/rng-anyhonest/data/config.json && docker rm -f rng-anyhonest >/dev/null 2>&1 || true; docker run -d --name rng-anyhonest --restart unless-stopped --network host -v /opt/rng-anyhonest/data:/data rng-anyhonest provider/anyhonest-validator.mjs run /data/config.json >/dev/null && echo $name started"
+    done ;;
+  anyhonest-status)
+    failed=0
+    for n in "${NODES[@]}"; do read -r i name ip <<<"$n"
+      result="$(ssh_ "$ip" "docker ps --filter name=rng-anyhonest --format '{{.Status}}'; curl -fsS -m 3 http://127.0.0.1:7478/")"
+      echo "$name: $result"
+      [[ "$result" == *'\"round\"'* ]] || failed=1
+    done
+    exit "$failed" ;;
+  anyhonest-logs)
+    for n in "${NODES[@]}"; do read -r i name ip <<<"$n"
+      echo "== $name"; ssh_ "$ip" "docker logs --tail ${2:-15} rng-anyhonest 2>&1"
     done ;;
   *) sed -n '2,10p' "$0"; exit 1 ;;
 esac

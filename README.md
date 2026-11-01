@@ -5,19 +5,23 @@ of **CipherPlay Inc.**
 
 ## Protocol
 
-HyperBEAM RNG is a threshold-BLS randomness primitive for AO processes. A
-distributed committee produces deterministic BLS12-381 signatures; HyperBEAM's
-preloaded `~rng@1.0` device verifies those signatures and derives replay-stable
-random bytes.
+HyperBEAM RNG is a multi-surface randomness primitive for AO processes. It
+provides deterministic local streams, request-bound threshold BLS, and a
+continuous Any-Honest time-lock beacon. HyperBEAM's preloaded `~rng@1.0`
+device verifies BLS signatures, time-lock reveals and cracks, and deterministic
+byte derivation.
 
-The canonical protocol, trust model, round-locking rules, and domain-separated
-derivations are in [`v2/SPEC.md`](./v2/SPEC.md).
+The threshold protocol is in [`v2/SPEC.md`](./v2/SPEC.md); the time-lock beacon,
+fixed economics, subscriptions, and validator exits are in
+[`v2/ANY_HONEST.md`](./v2/ANY_HONEST.md).
 
 ## Components
 
 - `v2/lib/rng.lua`: deterministic local and beacon-backed Lua API;
 - `v2/beacon/beacon.lua`: prepaid, round-locked threshold beacon process;
+- `v2/beacon/anyhonest.lua`: Foundation-funded one-second Any-Honest beacon;
 - `v2/provider/`: 2-of-3 BLS committee daemon and joint Feldman DKG;
+- `v2/governance/dao.lua`: advisory staked governance with manual execution;
 - `v2/token/rng-token.lua`: replay-safe test payment token;
 - `v2/deploy/`: HyperBEAM testnet and provider operations;
 - `v2/console/`: live console, documentation, deterministic demo, and MCP
@@ -47,9 +51,9 @@ their process balance so end users do not need to manage RNG credits.
 The live [RNG Labs Console](https://randao.net) shows the current committee,
 price, verification mode, and an independently verified round. It also offers
 a five-surface [`/try`](https://randao.net/try) console for local derivation,
-threshold requests, the planned continuous beacon, the restoring Any-Honest
-time-lock path, and proof exploration. Live, restoring, and not-deployed
-capabilities are labeled explicitly.
+threshold requests, the continuous Any-Honest beacon, one-shot Any-Honest
+requests, and proof exploration. Live proofs and funding state are shown
+directly from the native testnet.
 
 ## Agent tools
 

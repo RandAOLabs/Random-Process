@@ -46,6 +46,5 @@ It never receives or stores wallet keys.
 
 The visual system is deliberately monochrome and terminal-led. The persistent
 header rail keeps WHY, HOW, and TRY available at every viewport width. The
-five-product console defaults to the Beacon surface and changes its explanation
-and controls with the selected surface. Beacon is explicitly marked not
-deployed until a continuously advancing feed exists.
+five-product console defaults to the live Beacon surface and changes its
+explanation and controls with the selected surface.

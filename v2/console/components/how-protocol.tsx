@@ -11,8 +11,8 @@ type Status = {
 const surfaces = [
   ["01", "LOCAL", "LIVE", "derive", "free"],
   ["02", "THRESHOLD", "LIVE", "verify-bls", "3 TEST-RNG"],
-  ["03", "BEACON", "NOT DEPLOYED", "beacon", "read free"],
-  ["04", "ANY-HONEST", "RESTORING", "verify-reveal + verify-crack", "target 4 TEST-RNG"],
+  ["03", "BEACON", "LIVE / 1 SEC", "beacon", "read free"],
+  ["04", "ANY-HONEST", "LIVE", "verify-reveal + verify-crack", "4 TEST-RNG"],
   ["05", "PROOF", "LIVE", "verify", "free"],
 ];
 
