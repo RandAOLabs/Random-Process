@@ -162,8 +162,9 @@ for (;;) {
   } catch (e) {
     log('loop error:', e.message);
   }
-  // All validators can reach a node through the same reverse-proxy peer.
-  // Four polls per second still reacts well inside the commit window while
-  // keeping a three-validator beacon below HyperBEAM's default shared rate.
-  await sleep(250);
+  // All validators can reach a node through one reverse-proxy peer. Fast
+  // polling reacts promptly enough for a one-second cadence while the
+  // dedicated node's configured service allowance keeps aggregate traffic
+  // bounded.
+  await sleep(50);
 }
