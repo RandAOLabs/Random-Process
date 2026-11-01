@@ -54,6 +54,8 @@ const tokenSource = () => [...json(), read('token/rng-token.lua')].join('\n');
 const beaconSource = () => [...json(), 'rng = (function()', read('lib/rng.lua'), 'end)()', read('beacon/beacon.lua')].join('\n');
 const anyHonestSource = () => [...json(), 'rng = (function()', read('lib/rng.lua'), 'end)()', read('beacon/anyhonest.lua')].join('\n');
 const daoSource = () => [...json(), read('governance/dao.lua')].join('\n');
+const subscriptionConsumerSource = (beacon, id) => [...json(), read('test/subscription-consumer.lua')]
+  .join('\n').replaceAll('__BEACON__', beacon).replaceAll('__SUBSCRIPTION_ID__', id);
 
 async function send(pid, action, { tags = {}, data } = {}) {
   const { slot } = await sendMessage({ node: NODE, jwk, process: pid, action, tags, data });
@@ -294,6 +296,40 @@ if (cmd === 'vote-dao') {
 if (cmd === 'info-dao') {
   const r = await readState({ node: NODE, process: state.dao, path: 'now/daostate' });
   console.log(r.value);
+}
+
+if (cmd === 'test-subscription') {
+  if (!state.anyHonest || !state.token) throw new Error('token and Any-Honest beacon are required');
+  const id = `acceptance-${Date.now()}`;
+  const consumer = await spawnProcess({ node: NODE, jwk,
+    lua: subscriptionConsumerSource(state.anyHonest, id), name: 'RNG-Subscription-Acceptance' });
+  state.subscriptionAcceptance = { consumer, id, testedAt: Date.now() };
+  save();
+  await send(state.token, 'Faucet');
+  await send(state.token, 'Transfer', { tags: {
+    Recipient: state.anyHonest, Quantity: '1000000', 'X-For': consumer,
+  } });
+  await send(consumer, 'Start');
+  let receipt = null;
+  for (let attempt = 0; attempt < 30; attempt++) {
+    const r = await readState({ node: NODE, process: consumer, path: 'now/subscriptionstate' });
+    if (r.status === 200) {
+      const candidate = JSON.parse(r.value);
+      if (Number(candidate.receipts) > 0) { receipt = candidate; break; }
+    }
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+  }
+  if (!receipt) throw new Error('subscription did not deliver within 30 seconds');
+  const published = await readState({ node: NODE, process: state.anyHonest, path: 'now/timelockstate' });
+  const beaconState = JSON.parse(published.value);
+  const round = beaconState.rounds[String(receipt.lastRound)];
+  if (!round) throw new Error(`subscription round ${receipt.lastRound} is not retained`);
+  const expected = createHash('sha256').update(
+    `hyperbeam/rng/subscription/v1|${round.value}|${id}|${receipt.lastRound}`,
+  ).digest('hex');
+  if (receipt.lastValue !== expected) throw new Error('subscription value failed independent verification');
+  console.log(JSON.stringify({ consumer, id, receipts: receipt.receipts,
+    round: receipt.lastRound, value: receipt.lastValue, verified: true }, null, 2));
 }
 
 if (cmd === 'info') console.log(JSON.stringify(await beaconInfo(), null, 1));
