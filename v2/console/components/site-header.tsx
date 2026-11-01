@@ -11,12 +11,11 @@ export function SiteHeader({ live = false, network = "connecting" }: Props) {
         <span className="brand-copy"><strong>RNG_LABS</strong><small>CIPHERPLAY::HYPERBEAM</small></span>
       </Link>
       <nav aria-label="Main navigation">
-        <Link href="/#network">./network</Link>
+        <Link href="/why">./why</Link>
+        <Link href="/how">./how</Link>
         <Link href="/try">./try</Link>
-        <Link href="/#developers">./docs</Link>
-        <Link href="/#agents">./agents</Link>
       </nav>
-      <Link className="status-chip" href="/#network"><span className={live ? "signal on" : "signal"} />{network}</Link>
+      <Link className="status-chip" href="/how#live"><span className={live ? "signal on" : "signal"} />{network}</Link>
     </header>
   );
 }
