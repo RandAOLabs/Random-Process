@@ -74,6 +74,11 @@ Public reads remain available for observation and independent verification,
 but secure push is the canonical delivery path because it binds before reveal
 and avoids trusting a website or gateway for timing and completeness.
 
+Operators can run `deploy/deploy.mjs test-subscription` against a deployment.
+It creates a disposable AO consumer, prepays five rounds, waits for an
+authenticated push, and recomputes the subscriber-specific value from the
+published round before reporting success.
+
 ## Governance
 
 DAO votes are advisory. RNG Labs administrators manually execute passed votes

@@ -17,6 +17,7 @@
 //   node deploy/deploy.mjs stake-dao [rng]
 //   node deploy/deploy.mjs propose-dao <proposal.json>
 //   node deploy/deploy.mjs vote-dao <id> <yes|no|abstain>
+//   node deploy/deploy.mjs test-subscription         live authenticated-push acceptance test
 //
 // Env: HB_NODE (HyperBEAM endpoint), HB_WALLET (owner/deployer wallet),
 //      RNG_STATE (optional deployment-state path; defaults to testnet.json).
