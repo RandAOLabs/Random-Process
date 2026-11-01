@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node test/run-tests.mjs && node test/run-token-tests.mjs && node test/run-beacon-tests.mjs && node test/run-anyhonest-tests.mjs && node test/run-dao-tests.mjs && node --test test/bls.test.mjs test/anyhonest.test.mjs",
+    "test": "node test/run-tests.mjs && node test/run-token-tests.mjs && node test/run-beacon-tests.mjs && node test/run-anyhonest-tests.mjs && node test/run-dao-tests.mjs && node --test test/bls.test.mjs test/anyhonest.test.mjs test/deployment-config.test.mjs",
     "test:live": "node test/run-tests.mjs --live && node test/run-beacon-tests.mjs --live && node test/run-anyhonest-tests.mjs --live"
   },
   "dependencies": {
