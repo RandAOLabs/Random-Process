@@ -2,9 +2,9 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "RNG Labs — HyperBEAM RNG",
+  title: "RNG Labs — The randomness library for blockchains",
   description:
-    "Live, publicly verifiable randomness for AO processes on HyperBEAM.",
+    "Deterministic and publicly verifiable randomness for blockchain applications, built on HyperBEAM.",
   icons: {
     icon: "/rng.png",
     shortcut: "/rng.png",
