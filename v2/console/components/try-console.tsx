@@ -4,29 +4,34 @@ import { useEffect, useState } from "react";
 import { connectWallet, hasWallet, sendMessage } from "../lib/wallet";
 import { SiteFooter, SiteHeader } from "./site-header";
 
-type Mode = "local" | "verify" | "request";
+type Mode = "local" | "threshold" | "beacon" | "anyhonest" | "proof";
 type Status = {
   network: string; beacon: string; token: string; round: number; price: number;
-  unit: number; nativeVerification: boolean; groupKey: string; signature: string;
-  message: string; value: string; verified: boolean;
+  unit: number; threshold: number; committeeSize: number; nativeVerification: boolean;
+  groupKey: string; signature: string; message: string; value: string; verified: boolean;
   tokenInfo: { faucetAmount: number };
 };
 type Account = { address: string; tokenBalance: number; beaconBalance: number; price: number; unit: number };
 type Draw = { requestId: string; round: number; value?: string; verified?: boolean };
 
-const modes: Array<{ key: Mode; command: string; title: string; line: string; price: string; speed: string; trust: string }> = [
-  { key: "local", command: "rng derive", title: "LOCAL", line: "Replay-stable bytes from your own seed.", price: "FREE", speed: "IMMEDIATE", trust: "SENDER CAN PREDICT" },
-  { key: "verify", command: "rng verify", title: "VERIFY", line: "Inspect the latest threshold round.", price: "FREE", speed: "IMMEDIATE", trust: "2/3 BLS PROOF" },
-  { key: "request", command: "rng request", title: "REQUEST", line: "Create a fresh native-verified round.", price: "3 TEST-RNG", speed: "~1 SECOND", trust: "2/3 + ~rng@1.0" },
+const modes: Array<{ key: Mode; title: string; command: string; line: string; state: "LIVE" | "RESTORING" }> = [
+  { key: "local", title: "LOCAL", command: "derive", line: "Deterministic bytes inside one process.", state: "LIVE" },
+  { key: "threshold", title: "THRESHOLD", command: "request", line: "A fast, request-bound 2-of-3 BLS result.", state: "LIVE" },
+  { key: "beacon", title: "BEACON", command: "follow", line: "The shared public pulse, free to read.", state: "LIVE" },
+  { key: "anyhonest", title: "ANY-HONEST", command: "timelock", line: "Time-lock fairness while one actor is honest.", state: "RESTORING" },
+  { key: "proof", title: "PROOF EXPLORER", command: "verify", line: "Inspect any retained round yourself.", state: "LIVE" },
 ];
 
 export function TryConsole() {
-  const [mode, setMode] = useState<Mode>("verify");
+  const [mode, setMode] = useState<Mode>("beacon");
   const [status, setStatus] = useState<Status | null>(null);
   const [statusError, setStatusError] = useState<string | null>(null);
   const [seed, setSeed] = useState("loot-chest-42");
   const [derived, setDerived] = useState("");
   const [deriving, setDeriving] = useState(false);
+  const [proofRound, setProofRound] = useState("");
+  const [proof, setProof] = useState<Status | null>(null);
+  const [proofBusy, setProofBusy] = useState(false);
   const [walletPresent, setWalletPresent] = useState(false);
   const [address, setAddress] = useState<string | null>(null);
   const [account, setAccount] = useState<Account | null>(null);
@@ -61,6 +66,16 @@ export function TryConsole() {
     finally { setDeriving(false); }
   }
 
+  async function inspectProof() {
+    setProofBusy(true); setError(null);
+    try {
+      const requested = proofRound.trim() === "" ? undefined : Number(proofRound);
+      if (requested !== undefined && (!Number.isSafeInteger(requested) || requested < 1)) throw new Error("round must be a positive integer");
+      setProof(await refreshStatus(requested));
+    } catch (problem) { setError(problem instanceof Error ? problem.message : "verification failed"); }
+    finally { setProofBusy(false); }
+  }
+
   async function refreshAccount(currentAddress = address) {
     if (!currentAddress) return null;
     const response = await fetch(`/api/account?address=${encodeURIComponent(currentAddress)}`, { cache: "no-store" });
@@ -89,7 +104,7 @@ export function TryConsole() {
     rejectError((await sendMessage(status.token, { Action: "Faucet" })).reply);
     await refreshAccount();
   });
-  const onFund = () => walletAction("FUNDING_BEACON", async () => {
+  const onFund = () => walletAction("FUNDING_THRESHOLD", async () => {
     if (!status || !address) throw new Error("connect a wallet first");
     rejectError((await sendMessage(status.token, { Action: "Transfer", Recipient: status.beacon, Quantity: String(status.price * 3 * status.unit), "X-For": address })).reply);
     await refreshAccount();
@@ -100,17 +115,15 @@ export function TryConsole() {
     const reply = (await sendMessage(status.beacon, { Action: "Request-Random", Tier: "beacon", "Request-Id": requestId })).reply;
     rejectError(reply);
     const round = Number(reply.round);
-    if (!Number.isSafeInteger(round) || round < 1) throw new Error("the beacon did not assign a round");
+    if (!Number.isSafeInteger(round) || round < 1) throw new Error("the threshold service did not assign a round");
     setDraw({ requestId, round });
     for (let attempt = 0; attempt < 60; attempt += 1) {
       try {
-        const proof = await refreshStatus(round);
-        const framed = new TextEncoder().encode(`hyperbeam/rng/v1/request|${proof.value}|${requestId}`);
-        const digest = new Uint8Array(
-          await crypto.subtle.digest("SHA-256", framed as unknown as BufferSource),
-        );
+        const nextProof = await refreshStatus(round);
+        const framed = new TextEncoder().encode(`hyperbeam/rng/v1/request|${nextProof.value}|${requestId}`);
+        const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", framed as unknown as BufferSource));
         const value = Array.from(digest, (byte) => byte.toString(16).padStart(2, "0")).join("");
-        setDraw({ requestId, round, value, verified: proof.verified });
+        setDraw({ requestId, round, value, verified: nextProof.verified });
         await Promise.all([refreshStatus(), refreshAccount()]);
         return;
       } catch { await new Promise((resolve) => window.setTimeout(resolve, 500)); }
@@ -118,19 +131,36 @@ export function TryConsole() {
     throw new Error(`round ${round} did not finalize within 30 seconds`);
   });
 
+  const shownProof = proof ?? status;
+
   return (
     <main className="shell">
-      <SiteHeader live={Boolean(status?.verified)} network={status?.network} />
-      <section className="try-hero container"><p className="kicker">[ INTERACTIVE_TESTNET ]</p><h1>Choose your command.</h1><p className="lede">Three ways to touch the same primitive. No obsolete tiers. No hidden trust assumptions.</p><pre className="try-ascii">{`$ rng try --mode <local|verify|request>\n> protocol: hyperbeam/rng/v1\n> device:   ~rng@1.0\n> network:  ${status?.network ?? "connecting"}`}</pre></section>
+      <SiteHeader live={Boolean(status?.verified)} network={status?.network} active="try" />
+      <section className="console-overview container">
+        <div className="console-overview-head"><div><p className="kicker">[ RNG_CONTROL_PLANE ]</p><strong>~rng@1.0</strong></div><span className={status?.verified ? "console-connection online" : "console-connection"}><i className={status?.verified ? "signal on" : "signal"} />{status?.verified ? "CONNECTED" : "CONNECTING"}</span></div>
+        <dl className="console-metrics">
+          <div><dt>NETWORK</dt><dd>{status?.network ?? "—"}</dd></div>
+          <div><dt>FINALIZED_ROUND</dt><dd>{status?.round ?? "—"}</dd></div>
+          <div><dt>THRESHOLD</dt><dd>{status ? `${status.threshold}/${status.committeeSize}` : "—"}</dd></div>
+          <div><dt>NATIVE_VERIFY</dt><dd>{status?.nativeVerification ? "PASS" : "—"}</dd></div>
+          <div><dt>NEW_REQUEST</dt><dd>{status ? `${status.price} TEST-RNG` : "—"}</dd></div>
+          <div><dt>SURFACES</dt><dd>4 LIVE / 1 RESTORING</dd></div>
+        </dl>
+        <div className="console-operations" aria-label="Unified RNG device operations"><code>/derive</code><code>/verify-bls</code><code>/beacon</code><code>/verify-reveal</code><code>/verify-crack</code></div>
+      </section>
 
-      <section className="container mode-grid" aria-label="Try modes">{modes.map((item, index) => <button key={item.key} className={mode === item.key ? "mode-card selected" : "mode-card"} onClick={() => { setMode(item.key); setError(null); }}><span className="mode-index">0{index + 1}</span><code>$ {item.command}</code><h2>{item.title}</h2><p>{item.line}</p><dl><div><dt>PRICE</dt><dd>{item.price}</dd></div><div><dt>SPEED</dt><dd>{item.speed}</dd></div><div><dt>PROOF</dt><dd>{item.trust}</dd></div></dl></button>)}</section>
+      <section className="container product-switcher" aria-label="RNG products">{modes.map((item, index) => <button key={item.key} className={mode === item.key ? "product-option selected" : "product-option"} onClick={() => { setMode(item.key); setError(null); }} aria-pressed={mode === item.key}><span className="product-index">0{index + 1}</span><span className={item.state === "LIVE" ? "product-state live" : "product-state"}>{item.state}</span><strong>{item.title}</strong><small>{item.line}</small><code>$ rng {item.command}</code></button>)}</section>
 
       <section className="section container"><div className="mode-workbench">
-        {mode === "local" && <div className="workbench-grid"><div><p className="kicker">[ MODE::LOCAL ]</p><h2>Derive deterministic bytes.</h2><p className="muted">Length-framed SHA-256 blocks. Same seed, counter and byte count; same output on every replay.</p><label className="field"><span>SEED</span><input value={seed} onChange={(event) => setSeed(event.target.value)} maxLength={4096} /></label><button className="button invert" onClick={derive} disabled={deriving || !seed}>{deriving ? "DERIVING..." : "$ rng derive"}</button></div><div className="terminal"><div className="terminal-bar"><span>stdout</span><span>LOCAL</span></div><div className="terminal-body"><p><span className="prompt">&gt;</span> bytes=32 counter=0</p><code className="big-output">{derived || "waiting_for_input"}</code></div></div></div>}
+        {mode === "local" && <div className="workbench-grid"><div><p className="kicker">[ 01 // LOCAL ]</p><h2>Predictable on purpose.</h2><p className="muted">Free, immediate and replay-safe. Use it when the sender learning the result creates no advantage.</p><label className="field"><span>SEED</span><input value={seed} onChange={(event) => setSeed(event.target.value)} maxLength={4096} /></label><button className="button invert" onClick={derive} disabled={deriving || !seed}>{deriving ? "DERIVING..." : "$ rng derive"}</button></div><div className="terminal"><div className="terminal-bar"><span>stdout</span><span>~rng@1.0/derive</span></div><div className="terminal-body"><p><span className="prompt">&gt;</span> bytes=32 counter=0</p><code className="big-output">{derived || "waiting_for_input"}</code></div></div></div>}
 
-        {mode === "verify" && <div className="workbench-grid"><div><p className="kicker">[ MODE::VERIFY ]</p><h2>Challenge the latest round.</h2><p className="muted">The console checks the signature against the group key and recomputes the round value locally.</p><button className="button invert" onClick={() => void refreshStatus().catch((problem) => setStatusError(problem instanceof Error ? problem.message : "status unavailable"))}>$ rng verify --latest</button></div><div className="terminal"><div className="terminal-bar"><span>proof.log</span><span>{status?.verified ? "PASS" : "WAIT"}</span></div><div className="terminal-body"><p>round........ {status?.round ?? "—"}</p><p>device....... {status?.nativeVerification ? "~rng@1.0" : "pending"}</p><p>signature.... {status?.signature?.slice(0, 28) ?? "—"}...</p><p>value........ {status?.value ?? "—"}</p><p className={status?.verified ? "pass" : "wait"}>proof......... {status?.verified ? "VERIFIED" : statusError ?? "PENDING"}</p></div></div></div>}
+        {mode === "threshold" && <div><p className="kicker">[ 02 // THRESHOLD ]</p><h2>Bind a request before the committee knows the answer.</h2><p className="muted">A new 2-of-3 BLS result costs {status?.price ?? 3} TEST-RNG. Applications should prepay this balance so players never handle protocol credits.</p><ol className="wallet-steps"><li className={address ? "done" : "active"}><span>1</span><div><strong>CONNECT_WANDER</strong><small>{address ?? "authorize this console"}</small></div><button className="button" onClick={onConnect} disabled={Boolean(address) || Boolean(busy)}>{address ? "CONNECTED" : walletPresent ? "CONNECT" : "NO_WALLET"}</button></li><li className={(account?.tokenBalance ?? 0) >= ((status?.price ?? 3) * 3) ? "done" : address ? "active" : ""}><span>2</span><div><strong>GET_TEST_RNG</strong><small>wallet::{account?.tokenBalance ?? "—"}</small></div><button className="button" onClick={onFaucet} disabled={!address || Boolean(busy)}>FAUCET_{status?.tokenInfo.faucetAmount ?? 100}</button></li><li className={(account?.beaconBalance ?? 0) >= (status?.price ?? 3) ? "done" : account ? "active" : ""}><span>3</span><div><strong>FUND_THRESHOLD</strong><small>credit::{account?.beaconBalance ?? "—"}</small></div><button className="button" onClick={onFund} disabled={!account || account.tokenBalance < ((status?.price ?? 3) * 3) || Boolean(busy)}>FUND_{(status?.price ?? 3) * 3}</button></li><li className={(account?.beaconBalance ?? 0) >= (status?.price ?? 3) ? "active" : ""}><span>4</span><div><strong>REQUEST_RANDOM</strong><small>cost::{status?.price ?? 3}_TEST-RNG</small></div><button className="button invert" onClick={onRequest} disabled={!account || account.beaconBalance < (status?.price ?? 3) || Boolean(busy)}>EXECUTE</button></li></ol>{!walletPresent && <p className="notice">WANDER_NOT_FOUND :: <a href="https://wander.app" target="_blank" rel="noreferrer">install wallet</a></p>}{busy && <p className="notice" role="status">{busy} :: approve in Wander if prompted</p>}{draw && <output className="proof-output"><strong>{draw.value ? "RESULT_RECEIVED" : `WAITING_FOR_ROUND_${draw.round}`}</strong>{draw.value && <><span>{draw.verified ? "[ NATIVE_PROOF::PASS ]" : "[ PROOF::UNKNOWN ]"}</span><code>{draw.value}</code><small>round::{draw.round} request::{draw.requestId}</small></>}</output>}</div>}
 
-        {mode === "request" && <div><p className="kicker">[ MODE::REQUEST ]</p><h2>Make the committee produce a new value.</h2><p className="muted">Wander signs locally. TEST-RNG has no monetary value. The console never receives your wallet key.</p><ol className="wallet-steps"><li className={address ? "done" : "active"}><span>1</span><div><strong>CONNECT_WANDER</strong><small>{address ?? "authorize this console"}</small></div><button className="button" onClick={onConnect} disabled={Boolean(address) || Boolean(busy)}>{address ? "CONNECTED" : walletPresent ? "CONNECT" : "NO_WALLET"}</button></li><li className={(account?.tokenBalance ?? 0) >= ((status?.price ?? 3) * 3) ? "done" : address ? "active" : ""}><span>2</span><div><strong>GET_TEST_RNG</strong><small>wallet::{account?.tokenBalance ?? "—"}</small></div><button className="button" onClick={onFaucet} disabled={!address || Boolean(busy)}>FAUCET_{status?.tokenInfo.faucetAmount ?? 100}</button></li><li className={(account?.beaconBalance ?? 0) >= (status?.price ?? 3) ? "done" : account ? "active" : ""}><span>3</span><div><strong>FUND_BEACON</strong><small>credit::{account?.beaconBalance ?? "—"}</small></div><button className="button" onClick={onFund} disabled={!account || account.tokenBalance < ((status?.price ?? 3) * 3) || Boolean(busy)}>FUND_{(status?.price ?? 3) * 3}</button></li><li className={(account?.beaconBalance ?? 0) >= (status?.price ?? 3) ? "active" : ""}><span>4</span><div><strong>REQUEST_RANDOM</strong><small>cost::{status?.price ?? 3}_TEST-RNG</small></div><button className="button invert" onClick={onRequest} disabled={!account || account.beaconBalance < (status?.price ?? 3) || Boolean(busy)}>EXECUTE</button></li></ol>{!walletPresent && <p className="notice">WANDER_NOT_FOUND :: <a href="https://wander.app" target="_blank" rel="noreferrer">install wallet</a></p>}{busy && <p className="notice" role="status">{busy} :: approve in Wander if prompted</p>}{draw && <output className="proof-output"><strong>{draw.value ? "RESULT_RECEIVED" : `WAITING_FOR_ROUND_${draw.round}`}</strong>{draw.value && <><span>{draw.verified ? "[ NATIVE_PROOF::PASS ]" : "[ PROOF::UNKNOWN ]"}</span><code>{draw.value}</code><small>round::{draw.round} request::{draw.requestId}</small></>}</output>}</div>}
+        {mode === "beacon" && <div className="workbench-grid"><div><p className="kicker">[ 03 // BEACON // DEFAULT ]</p><h2>Follow the public pulse.</h2><p className="muted">Rounds are public, free to read and independently verifiable. The current testnet advances when paid threshold requests settle; continuous heartbeat subscription is the next delivery upgrade.</p><div className="fact-stack"><div><span>READ</span><b>FREE</b></div><div><span>SOURCE</span><b>{status ? `${status.threshold}-OF-${status.committeeSize} BLS` : "CONNECTING"}</b></div><div><span>DELIVERY</span><b>ON-DEMAND TESTNET</b></div></div><button className="button invert" onClick={() => void refreshStatus().catch((problem) => setStatusError(problem instanceof Error ? problem.message : "status unavailable"))}>REFRESH_PUBLIC_ROUND</button></div><div className="terminal"><div className="terminal-bar"><span>beacon.feed</span><span>{status?.verified ? "VERIFIED" : "WAIT"}</span></div><div className="terminal-body"><p>round........ {status?.round ?? "—"}</p><p>network...... {status?.network ?? "connecting"}</p><p>device....... {status?.nativeVerification ? "~rng@1.0" : "pending"}</p><p>value........</p><code className="big-output">{status?.value ?? statusError ?? "awaiting beacon"}</code></div></div></div>}
+
+        {mode === "anyhonest" && <div className="roadmap-workbench"><div><p className="kicker">[ 04 // ANY-HONEST // RESTORING ]</p><h2>Fair unless everyone colludes.</h2><p className="lede">Every validator commits a time-lock puzzle before reveals begin. One honest hidden contribution keeps the round unpredictable; a missing reveal can be cracked later without changing the result.</p><div className="roadmap-status">NOT_LIVE_ON_CURRENT_TESTNET</div></div><div className="protocol-steps"><div><span>01</span><b>COMMIT</b><p>Validators lock fresh puzzle contributions.</p></div><div><span>02</span><b>REVEAL</b><p>Secrets open only after the commit window closes.</p></div><div><span>03</span><b>CRACK</b><p>A withheld output is recovered by sequential work.</p></div><div><span>04</span><b>COMBINE</b><p>Every canonical output becomes one round value.</p></div></div><div className="device-paths"><code>~rng@1.0/generator</code><code>~rng@1.0/verify-reveal</code><code>~rng@1.0/verify-crack</code><code>~rng@1.0/derive</code></div><p className="notice">The original implementation still passes its local suites. It must be re-audited, merged into the unified device and redeployed before this control becomes executable.</p></div>}
+
+        {mode === "proof" && <div className="workbench-grid"><div><p className="kicker">[ 05 // PROOF_EXPLORER ]</p><h2>Do not trust the badge.</h2><p className="muted">Fetch a retained round, verify its BLS signature against the group key, then recompute the domain-separated value.</p><label className="field"><span>ROUND // BLANK MEANS LATEST</span><input type="number" min="1" inputMode="numeric" value={proofRound} onChange={(event) => setProofRound(event.target.value)} placeholder={String(status?.round ?? 1)} /></label><button className="button invert" onClick={inspectProof} disabled={proofBusy}>{proofBusy ? "VERIFYING..." : "$ rng verify --round"}</button></div><div className="terminal"><div className="terminal-bar"><span>proof.explorer</span><span>{shownProof?.verified ? "PASS" : "WAIT"}</span></div><div className="terminal-body"><p>round........ {shownProof?.round ?? "—"}</p><p>device....... {shownProof?.nativeVerification ? "~rng@1.0" : "pending"}</p><p>signature.... {shownProof?.signature?.slice(0, 32) ?? "—"}...</p><p>group-key.... {shownProof?.groupKey?.slice(0, 32) ?? "—"}...</p><p>value........ {shownProof?.value ?? "—"}</p><p className={shownProof?.verified ? "pass" : "wait"}>proof......... {shownProof?.verified ? "VERIFIED" : statusError ?? "PENDING"}</p></div></div></div>}
 
         {error && <p className="error" role="alert">ERROR:: {error}</p>}
       </div></section>

@@ -42,16 +42,21 @@ export function HowProtocol() {
 
   return (
     <main className="shell">
-      <SiteHeader live={Boolean(status?.verified)} network={status?.network} />
+      <SiteHeader live={Boolean(status?.verified)} network={status?.network} active="how" />
 
       <section className="content-hero container">
         <p className="kicker">[ 02 // HOW ]</p>
-        <h1>One library. Two sources. One verifier.</h1>
-        <p className="lede">Start with a deterministic local stream. Select the threshold beacon when an outcome must remain unpredictable until everyone is committed.</p>
+        <h1>One device. Five product surfaces.</h1>
+        <p className="lede"><code>~rng@1.0</code> is the shared cryptographic core. Applications choose a trust level or tool without changing randomness stacks.</p>
       </section>
 
       <section className="section container">
-        <div className="section-head"><div><p className="kicker">[ CHOOSE_THE_SOURCE ]</p><h2>Use only the trust you need.</h2></div><p>The same RNG library exposes both paths, so applications do not need two incompatible randomness systems.</p></div>
+        <div className="section-head"><div><p className="kicker">[ PRODUCT_MODEL ]</p><h2>Five surfaces. One core.</h2></div><p>Local, threshold and proof are live. The public beacon currently advances on demand. Any-Honest is implemented in the earlier codebase and is being restored to this device.</p></div>
+        <div className="surface-grid"><article><span>01 // LIVE</span><h3>LOCAL</h3><p>Predictable, deterministic bytes.</p></article><article><span>02 // LIVE</span><h3>THRESHOLD</h3><p>Fast request-bound 2-of-3 BLS.</p></article><article><span>03 // LIVE</span><h3>BEACON</h3><p>Shared public rounds, free to read.</p></article><article><span>04 // RESTORING</span><h3>ANY-HONEST</h3><p>Time-lock commit/reveal.</p></article><article><span>05 // LIVE</span><h3>PROOF</h3><p>Inspect and verify any retained round.</p></article></div>
+      </section>
+
+      <section className="section container">
+        <div className="section-head"><div><p className="kicker">[ LIVE_EXECUTION_PATHS ]</p><h2>Use only the trust you need.</h2></div><p>The current native testnet exposes local derivation and threshold-backed requests while the full Any-Honest path is restored.</p></div>
         <div className="source-grid">
           <article><span>LOCAL_STREAM</span><h3>Deterministic and free.</h3><p>A seed, byte count and counter are length-framed and expanded with SHA-256. Every process replay gets identical bytes.</p><dl><div><dt>USE_FOR</dt><dd>simulation, shuffling without adversarial value, reproducible tests</dd></div><div><dt>WALLET</dt><dd>none</dd></div><div><dt>PRICE</dt><dd>free</dd></div></dl></article>
           <article><span>THRESHOLD_BEACON</span><h3>Unpredictable before commitment.</h3><p>Requests are locked into a round before signature shares appear. Any valid threshold produces the same unique BLS signature.</p><dl><div><dt>USE_FOR</dt><dd>games, lotteries, rewards, markets and contested ordering</dd></div><div><dt>WALLET</dt><dd>application funds beacon</dd></div><div><dt>PRICE</dt><dd>{status ? `${status.price} TEST-RNG` : "3 TEST-RNG"}</dd></div></dl></article>

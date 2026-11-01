@@ -3,7 +3,7 @@ import { SiteFooter, SiteHeader } from "../../components/site-header";
 export default function WhyPage() {
   return (
     <main className="shell">
-      <SiteHeader live network="Native-Testnet" />
+      <SiteHeader live network="Native-Testnet" active="why" />
       <section className="content-hero container">
         <p className="kicker">[ 01 // WHY ]</p>
         <h1>Blockchains cannot use ordinary randomness.</h1>
@@ -25,8 +25,8 @@ export default function WhyPage() {
       </section>
 
       <section className="section container">
-        <div className="section-head"><div><p className="kicker">[ WHAT_RNG_PROVIDES ]</p><h2>One API for both cases.</h2></div><p>Use the cheapest safe source for each action rather than forcing every draw through a network round.</p></div>
-        <div className="guarantee-list"><div><b>LOCAL</b><span>Immediate, free and replay-stable. Appropriate when prediction does not create an advantage.</span></div><div><b>BEACON</b><span>Requests lock before partial signatures are published. Any valid threshold creates the same unique result.</span></div><div><b>PROOF</b><span>The signature and derived value are publicly verifiable through HyperBEAM’s native <code>~rng@1.0</code> device.</span></div></div>
+        <div className="section-head"><div><p className="kicker">[ WHAT_RNG_PROVIDES ]</p><h2>One API. Explicit trust.</h2></div><p>Choose the cheapest safe contract for each action instead of pretending every random value has the same guarantees.</p></div>
+        <div className="guarantee-list"><div><b>LOCAL</b><span>Immediate and replay-stable, but predictable to the sender.</span></div><div><b>THRESHOLD</b><span>A fast, request-bound 2-of-3 BLS result for value-bearing actions.</span></div><div><b>BEACON</b><span>A shared public round that applications can follow and independently verify.</span></div><div><b>ANY-HONEST</b><span>Time-lock commit/reveal security that remains fair while one validator is honest. Currently being restored to the unified device.</span></div><div><b>PROOF</b><span>Free inspection through HyperBEAM’s native <code>~rng@1.0</code> cryptographic core.</span></div></div>
       </section>
 
       <section className="section container trust-box"><p className="kicker">[ HONEST_LIMITS ]</p><h2>What it does not promise.</h2><p>Threshold committee collusion can reconstruct rounds early. A committee can censor or stop signing. A funded requester can buy multiple independent draws. The protocol makes these trust boundaries explicit rather than hiding them behind “random.”</p></section>

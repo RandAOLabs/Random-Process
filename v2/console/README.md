@@ -4,8 +4,8 @@ The CipherPlay-owned console for HyperBEAM RNG. It provides:
 
 - live beacon and committee status;
 - independent BLS signature and round-value verification;
-- a dedicated three-mode try console: local derive, live verify, and new
-  threshold request;
+- a five-surface try console for local, threshold, beacon, Any-Honest, and
+  proof exploration, with live and restoring states shown explicitly;
 - a guided Wander faucet, funding, request, and proof flow;
 - current Lua, JavaScript and HTTP integration documentation;
 - a Site-hosted MCP endpoint at `POST /mcp`;
@@ -44,6 +44,7 @@ and deployment follow the Sites workflow documented by the project tooling.
 The initial MCP surface is read-only except for pure deterministic derivation.
 It never receives or stores wallet keys.
 
-The visual system is deliberately monochrome and terminal-led. The circular
-RNG mark is reused from the earlier research site, while the previous UI's
-three-column interaction is retained without its retired protocol tiers.
+The visual system is deliberately monochrome and terminal-led. The persistent
+header rail keeps WHY, HOW, and TRY available at every viewport width. The
+five-product console defaults to the public beacon and changes its explanation
+and controls with the selected surface.

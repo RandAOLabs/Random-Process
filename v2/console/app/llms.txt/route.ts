@@ -14,13 +14,26 @@ Beacon process: ${cfg.beacon}
 Token process: ${cfg.token}
 Network: ${cfg.label}
 
+## Product surfaces
+
+- Local: live; deterministic and predictable to the sender.
+- Threshold: live; paid request-bound 2-of-3 BLS randomness.
+- Beacon: live, on demand; shared public rounds are free to read and verify.
+- Any-Honest: restoring; the earlier time-lock implementation is not live on
+  the current testnet and must not be presented as executable.
+- Proof Explorer: live; independently verifies retained rounds.
+
+All five surfaces converge on the ~rng@1.0 device namespace. The device owns
+cryptographic operations; libraries and processes own delivery, request
+binding, balances, and fees.
+
 ## What costs credits
 
 - Local deterministic streams: free; no wallet or network.
 - Reading rounds: free.
 - Verifying a signature: free at the protocol layer.
 - Deriving bytes: free at the protocol layer.
-- Requesting a new beacon result: 3 TEST-RNG on the current testnet.
+- Requesting a new threshold result: 3 TEST-RNG on the current testnet.
 
 Applications should prepay their process balance. End users should not need to
 hold or understand RNG credits.

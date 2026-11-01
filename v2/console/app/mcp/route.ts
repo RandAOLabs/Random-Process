@@ -78,8 +78,16 @@ async function callTool(name: unknown, args: Record<string, unknown>) {
     return textResult(guide(String(args.language)));
   }
   if (name === "rng_request_plan") return textResult({
+    productSurfaces: {
+      local: { status: "live", contract: "deterministic and predictable to the sender" },
+      threshold: { status: "live", contract: "request-bound 2-of-3 BLS randomness" },
+      beacon: { status: "live-on-demand", contract: "shared public rounds, free to read and verify" },
+      anyHonest: { status: "restoring", contract: "time-lock commit/reveal; not executable on the current testnet" },
+      proofExplorer: { status: "live", contract: "independent retained-round verification" },
+    },
+    device: "One ~rng@1.0 namespace for derivation, BLS verification, and the restored time-lock checks.",
     free: ["local deterministic streams", "round reads", "signature verification", "byte derivation"],
-    paid: { operation: "new threshold-beacon request", currentTestnetPrice: "3 TEST-RNG", faucet: "100 TEST-RNG per signed request, 1,000 lifetime cap per wallet" },
+    paid: { operation: "new threshold request", currentTestnetPrice: "3 TEST-RNG", faucet: "100 TEST-RNG per signed request, 1,000 lifetime cap per wallet" },
     recommendedUX: "The AO application process should prepay its beacon balance so end users never manage RNG credits.",
   });
   throw new Error(`unknown tool: ${String(name)}`);
