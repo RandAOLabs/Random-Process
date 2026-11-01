@@ -25,7 +25,7 @@ export function ConsoleDashboard() {
   }, []);
 
   return (
-    <main className="shell">
+    <main className="shell home-page">
       <SiteHeader live={Boolean(status?.verified)} network={status?.network} />
 
       <section className="home-simple container">
@@ -51,21 +51,6 @@ export function ConsoleDashboard() {
           </div>
           <div className="home-status"><span className={status?.verified ? "signal on" : "signal"} /><strong>{status?.verified ? "NATIVE_PROOF::PASS" : "CONNECTING"}</strong><small>{status ? `ROUND_${status.round} // ${status.threshold}_OF_${status.committeeSize} // ${status.nativeVerification ? "HYPERBEAM" : "FALLBACK"}` : "READING_NATIVE_TESTNET"}</small></div>
         </aside>
-      </section>
-
-      <section className="home-promises container">
-        <article><span>01</span><h2>Deterministic by default.</h2><p>Every node and replay reaches the same result.</p></article>
-        <article><span>02</span><h2>Verifiable when it matters.</h2><p>Threshold BLS rounds produce a proof anyone can check.</p></article>
-        <article><span>03</span><h2>One library.</h2><p>Move from local draws to beacon-backed results with one option.</p></article>
-      </section>
-
-      <section className="route-section container">
-        <p className="kicker">[ START_HERE ]</p>
-        <div className="route-grid">
-          <a href="/why"><span>01</span><h2>WHY</h2><p>Why ordinary randomness fails on deterministic blockchains.</p><b>READ_WHY →</b></a>
-          <a href="/how"><span>02</span><h2>HOW</h2><p>How local streams, threshold rounds, verification and pricing work.</p><b>SEE_THE_PROTOCOL →</b></a>
-          <a href="/try"><span>03</span><h2>TRY</h2><p>Derive locally, verify a round, or request fresh randomness.</p><b>OPEN_CONSOLE →</b></a>
-        </div>
       </section>
 
       <SiteFooter />

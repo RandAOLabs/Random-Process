@@ -134,24 +134,11 @@ export function TryConsole() {
   const shownProof = proof ?? status;
 
   return (
-    <main className="shell">
+    <main className="shell try-page">
       <SiteHeader live={Boolean(status?.verified)} network={status?.network} active="try" />
-      <section className="console-overview container">
-        <div className="console-overview-head"><div><p className="kicker">[ RNG_CONTROL_PLANE ]</p><strong>~rng@1.0</strong></div><span className={status?.verified ? "console-connection online" : "console-connection"}><i className={status?.verified ? "signal on" : "signal"} />{status?.verified ? "CONNECTED" : "CONNECTING"}</span></div>
-        <dl className="console-metrics">
-          <div><dt>NETWORK</dt><dd>{status?.network ?? "—"}</dd></div>
-          <div><dt>FINALIZED_ROUND</dt><dd>{status?.round ?? "—"}</dd></div>
-          <div><dt>THRESHOLD</dt><dd>{status ? `${status.threshold}/${status.committeeSize}` : "—"}</dd></div>
-          <div><dt>NATIVE_VERIFY</dt><dd>{status?.nativeVerification ? "PASS" : "—"}</dd></div>
-          <div><dt>NEW_REQUEST</dt><dd>{status ? `${status.price} TEST-RNG` : "—"}</dd></div>
-          <div><dt>SURFACES</dt><dd>4 LIVE / 1 RESTORING</dd></div>
-        </dl>
-        <div className="console-operations" aria-label="Unified RNG device operations"><code>/derive</code><code>/verify-bls</code><code>/beacon</code><code>/verify-reveal</code><code>/verify-crack</code></div>
-      </section>
-
       <section className="container product-switcher" aria-label="RNG products">{modes.map((item, index) => <button key={item.key} className={mode === item.key ? "product-option selected" : "product-option"} onClick={() => { setMode(item.key); setError(null); }} aria-pressed={mode === item.key}><span className="product-index">0{index + 1}</span><span className={item.state === "LIVE" ? "product-state live" : "product-state"}>{item.state}</span><strong>{item.title}</strong><small>{item.line}</small><code>$ rng {item.command}</code></button>)}</section>
 
-      <section className="section container"><div className="mode-workbench">
+      <section className="try-workspace container"><div className="mode-workbench">
         {mode === "local" && <div className="workbench-grid"><div><p className="kicker">[ 01 // LOCAL ]</p><h2>Predictable on purpose.</h2><p className="muted">Free, immediate and replay-safe. Use it when the sender learning the result creates no advantage.</p><label className="field"><span>SEED</span><input value={seed} onChange={(event) => setSeed(event.target.value)} maxLength={4096} /></label><button className="button invert" onClick={derive} disabled={deriving || !seed}>{deriving ? "DERIVING..." : "$ rng derive"}</button></div><div className="terminal"><div className="terminal-bar"><span>stdout</span><span>~rng@1.0/derive</span></div><div className="terminal-body"><p><span className="prompt">&gt;</span> bytes=32 counter=0</p><code className="big-output">{derived || "waiting_for_input"}</code></div></div></div>}
 
         {mode === "threshold" && <div><p className="kicker">[ 02 // THRESHOLD ]</p><h2>Bind a request before the committee knows the answer.</h2><p className="muted">A new 2-of-3 BLS result costs {status?.price ?? 3} TEST-RNG. Applications should prepay this balance so players never handle protocol credits.</p><ol className="wallet-steps"><li className={address ? "done" : "active"}><span>1</span><div><strong>CONNECT_WANDER</strong><small>{address ?? "authorize this console"}</small></div><button className="button" onClick={onConnect} disabled={Boolean(address) || Boolean(busy)}>{address ? "CONNECTED" : walletPresent ? "CONNECT" : "NO_WALLET"}</button></li><li className={(account?.tokenBalance ?? 0) >= ((status?.price ?? 3) * 3) ? "done" : address ? "active" : ""}><span>2</span><div><strong>GET_TEST_RNG</strong><small>wallet::{account?.tokenBalance ?? "—"}</small></div><button className="button" onClick={onFaucet} disabled={!address || Boolean(busy)}>FAUCET_{status?.tokenInfo.faucetAmount ?? 100}</button></li><li className={(account?.beaconBalance ?? 0) >= (status?.price ?? 3) ? "done" : account ? "active" : ""}><span>3</span><div><strong>FUND_THRESHOLD</strong><small>credit::{account?.beaconBalance ?? "—"}</small></div><button className="button" onClick={onFund} disabled={!account || account.tokenBalance < ((status?.price ?? 3) * 3) || Boolean(busy)}>FUND_{(status?.price ?? 3) * 3}</button></li><li className={(account?.beaconBalance ?? 0) >= (status?.price ?? 3) ? "active" : ""}><span>4</span><div><strong>REQUEST_RANDOM</strong><small>cost::{status?.price ?? 3}_TEST-RNG</small></div><button className="button invert" onClick={onRequest} disabled={!account || account.beaconBalance < (status?.price ?? 3) || Boolean(busy)}>EXECUTE</button></li></ol>{!walletPresent && <p className="notice">WANDER_NOT_FOUND :: <a href="https://wander.app" target="_blank" rel="noreferrer">install wallet</a></p>}{busy && <p className="notice" role="status">{busy} :: approve in Wander if prompted</p>}{draw && <output className="proof-output"><strong>{draw.value ? "RESULT_RECEIVED" : `WAITING_FOR_ROUND_${draw.round}`}</strong>{draw.value && <><span>{draw.verified ? "[ NATIVE_PROOF::PASS ]" : "[ PROOF::UNKNOWN ]"}</span><code>{draw.value}</code><small>round::{draw.round} request::{draw.requestId}</small></>}</output>}</div>}
