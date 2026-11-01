@@ -18,7 +18,8 @@ Network: ${cfg.label}
 
 - Local: live; deterministic and predictable to the sender.
 - Threshold: live; paid request-bound 2-of-3 BLS randomness.
-- Beacon: live, on demand; shared public rounds are free to read and verify.
+- Beacon: not deployed; a real beacon must advance continuously. The current
+  2-of-3 Threshold service advances only when a paid request is pending.
 - Any-Honest: restoring; the earlier time-lock implementation is not live on
   the current testnet and must not be presented as executable.
 - Proof Explorer: live; independently verifies retained rounds.

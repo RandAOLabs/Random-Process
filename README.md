@@ -47,9 +47,9 @@ their process balance so end users do not need to manage RNG credits.
 The live [RNG Labs Console](https://randao.net) shows the current committee,
 price, verification mode, and an independently verified round. It also offers
 a five-surface [`/try`](https://randao.net/try) console for local derivation,
-threshold requests, the public beacon, the restoring Any-Honest time-lock
-path, and proof exploration. Live and restoring capabilities are labeled
-explicitly.
+threshold requests, the planned continuous beacon, the restoring Any-Honest
+time-lock path, and proof exploration. Live, restoring, and not-deployed
+capabilities are labeled explicitly.
 
 ## Agent tools
 

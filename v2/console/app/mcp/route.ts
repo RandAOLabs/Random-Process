@@ -81,7 +81,7 @@ async function callTool(name: unknown, args: Record<string, unknown>) {
     productSurfaces: {
       local: { status: "live", contract: "deterministic and predictable to the sender" },
       threshold: { status: "live", contract: "request-bound 2-of-3 BLS randomness" },
-      beacon: { status: "live-on-demand", contract: "shared public rounds, free to read and verify" },
+      beacon: { status: "not-deployed", contract: "continuous shared public rounds; the current on-demand Threshold service is not the beacon product" },
       anyHonest: { status: "restoring", contract: "time-lock commit/reveal; not executable on the current testnet" },
       proofExplorer: { status: "live", contract: "independent retained-round verification" },
     },
