@@ -44,7 +44,7 @@ export function ConsoleDashboard() {
         </div>
 
         <aside className="home-proof">
-          <Image src="/rng.png" alt="RNG" width={220} height={220} className="home-rng-mark" priority />
+          <Image src="/rng.png" alt="RNG" width={220} height={220} className="home-rng-mark" priority unoptimized />
           <pre aria-label="Application randomness flow">{ascii}</pre>
           <div className="home-status"><span className={status?.verified ? "signal on" : "signal"} /><strong>{status?.verified ? "LIVE_PROOF::PASS" : "CONNECTING"}</strong><small>{status ? `ROUND_${status.round} // ${status.threshold}_OF_${status.committeeSize} // ${status.nativeVerification ? "NATIVE" : "FALLBACK"}` : "READING_NATIVE_TESTNET"}</small></div>
         </aside>

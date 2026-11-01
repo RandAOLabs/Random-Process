@@ -7,7 +7,7 @@ export function SiteHeader({ live = false, network = "connecting" }: Props) {
   return (
     <header className="topbar">
       <Link className="brand" href="/" aria-label="RNG Labs home">
-        <Image className="brand-logo" src="/rng.png" width={48} height={48} alt="" priority />
+        <Image className="brand-logo" src="/rng.png" width={48} height={48} alt="" priority unoptimized />
         <span className="brand-copy"><strong>RNG_LABS</strong><small>CIPHERPLAY::HYPERBEAM</small></span>
       </Link>
       <nav aria-label="Main navigation">
