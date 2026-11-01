@@ -19,6 +19,8 @@ The deployment supplies these environment variables:
 - `RNG_NODE_URL`
 - `RNG_BEACON_ID`
 - `RNG_TOKEN_ID`
+- `RNG_ANYHONEST_ID`
+- `RNG_DAO_ID`
 - `RNG_NETWORK_LABEL`
 
 Keeping network identity out of the bundle allows a beacon, token, node or
@@ -37,6 +39,8 @@ and deployment follow the Sites workflow documented by the project tooling.
 
 - `rng_status`
 - `rng_verify_round`
+- `rng_anyhonest_status`
+- `rng_governance_status`
 - `rng_derive`
 - `rng_integration_guide`
 - `rng_request_plan`

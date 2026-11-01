@@ -127,7 +127,7 @@ case "${1:-}" in
     for n in "${NODES[@]}"; do read -r i name ip <<<"$n"
       result="$(ssh_ "$ip" "docker ps --filter name=rng-anyhonest --format '{{.Status}}'; curl -fsS -m 3 http://127.0.0.1:7478/")"
       echo "$name: $result"
-      [[ "$result" == *'\"round\"'* ]] || failed=1
+      [[ "$result" == *'"round"'* ]] || failed=1
     done
     exit "$failed" ;;
   anyhonest-logs)

@@ -10,4 +10,6 @@ exec npm run start:container -- \
   --var "RNG_NODE_URL:${RNG_NODE_URL}" \
   --var "RNG_BEACON_ID:${RNG_BEACON_ID}" \
   --var "RNG_TOKEN_ID:${RNG_TOKEN_ID}" \
+  --var "RNG_ANYHONEST_ID:${RNG_ANYHONEST_ID:-}" \
+  --var "RNG_DAO_ID:${RNG_DAO_ID:-}" \
   --var "RNG_NETWORK_LABEL:${RNG_NETWORK_LABEL:-Testnet}"

@@ -62,6 +62,8 @@ The console exposes an MCP 2026-07-28 endpoint at
 
 - `rng_status`
 - `rng_verify_round`
+- `rng_anyhonest_status`
+- `rng_governance_status`
 - `rng_derive`
 - `rng_integration_guide`
 - `rng_request_plan`

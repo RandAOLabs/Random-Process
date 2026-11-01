@@ -1,9 +1,9 @@
-import { networkConfig } from "../../lib/rng";
+import { extendedNetworkConfig } from "../../lib/rng";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  const cfg = networkConfig();
+  const cfg = extendedNetworkConfig();
   const text = `# RNG Labs / HyperBEAM RNG
 
 HyperBEAM RNG v1 provides replay-stable local randomness, threshold-BLS beacon
@@ -11,6 +11,8 @@ rounds, native BLS verification, and deterministic byte derivation for AO.
 
 Canonical domain: hyperbeam/rng/v1
 Beacon process: ${cfg.beacon}
+Any-Honest process: ${cfg.anyHonest}
+Governance process: ${cfg.dao}
 Token process: ${cfg.token}
 Network: ${cfg.label}
 
@@ -34,6 +36,12 @@ binding, balances, and fees.
 - Verifying a signature: free at the protocol layer.
 - Deriving bytes: free at the protocol layer.
 - Requesting a new threshold result: 3 TEST-RNG on the current testnet.
+- Requesting a one-shot Any-Honest result: 4 TEST-RNG.
+- Secure process subscription: 1 TEST-RNG for 1,000 authenticated pushes.
+
+Public reads are free but inherit the selected gateway view. The strongest
+delivery path is a prepaid AO process subscription bound before the reveal
+phase; the beacon then pushes the authenticated result to that process.
 
 Applications should prepay their process balance. End users should not need to
 hold or understand RNG credits.
@@ -44,8 +52,12 @@ hold or understand RNG credits.
 - POST /api/derive
 - POST /mcp (MCP 2026-07-28)
 
-MCP tools: rng_status, rng_verify_round, rng_derive,
-rng_integration_guide, rng_request_plan.
+MCP tools: rng_status, rng_verify_round, rng_anyhonest_status,
+rng_governance_status, rng_derive, rng_integration_guide, rng_request_plan.
+
+Governance is advisory. Token-weighted votes establish the DAO's decision;
+administrators manually execute and record passed proposals after technical
+review. The DAO cannot upgrade contracts or move funds automatically.
 
 ## Signature framing
 

@@ -34,8 +34,11 @@ export function extendedNetworkConfig() {
   return { ...cfg, anyHonest: env.RNG_ANYHONEST_ID || "", dao: env.RNG_DAO_ID || "" };
 }
 
-async function readJson<T>(url: string): Promise<T> {
-  const response = await fetch(url, { cache: "no-store", headers: { accept: "application/json" }, signal: AbortSignal.timeout(8_000) });
+async function readJson<T>(url: string, accept = "application/ao"): Promise<T> {
+  // HyperBEAM's `application/json` codec wraps process bodies in
+  // `{ "ao-result": "body", body: "..." }`. The AO representation returns
+  // the process/device JSON itself, which is the stable shape callers need.
+  const response = await fetch(url, { cache: "no-store", headers: { accept }, signal: AbortSignal.timeout(8_000) });
   if (!response.ok) throw new Error(`HyperBEAM returned HTTP ${response.status}`);
   return response.json() as Promise<T>;
 }
@@ -73,12 +76,14 @@ export async function getAnyHonestStatus() {
         url.searchParams.set("y", output.y);
         url.searchParams.set("proof", output.proof ?? "");
       }
-      const result = await readJson<{ valid?: boolean | string; y?: string }>(url.toString());
+      const result = await readJson<{ valid?: boolean | string; y?: string }>(url.toString(), "application/json");
       if (!([true, "true"].includes(result.valid ?? false)) || result.y !== output.y) { proofValid = false; break; }
     }
-    const ys = addresses.map((address) => record.outputs[address].y).join("|");
-    const expected = await sha256Hex(`hyperbeam/rng/any-honest/v1/round|${cfg.anyHonest}|${info.round}|${ys}`);
-    proofValid = proofValid && expected === record.value;
+    if (proofValid) {
+      const ys = addresses.map((address) => record.outputs[address].y).join("|");
+      const expected = await sha256Hex(`hyperbeam/rng/any-honest/v1/round|${cfg.anyHonest}|${info.round}|${ys}`);
+      proofValid = expected === record.value;
+    }
   }
   return { configured: true, process: cfg.anyHonest, ...info, latest: record,
     proofValid, checkedAt: new Date().toISOString() };
