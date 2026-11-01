@@ -8,8 +8,8 @@ COPY --from=rng_source \
   /app/src/preloaded/crypto/dev_rng.erl \
   /app/src/preloaded/crypto/dev_rng_test_vectors.erl \
   /app/src/preloaded/crypto/dev_rng_timelock_test_vectors.erl \
-  /app/src/preloaded/rng/
-RUN rm -rf /app/_build/preloaded-store && rebar3 device preload
+  /app/src/preloaded/crypto/
+RUN rebar3 device preload
 
 FROM ${HB_BASE_IMAGE}
 
