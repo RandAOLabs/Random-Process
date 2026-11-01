@@ -9,12 +9,6 @@ type Status = {
   nativeVerification: boolean; verified: boolean; value: string;
 };
 
-const ascii = String.raw`      ┌─────────────┐
-APP ──▶│ RNG LIBRARY │──▶ VALUE
-      └──────┬──────┘
-             ▼
-      HYPERBEAM PROOF`;
-
 export function ConsoleDashboard() {
   const [status, setStatus] = useState<Status | null>(null);
 
@@ -36,17 +30,26 @@ export function ConsoleDashboard() {
 
       <section className="home-simple container">
         <div className="home-message">
-          <p className="kicker">[ RNG LABS // CIPHERPLAY ]</p>
-          <h1>The randomness library for blockchain applications.</h1>
-          <p className="home-built">Built on HyperBEAM.</p>
-          <p className="home-description">Generate replay-safe randomness locally. Upgrade important outcomes to publicly verifiable threshold randomness without rewriting your application.</p>
-          <div className="hero-actions"><a className="button invert" href="/try">TRY_IT_NOW →</a><a className="button" href="/why">WHY_BLOCKCHAINS_NEED_THIS</a></div>
+          <p className="kicker">[ THE BLOCKCHAIN RNG LIBRARY // BUILT ON HYPERBEAM ]</p>
+          <h1>Randomness you can prove.</h1>
+          <div className="hero-actions"><a className="button invert" href="/try">ENTER_THE_CONSOLE →</a><a className="text-link" href="/how">see_how_it_works</a></div>
+          <div className="hero-command"><span>$</span> rng request <b>--verify=native</b><i className="cursor">█</i></div>
         </div>
 
-        <aside className="home-proof">
-          <Image src="/rng.png" alt="RNG" width={220} height={220} className="home-rng-mark" priority unoptimized />
-          <pre aria-label="Application randomness flow">{ascii}</pre>
-          <div className="home-status"><span className={status?.verified ? "signal on" : "signal"} /><strong>{status?.verified ? "LIVE_PROOF::PASS" : "CONNECTING"}</strong><small>{status ? `ROUND_${status.round} // ${status.threshold}_OF_${status.committeeSize} // ${status.nativeVerification ? "NATIVE" : "FALLBACK"}` : "READING_NATIVE_TESTNET"}</small></div>
+        <aside className="rng-visual" aria-label="HyperBEAM native randomness proof">
+          <div className="rng-orbit">
+            <span className="orbit ring-one" />
+            <span className="orbit ring-two" />
+            <span className="orbit ring-three" />
+            <span className="orbit-node node-one" />
+            <span className="orbit-node node-two" />
+            <span className="orbit-node node-three" />
+            <Image src="/rng.png" alt="RNG" width={260} height={260} className="home-rng-mark" priority unoptimized />
+            <code className="visual-label label-one">THRESHOLD_BLS</code>
+            <code className="visual-label label-two">REPLAY_SAFE</code>
+            <code className="visual-label label-three">~rng@1.0</code>
+          </div>
+          <div className="home-status"><span className={status?.verified ? "signal on" : "signal"} /><strong>{status?.verified ? "NATIVE_PROOF::PASS" : "CONNECTING"}</strong><small>{status ? `ROUND_${status.round} // ${status.threshold}_OF_${status.committeeSize} // ${status.nativeVerification ? "HYPERBEAM" : "FALLBACK"}` : "READING_NATIVE_TESTNET"}</small></div>
         </aside>
       </section>
 
