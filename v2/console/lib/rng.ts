@@ -49,7 +49,7 @@ export async function getAnyHonestStatus() {
   const base = `${cfg.node}/${cfg.anyHonest}~process@1.0/now`;
   type Output = { y: string; via: "reveal" | "crack"; alpha?: string; proof?: string };
   type Record = { T: number; h: string; commits: { [address: string]: string };
-    outputs: { [address: string]: Output }; value: string };
+    outputs: { [address: string]: Output }; value: string; opened?: number; finalizedAt?: number };
   type Info = { round: number; unit: number; validators: Array<{ suspended?: boolean; exiting?: boolean }>;
     foundationReserveAtoms: string; treasuryAtoms: string; activeSubscriptions: number;
     priceSchedule: { round: number; request: number; subscription: number; subscriptionRounds: number; crackBounty: number } };
@@ -62,9 +62,10 @@ export async function getAnyHonestStatus() {
   let proofValid = Boolean(record);
   if (record) {
     const addresses = Object.keys(record.commits).sort();
-    for (const address of addresses) {
+    // Each output verifies independently, so check them concurrently.
+    const checks = await Promise.all(addresses.map(async (address) => {
       const output = record.outputs[address];
-      if (!output) { proofValid = false; break; }
+      if (!output) return false;
       const url = new URL(`${cfg.node}/~rng@1.0/${output.via === "reveal" ? "verify-reveal" : "verify-crack"}`);
       if (output.via === "reveal") {
         url.searchParams.set("c", record.commits[address]);
@@ -77,15 +78,21 @@ export async function getAnyHonestStatus() {
         url.searchParams.set("proof", output.proof ?? "");
       }
       const result = await readJson<{ valid?: boolean | string; y?: string }>(url.toString(), "application/json");
-      if (!([true, "true"].includes(result.valid ?? false)) || result.y !== output.y) { proofValid = false; break; }
-    }
+      return [true, "true"].includes(result.valid ?? false) && result.y === output.y;
+    }));
+    proofValid = checks.every(Boolean);
     if (proofValid) {
       const ys = addresses.map((address) => record.outputs[address].y).join("|");
       const expected = await sha256Hex(`hyperbeam/rng/any-honest/v1/round|${cfg.anyHonest}|${info.round}|${ys}`);
       proofValid = expected === record.value;
     }
   }
-  return { configured: true, process: cfg.anyHonest, ...info, latest: record,
+  // The process keeps its last few finalized rounds; clients use them to fill
+  // in rounds that finalized between polls.
+  const recent = Object.entries(state.rounds).map(([round, r]) => ({ round: Number(round), value: r.value,
+    opened: r.opened, finalizedAt: r.finalizedAt }))
+    .sort((a, b) => b.round - a.round);
+  return { configured: true, process: cfg.anyHonest, ...info, latest: record, recent,
     proofValid, checkedAt: new Date().toISOString() };
 }
 
