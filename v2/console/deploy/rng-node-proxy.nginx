@@ -1,5 +1,5 @@
-# Private bridge used only by the RNG console container. The staging
-# HyperBEAM node is bound to host loopback and is not directly public.
+# Private bridge used only by the RNG console container. The
+# shared HyperBEAM node (hyperbeam-prod, rng@1.0 preloaded) is on host loopback.
 server {
     listen 172.17.0.1:4181;
     server_name _;
@@ -8,9 +8,9 @@ server {
     deny all;
 
     location / {
-        proxy_pass http://127.0.0.1:10002/;
+        proxy_pass http://127.0.0.1:10000/;
         proxy_http_version 1.1;
-        proxy_set_header Host randao.net;
+        proxy_set_header Host hyperbeam.tylerw.ai;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto https;

@@ -1,7 +1,7 @@
 {
   "owner": "DA9qhP25ZPz6MHIhO-7aNHDN3LsTAL7yCKYIkqr13Z8",
-  "token": "xYts6hTg3dbs7OfJCPuORogtmcD3iVaimATQ_686hY8",
-  "beacon": "4Uc_5UwuhxXYzN9BdB09jyOn-C66VSNHq5ikb3aMNg0",
+  "token": "qFXxcvw12vB213eOsThBXiB_A9I-gaqFydWuCMTHouA",
+  "beacon": "iRWVCsShDNboHKSgXHe0_ZVZ89RhBdoRA0hU1wt468c",
   "groupKey": "8085ed55cb08a9193f3ef23ee16b3212033aa5f228402508502667d381d0b4e665ef32948a248634faa796a37e3a4658",
   "committee": [
     "mLw9gcjBKLekLhNDOrejq6l0MvQ9AOMFiMFDajFvvSI",
@@ -14,16 +14,21 @@
     "b2168205a8d3b24a231d2c1d2c0efebbedb355248f5d754423849109f281265c3de977c380585696f1fb46459868f73c"
   ],
   "verification": "device",
-  "anyHonest": "wKbfFswhCWvm6AhsUF_8kHDVvZMJnspqlnVDgZyq3AY",
+  "anyHonest": "QAxyTvi39Ems-nWGl6PZsZsIzDuo2Zj1IlYjBgKl2zA",
   "anyHonestValidators": [
     "apkIrBZxqKh1oyUVJtCXOrHMviL3vtQaD7j0DTfJ0KY",
     "JZeSPxl06ay3HsZKJWz2l_HbPs03uJj1WcB1tUnctcQ",
     "G8nfKNw1wKnCd9bGYnr-3Os1j3a-pnWU7ovtLq5bPqU"
   ],
-  "dao": "I4kC2K3GFvuQfFlR0d2Qnaes0I4YG85IJ2mYJkY_Ql0",
-  "subscriptionAcceptance": {
-    "consumer": "eEGVL3-k2ojAKZyy4iRWdnqxVTeFrPOfF0JOKTiIqiQ",
-    "id": "acceptance-1793553767592",
-    "testedAt": 1793553768590
-  }
+  "dao": "_CJpu0Rq03Jk1xmslJPcNbH7zSrrVCUI_w8Aw67SUYQ",
+  "node": "https://hyperbeam.tylerw.ai",
+  "retired": [
+    {
+      "token": "xYts6hTg3dbs7OfJCPuORogtmcD3iVaimATQ_686hY8",
+      "beacon": "4Uc_5UwuhxXYzN9BdB09jyOn-C66VSNHq5ikb3aMNg0",
+      "anyHonest": "wKbfFswhCWvm6AhsUF_8kHDVvZMJnspqlnVDgZyq3AY",
+      "dao": "I4kC2K3GFvuQfFlR0d2Qnaes0I4YG85IJ2mYJkY_Ql0",
+      "reason": "stage node store hit ext4 directory limit 2026-11-02; moved to shared node"
+    }
+  ]
 }
