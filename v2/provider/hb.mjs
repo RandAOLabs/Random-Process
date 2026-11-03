@@ -11,6 +11,9 @@ async function post(node, path, jwk, item) {
   const body = await signDataItem(jwk, item);
   const res = await fetch(`${node}${path}?codec-device=ans104@1.0`, {
     method: 'POST', headers: { 'content-type': 'application/ans104', 'accept-bundle': 'true' }, body,
+    // A node under load can accept the connection and never answer; without a
+    // deadline the caller's loop waits forever (Any-Honest froze 9 h, 2026-11-03).
+    signal: AbortSignal.timeout(Number(process.env.HB_FETCH_TIMEOUT_MS) || 30_000),
   });
   if (!res.ok) {
     const detail = (res.headers.get('details') || await res.text()).slice(0, 400);

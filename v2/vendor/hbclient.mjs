@@ -636,7 +636,9 @@ async function send(node, path, method, headers, body) {
     method,
     headers: { ...headers, 'accept-bundle': 'true' },
     body: body && body.length ? body : undefined,
-    redirect: 'follow'
+    redirect: 'follow',
+    // Never wait forever on a node that took the connection and went quiet.
+    signal: AbortSignal.timeout(Number(process.env.HB_FETCH_TIMEOUT_MS) || 30_000)
   });
   const buf = Buffer.from(await res.arrayBuffer());
   const h = {};
