@@ -19,7 +19,7 @@ fixed economics, subscriptions, and validator exits are in
 
 - `v2/lib/rng.lua`: deterministic local and beacon-backed Lua API;
 - `v2/beacon/beacon.lua`: prepaid, round-locked threshold beacon process;
-- `v2/beacon/anyhonest.lua`: Foundation-funded one-second Any-Honest beacon;
+- `v2/beacon/anyhonest.lua`: Foundation-funded Any-Honest beacon (one round every 5 s);
 - `v2/provider/`: 2-of-3 BLS committee daemon and joint Feldman DKG;
 - `v2/governance/dao.lua`: advisory staked governance with manual execution;
 - `v2/token/rng-token.lua`: replay-safe test payment token;

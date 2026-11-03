@@ -237,6 +237,14 @@ function runTimelockTests()
   eq("rejoin clears strikes", #Timelock.validators[C].strikes, 0)
   eq("price back to 4", info().price, 4)
 
+  -- One live validator cannot open a round it could only void: on 2026-11-03
+  -- a lone validator re-committing into a voiding round grew `used` to 6.2 MB.
+  Timelock.validators[B].suspended, Timelock.validators[C].suspended = true, true
+  r = commit(A, 8, "r8a")
+  eq("one active validator cannot open a round", r.error, "Too-Few-Validators")
+  check("a refused open records no commitment", Timelock.opens["8"] == nil or next(Timelock.opens["8"].used) == nil)
+  Timelock.validators[B].suspended, Timelock.validators[C].suspended = false, false
+
   -- Round 8: only a commits: void; its commitment can't come back.
   r = request("req-8")
   eq("request binds to round 8", r.round, 8)

@@ -49,8 +49,8 @@ local function freshState()
   return {
     rev = 0, self = "", token = "", unit = 1000000,
     params = {
-      T = 134217728, h = "", commitWindowMs = 3000, revealWindowMs = 10000, abandonAfterMs = 1800000,
-      minCommits = 2, cadenceMs = 1000, suspendAfter = 3, slash = 1000, rejoinAfter = 600, heartbeat = 1,
+      T = 134217728, h = "", commitWindowMs = 3000, revealWindowMs = 30000, abandonAfterMs = 1800000,
+      minCommits = 2, cadenceMs = 5000, suspendAfter = 3, slash = 1000, rejoinAfter = 600, heartbeat = 1,
       roundPrice = 3, requestPrice = 4, subscriptionPrice = 1, subscriptionRounds = 1000, crackBounty = 10,
     },
     -- address -> { strikes = { round, ... }, struckAt = ms, missed = n, suspended = bool, idle = bool, suspendedAt = round }
@@ -358,7 +358,7 @@ local function missed(addr, r)
   end
 end
 
---- `used`: every c committed to this round number, void attempts included.
+--- `used`: the sha256 of every c committed to this round number, void attempts included.
 local function openRound(r, used)
   return { round = r, phase = "collecting", firstCommitAt = 0, commitClose = 0, revealDeadline = 0,
            active = activeValidators(), commits = {}, outputs = {}, used = used or {} }
@@ -705,14 +705,23 @@ H["Commit"] = function(base, msg, from, now)
   if o.phase == "collecting" and now < int(Timelock.lastOpenAt, 0) + int(Timelock.params.cadenceMs, 0) then
     return fail(base, "Too-Early")
   end
-  -- The validator set is fixed when the round's first commit arrives.
-  if o.phase == "collecting" then o.active = activeValidators() end
+  -- The validator set is fixed when the round's first commit arrives. A round
+  -- that cannot reach minCommits only voids and reopens, so it is not opened:
+  -- one live validator re-committing into a voiding round every cadence grew
+  -- this round's `used` set to 12k puzzles (6.2 MB) on 2026-11-03.
+  if o.phase == "collecting" then
+    local active = activeValidators()
+    if #active < int(Timelock.params.minCommits, 2) then return fail(base, "Too-Few-Validators") end
+    o.active = active
+  end
   local inSet = false
   for _, a in ipairs(o.active) do if a == addr then inSet = true end end
   if not inSet then return fail(base, "Joined-After-Round-Opened") end
   if o.commits[addr] then return fail(base, "Already-Committed") end
   if not belowN(d.c) or TRIVIAL[d.c] then return fail(base, "Bad-Commitment") end
-  if o.used[d.c] then return fail(base, "Reused-Commitment") end
+  -- `used` holds digests, not the puzzles themselves (each c is ~500 bytes).
+  local usedKey = rng.hex(rng.sha256(d.c))
+  if o.used[usedKey] then return fail(base, "Reused-Commitment") end
   -- The round keeps the puzzle it opened with.
   if o.phase == "collecting" then
     if int(Timelock.params.heartbeat, 1) ~= 0 then
@@ -726,7 +735,7 @@ H["Commit"] = function(base, msg, from, now)
     o.phase, o.firstCommitAt, Timelock.lastOpenAt = "commit", now, now
     o.T, o.h = Timelock.params.T, Timelock.params.h
   end
-  o.commits[addr], o.used[d.c] = d.c, true
+  o.commits[addr], o.used[usedKey] = d.c, true
   Timelock.validators[addr].missed = 0
   local phase = closeIfDue(now) or o.phase
   return reply(base, { round = o.round, committed = count(o.commits), phase = phase })

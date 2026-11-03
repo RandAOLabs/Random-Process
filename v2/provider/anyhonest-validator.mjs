@@ -114,7 +114,11 @@ for (;;) {
 
     // Commit as soon as the cadence allows: every round with the heartbeat
     // on, else only rounds with requests waiting.
-    if (mine && !mine.suspended && !mine.exiting && (o.phase === 'collecting' || o.phase === 'commit') && (o.pending > 0 || i.params.heartbeat)
+    // A round with fewer active validators than minCommits can only void, and
+    // the beacon refuses to open one (Too-Few-Validators): wait instead.
+    const activeCount = i.validators.filter((v) => !v.suspended && !v.exiting && !v.overdue).length;
+    if (mine && !mine.suspended && !mine.exiting && activeCount >= Number(i.params.minCommits ?? 2)
+        && (o.phase === 'collecting' || o.phase === 'commit') && (o.pending > 0 || i.params.heartbeat)
         && now >= i.nextRoundAt && !committed[me] && due('commit', o.round, now, 1000)) {
       // A fresh secret on every send, also a resend after a void: never reuse one.
       const alpha = tl.newAlpha(), c = tl.commit(alpha);
@@ -163,7 +167,7 @@ for (;;) {
     log('loop error:', e.message);
   }
   // All validators can reach a node through one reverse-proxy peer. Fast
-  // polling reacts promptly enough for a one-second cadence while the
+  // polling reacts promptly enough for a five-second cadence while the
   // dedicated node's configured service allowance keeps aggregate traffic
   // bounded.
   await sleep(50);

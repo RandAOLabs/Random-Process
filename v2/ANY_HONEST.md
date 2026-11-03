@@ -4,7 +4,7 @@ Status: implementation candidate for the native testnet.
 
 ## Purpose
 
-The Any-Honest beacon publishes one shared round per second. Every validator
+The Any-Honest beacon publishes one shared round every 5 seconds. Every validator
 commits a fresh time-lock puzzle before reveals begin. Once commits close, one
 honest hidden contribution is sufficient to keep the round unpredictable. A
 withheld contribution can be recovered by sequential work and a Wesolowski
@@ -12,8 +12,14 @@ proof verified by HyperBEAM's `~rng@1.0` device.
 
 ## Round lifecycle
 
-Rounds overlap. A new round begins every 1,000 ms while earlier rounds reveal
-or wait for a crack.
+Rounds overlap. A new round begins every 5,000 ms while earlier rounds reveal
+or wait for a crack. Validators have 30 s to reveal after commits close: the
+beacon shares a busy HyperBEAM node, and a reveal is a full round trip.
+
+A round opens only while at least `minCommits` validators are active; with
+fewer it could only void and reopen, so the first commit is refused with
+`Too-Few-Validators` and validators wait. A void round keeps the sha256 of
+every commitment it saw, so none can be reused under the same round number.
 
 1. **Commit:** active validators post `c = g^alpha mod N` for fresh `alpha`.
 2. **Close:** the commit set and validator assignment become immutable.

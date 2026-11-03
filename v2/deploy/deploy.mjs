@@ -197,6 +197,15 @@ if (cmd === 'verify') {
 }
 
 if (cmd === 'spawn-anyhonest') {
+  // `--replace <reason>` retires the recorded beacon first; its bonds and
+  // reserve stay on it. Validators, funding and the console then move over.
+  const replace = args.indexOf('--replace');
+  if (state.anyHonest && replace >= 0) {
+    (state.retired ||= []).push({ anyHonest: state.anyHonest, reason: args[replace + 1] || 'replaced',
+      at: new Date().toISOString() });
+    delete state.anyHonest;
+    save();
+  }
   if (state.anyHonest) throw new Error(`Any-Honest beacon already deployed (${state.anyHonest})`);
   state.anyHonest = await spawnProcess({ node: NODE, jwk, lua: anyHonestSource(), name: 'RNG-Any-Honest-Beacon' });
   save();
@@ -214,8 +223,10 @@ if (cmd === 'configure-anyhonest') {
   const configured = await send(state.anyHonest, 'Configure', { data: JSON.stringify({
     self: state.anyHonest, token: state.token, unit: 1000000,
     T, h: puzzle.h, hProof: puzzle.hProof,
-    commitWindowMs: 3000, revealWindowMs: 10000,
-    abandonAfterMs: 1800000, minCommits: 2, cadenceMs: 1000,
+    // The beacon shares a busy node: a reveal has to land through 20 s round
+    // trips, and a 1 s cadence slashed every validator dry (2026-11-02).
+    commitWindowMs: 3000, revealWindowMs: 30000,
+    abandonAfterMs: 1800000, minCommits: 2, cadenceMs: 5000,
     heartbeat: 1, roundPrice: 3, requestPrice: 4,
     subscriptionPrice: 1, subscriptionRounds: 1000, crackBounty: 10,
     suspendAfter: 3, slash: 1000, rejoinAfter: 0,
