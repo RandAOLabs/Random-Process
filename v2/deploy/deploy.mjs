@@ -258,6 +258,25 @@ if (cmd === 'fund-anyhonest') {
   console.log(JSON.stringify(await anyHonestInfo(), null, 1));
 }
 
+// Re-bond validators a slashing run emptied (bond below the slash, so they
+// cannot rejoin): `bond-anyhonest [units] [address...]`, default every
+// recorded validator whose bond is under one slash.
+if (cmd === 'bond-anyhonest') {
+  if (!state.anyHonest || !state.token) throw new Error('token and Any-Honest beacon are required');
+  const units = Number(args[0] || 25000);
+  if (!Number.isSafeInteger(units) || units < 1) throw new Error('invalid bond amount');
+  const info = await anyHonestInfo();
+  const targets = args.length > 1 ? args.slice(1)
+    : (info.validators || []).filter((v) => Number(v.bond) < Number(info.params.slash)).map((v) => v.address);
+  for (const address of targets) {
+    console.log('bond', address, (await send(state.token, 'Transfer', {
+      tags: { Recipient: state.anyHonest, Quantity: String(units * 1000000),
+        'X-For': address, 'X-Bond': 'true' },
+    })).output);
+  }
+  console.log(JSON.stringify((await anyHonestInfo()).validators, null, 1));
+}
+
 if (cmd === 'spawn-dao') {
   if (state.dao) throw new Error(`DAO already deployed (${state.dao})`);
   state.dao = await spawnProcess({ node: NODE, jwk, lua: daoSource(), name: 'RNG-DAO-Advisory' });
