@@ -14,7 +14,6 @@
     "b2168205a8d3b24a231d2c1d2c0efebbedb355248f5d754423849109f281265c3de977c380585696f1fb46459868f73c"
   ],
   "verification": "device",
-  "anyHonest": "QAxyTvi39Ems-nWGl6PZsZsIzDuo2Zj1IlYjBgKl2zA",
   "anyHonestValidators": [
     "apkIrBZxqKh1oyUVJtCXOrHMviL3vtQaD7j0DTfJ0KY",
     "JZeSPxl06ay3HsZKJWz2l_HbPs03uJj1WcB1tUnctcQ",
@@ -29,6 +28,12 @@
       "anyHonest": "wKbfFswhCWvm6AhsUF_8kHDVvZMJnspqlnVDgZyq3AY",
       "dao": "I4kC2K3GFvuQfFlR0d2Qnaes0I4YG85IJ2mYJkY_Ql0",
       "reason": "stage node store hit ext4 directory limit 2026-11-02; moved to shared node"
+    },
+    {
+      "anyHonest": "QAxyTvi39Ems-nWGl6PZsZsIzDuo2Zj1IlYjBgKl2zA",
+      "reason": "used set 6.2 MB, 25k slots behind (2026-11-03)",
+      "at": "2026-11-03T13:11:11.564Z"
     }
-  ]
+  ],
+  "anyHonest": "VQMv1Z8-T4pLMkU4MJVfhxO6lHkzSkWSDY4tvB0PA8Q"
 }
