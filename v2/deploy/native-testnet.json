@@ -38,7 +38,13 @@
       "anyHonest": "VQMv1Z8-T4pLMkU4MJVfhxO6lHkzSkWSDY4tvB0PA8Q",
       "reason": "validators flooded it 14k slots behind (2026-11-04)",
       "at": "2026-11-04T09:59:38.653Z"
+    },
+    {
+      "anyHonest": "kqzobErkDpChZlORcOEMj8OJBY_EIoPVjyyelDJlNVw",
+      "reason": "lua-patch@1.0 cutover: Act, ready/pause duty, full slashing",
+      "at": "2026-11-04T17:19:19.800Z"
     }
   ],
-  "anyHonest": "kqzobErkDpChZlORcOEMj8OJBY_EIoPVjyyelDJlNVw"
+  "anyHonest": "Olf8H3DxnyNIm2DQwi_jgPuMuObT54UZhthwn4lDqMQ",
+  "anyHonestDevice": "lua-patch@1.0"
 }
