@@ -59,7 +59,11 @@ const secrets = (round) => (fs.existsSync(secretFile(round)) ? JSON.parse(fs.rea
 const cracking = new Set();
 async function crack(info, o, target) {
   const key = `${o.round}|${target}`;
-  if (cracking.has(key)) return;
+  // One crack at a time; the loop offers the next one when this finishes. A
+  // node restart left every in-flight round to be cracked at once: 118
+  // crackers ran in parallel on the HyperBEAM host, none finished, and the
+  // node lost 13 of its 16 cores to them (2026-11-04).
+  if (cracking.size > 0) return;
   cracking.add(key);
   const c = o.committed[target];
   const T = o.T ?? info.params.T;
