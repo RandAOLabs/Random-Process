@@ -288,6 +288,18 @@ if (cmd === 'bond-anyhonest') {
   console.log(JSON.stringify((await anyHonestInfo()).validators, null, 1));
 }
 
+// Owner brings suspended validators back (strikes cleared, bond kept):
+// `reinstate-anyhonest [address...]`, default every suspended one.
+if (cmd === 'reinstate-anyhonest') {
+  if (!state.anyHonest) throw new Error('Any-Honest beacon is required');
+  const info = await anyHonestInfo();
+  const targets = args.length ? args : (info.validators || []).filter((v) => v.suspended).map((v) => v.address);
+  for (const address of targets) {
+    console.log('reinstate', address, (await send(state.anyHonest, 'Admin.Reinstate', { data: JSON.stringify({ address }) })).output);
+  }
+  console.log(JSON.stringify((await anyHonestInfo()).validators, null, 1));
+}
+
 if (cmd === 'spawn-dao') {
   if (state.dao) throw new Error(`DAO already deployed (${state.dao})`);
   state.dao = await spawnProcess({ node: NODE, jwk, lua: daoSource(), name: 'RNG-DAO-Advisory' });

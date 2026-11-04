@@ -105,8 +105,12 @@ for (;;) {
     const now = Date.now();
 
     // Suspended: rejoin on our own (idle at once, slashed after the cooldown)
-    // while the bond still covers the next slash (SPEC.md §2.2).
-    if (mine?.suspended && !mine.exiting && mine.bond >= i.params.slash && (mine.idle || i.round >= mine.suspendedAt + i.params.rejoinAfter) && due('rejoin', i.round, now)) {
+    // while the bond still covers the next slash (SPEC.md §2.2). The cooldown
+    // is counted in finished rounds, so it is waived while too few validators
+    // are active to finish one: otherwise all-suspended waits forever.
+    const quorumLost = i.validators.filter((v) => !v.suspended && !v.exiting && !v.overdue).length < i.params.minCommits;
+    if (mine?.suspended && !mine.exiting && mine.bond >= i.params.slash
+      && (mine.idle || quorumLost || i.round >= mine.suspendedAt + i.params.rejoinAfter) && due('rejoin', i.round, now)) {
       log(`${mine.idle ? 'idle' : 'suspended'} since round ${mine.suspendedAt}; rejoining with bond ${mine.bond}`);
       await post('Rejoin', {});
       mark('rejoin', i.round, now);

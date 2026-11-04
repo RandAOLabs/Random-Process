@@ -243,6 +243,13 @@ function runTimelockTests()
   r = commit(A, 8, "r8a")
   eq("one active validator cannot open a round", r.error, "Too-Few-Validators")
   check("a refused open records no commitment", Timelock.opens["8"] == nil or next(Timelock.opens["8"].used) == nil)
+  -- Too few active to finish a round, so the round-counted cooldown could
+  -- never elapse: on 2026-11-03 all three sat suspended for hours.
+  configure({ rejoinAfter = 600 })
+  Timelock.validators[C].suspendedAt, Timelock.validators[C].idle = Timelock.round + 1, false
+  r = send(wallet(C, { Action = "Rejoin" }))
+  check("rejoin skips the cooldown while quorum is lost", r.error == nil and Timelock.validators[C].suspended == false)
+  configure({ rejoinAfter = 0 })
   Timelock.validators[B].suspended, Timelock.validators[C].suspended = false, false
 
   -- Round 8: only a commits: void; its commitment can't come back.

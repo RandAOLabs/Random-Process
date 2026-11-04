@@ -864,8 +864,11 @@ H["Rejoin"] = function(base, msg, from)
   if v.exiting then return fail(base, "Validator-Exiting") end
   if not v.suspended then return fail(base, "Not suspended") end
   if not bonded(from) then return fail(base, "Bond-Too-Low") end
+  -- The cooldown is counted in finished rounds, so it is waived while too few
+  -- validators are active to finish one; otherwise all-suspended is permanent.
+  local quorumLost = #activeValidators() < int(Timelock.params.minCommits, 2)
   if not v.idle then
-    if Timelock.round < int(v.suspendedAt, 0) + int(Timelock.params.rejoinAfter, 600) then return fail(base, "Too-Soon") end
+    if not quorumLost and Timelock.round < int(v.suspendedAt, 0) + int(Timelock.params.rejoinAfter, 600) then return fail(base, "Too-Soon") end
     v.strikes = {}
   end
   v.suspended, v.idle, v.missed = false, false, 0
