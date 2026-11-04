@@ -52,12 +52,22 @@
       "dao": "_CJpu0Rq03Jk1xmslJPcNbH7zSrrVCUI_w8Aw67SUYQ",
       "reason": "stakes the retired token qFXxcvw1",
       "at": "2026-11-04T21:52:21.553Z"
+    },
+    {
+      "anyHonest": "DdOUCqTQV4DAh2Ev4436HVnHtQhpQNuC-9WtvnXQgVQ",
+      "reason": "rejoin on bond (rejoinBond = one slash); 350 ms cadence for ~2 rounds/s",
+      "at": "2026-11-04T23:30:59.518Z"
+    },
+    {
+      "anyHonest": "jUNwpUHjlArYUISCLkze5sW5D55SsEdmr51i4pWvNOw",
+      "reason": "self-adjusting rhythm: 2 rounds/s target, max 3 in flight",
+      "at": "2026-11-04T23:33:55.219Z"
     }
   ],
   "anyHonestDevice": "lua-patch@1.0",
   "retiredTokens": [
     "qFXxcvw12vB213eOsThBXiB_A9I-gaqFydWuCMTHouA"
   ],
-  "anyHonest": "DdOUCqTQV4DAh2Ev4436HVnHtQhpQNuC-9WtvnXQgVQ",
-  "dao": "FWL1QREmxYJfkt-NHgAtF4M351t4vtXhqQZgR-qMhU0"
+  "dao": "FWL1QREmxYJfkt-NHgAtF4M351t4vtXhqQZgR-qMhU0",
+  "anyHonest": "KRB9JTf3uDYJYSqtJo_v1U_MYsIYKjculScArHXAMkw"
 }

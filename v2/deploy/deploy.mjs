@@ -164,6 +164,24 @@ if (cmd === 'spawn-token') {
   console.log('token info', (await send(state.token, 'Info')).output);
 }
 
+// Retune a live Any-Honest beacon's parameters: `tune-anyhonest cadenceMs=400`.
+// The beacon checks the whole set before applying any of it.
+if (cmd === 'tune-anyhonest') {
+  if (!state.anyHonest) throw new Error('Any-Honest beacon is required');
+  const params = Object.fromEntries(args.map((a) => a.split('=')).map(([k, v]) => [k, Number(v)]));
+  if (!Object.keys(params).length || Object.values(params).some((v) => !Number.isSafeInteger(v))) {
+    throw new Error('tune-anyhonest needs key=integer pairs');
+  }
+  console.log((await send(state.anyHonest, 'Configure', { data: JSON.stringify(params) })).output);
+}
+
+// The owner sends a retired beacon's unspent Foundation reserve to the
+// successor it names: `move-reserve <old>`.
+if (cmd === 'move-reserve') {
+  if (!args[0]) throw new Error('move-reserve needs the retired beacon');
+  console.log((await send(args[0], 'Admin.Move-Reserve')).output);
+}
+
 // The owner points a retired Any-Honest beacon at its replacement, so the
 // validator devices walk over to it: `set-successor <old> <new>`.
 if (cmd === 'set-successor') {
@@ -274,12 +292,18 @@ if (cmd === 'configure-anyhonest') {
     // window is 2 s, not 1. Reveals keep 30 s for a busy node; a round still
     // uncracked 6 min (two crack times) after its deadline is abandoned.
     commitWindowMs: 2000, revealWindowMs: 30000,
-    abandonAfterMs: 360000, minCommits: 2, cadenceMs: 500,
+    // The rhythm: rounds are due every 500 ms (2 rounds/s, what the Foundation
+    // reserve is sized for) and the beacon speeds up after slow rounds and waits
+    // after fast ones to hold that average: at most 3 rounds in flight, opens at
+    // least 100 ms apart, and up to 30 s of lateness is made up.
+    abandonAfterMs: 360000, minCommits: 2, cadenceMs: 100,
+    targetIntervalMs: 500, maxInFlight: 3, catchUpMs: 30000,
     // The beacon this one replaces: validator devices follow its successor.
     ...(state.retired?.at(-1)?.anyHonest ? { predecessor: state.retired.at(-1).anyHonest } : {}),
     heartbeat: 1, roundPrice: 3, requestPrice: 4,
     subscriptionPrice: 1, subscriptionRounds: 1000, crackBounty: 10,
-    stake: 25000, slash: 1000,
+    // A slashed validator rejoins while its bond covers one more slash.
+    stake: 25000, slash: 1000, rejoinBond: 1000,
   }) });
   console.log('configure', configured.output);
   for (const address of validators) {

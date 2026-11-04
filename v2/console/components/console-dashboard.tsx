@@ -9,7 +9,7 @@ type Round = {
   commits: Record<string, string>; outputs: Record<string, { via: "reveal" | "crack" }>;
 };
 type InFlight = { round: number; committed?: unknown; revealed?: unknown };
-type Validator = { address: string; suspended?: boolean; exiting?: boolean };
+type Validator = { address: string; ready?: boolean; suspended?: boolean; exiting?: boolean };
 type Recent = { round: number; value: string; opened?: number; finalizedAt?: number };
 type Beacon = { configured: boolean; round?: number; proofValid?: boolean; latest?: Round; recent?: Recent[]; validators?: Validator[]; open?: InFlight; revealing?: InFlight[] };
 type Pulse = { round: number; value: string; ms?: number };
@@ -118,7 +118,9 @@ export function ConsoleDashboard() {
       const round = body.round ?? 0;
       if (round < seen.current) return;
       seen.current = round;
-      const active = (body.validators ?? []).filter((v) => !v.exiting);
+      // The active set: validators ready for rounds now. A slashed or paused one
+      // drops out of the count until it rejoins; a new one adds to it.
+      const active = (body.validators ?? []).filter((v) => !v.exiting && !v.suspended && v.ready !== false);
       setValidators(active);
       setTotal(body.latest?.round);
       setLive(Boolean(body.proofValid));

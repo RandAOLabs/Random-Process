@@ -50,7 +50,8 @@ local function freshState()
     rev = 0, self = "", token = "", unit = 1000000,
     params = {
       T = 134217728, h = "", commitWindowMs = 2000, revealWindowMs = 30000, abandonAfterMs = 360000,
-      minCommits = 2, cadenceMs = 500, stake = 25000, slash = 1000, heartbeat = 1,
+      minCommits = 2, cadenceMs = 100, targetIntervalMs = 500, maxInFlight = 3, catchUpMs = 30000,
+      stake = 25000, slash = 1000, rejoinBond = 1000, heartbeat = 1,
       roundPrice = 3, requestPrice = 4, subscriptionPrice = 1, subscriptionRounds = 1000, crackBounty = 10,
     },
     -- address -> { ready = bool, paused = bool, faults = n, lastFault = { round, kind, slashed },
@@ -60,6 +61,8 @@ local function freshState()
     round = 0,             -- highest finalized round
     lastRoundAt = 0,
     lastOpenAt = 0,        -- first commit of the newest round; cadence counts from here
+    rhythmAt = 0,          -- the rhythm's anchor: round `rhythmRound' was due at `rhythmAt' (ms)
+    rhythmRound = 0,
     next = 1,              -- the round taking requests and commits
     opens = {},            -- "r" -> round being built (see openRound): `next`, plus older ones revealing
     recent = {},           -- finalized round numbers, oldest first (cracked rounds finish late)
@@ -392,6 +395,44 @@ local function count(t) local n = 0 for _ in pairs(t) do n = n + 1 end return n 
 ---------------------------------------------------------------------------
 
 --- The round taking commits (always `collecting` or `commit`).
+--- The rhythm. Round r is due at rhythmAt + (r - rhythmRound) * targetIntervalMs,
+--- so rounds finish at the target rate on the long-run average whatever each one
+--- takes: after slow rounds the next ones open as soon as they may (cadenceMs
+--- apart, at most maxInFlight rounds in flight) to catch up, after fast ones they
+--- wait. Lateness beyond catchUpMs is forgiven when the next round opens, so an
+--- outage is not repaid in one burst. targetIntervalMs 0 turns the rhythm off.
+local function inFlight()
+  local n = 0
+  for _, o in pairs(Timelock.opens) do if o.phase == "reveal" then n = n + 1 end end
+  return n
+end
+
+local function nextOpenAt()
+  local p = Timelock.params
+  local floor = int(Timelock.lastOpenAt, 0) + int(p.cadenceMs, 0)
+  -- A full pipeline opens nothing until a round finishes; publish a time no
+  -- validator waits on past the reveal it is already doing.
+  if inFlight() >= math.max(1, int(p.maxInFlight, 3)) then
+    return math.max(floor, int(Timelock.lastOpenAt, 0) + int(p.revealWindowMs, 30000))
+  end
+  local target = int(p.targetIntervalMs, 0)
+  if target <= 0 or int(Timelock.rhythmAt, 0) == 0 then return floor end
+  local due = int(Timelock.rhythmAt, 0) + (Timelock.next - int(Timelock.rhythmRound, 0)) * target
+  return math.max(floor, due)
+end
+
+--- Called as a round opens: start the rhythm, or forgive lateness past catchUpMs.
+local function keepRhythm(now)
+  local p = Timelock.params
+  local target = int(p.targetIntervalMs, 0)
+  if target <= 0 then return end
+  local due = int(Timelock.rhythmAt, 0) + (Timelock.next - int(Timelock.rhythmRound, 0)) * target
+  if int(Timelock.rhythmAt, 0) == 0 or now - due > int(p.catchUpMs, 30000) then
+    Timelock.rhythmAt = int(Timelock.rhythmAt, 0) == 0 and now or now - int(p.catchUpMs, 30000)
+    Timelock.rhythmRound = Timelock.next
+  end
+end
+
 local function current()
   local key = tostring(Timelock.next)
   if not Timelock.opens[key] then Timelock.opens[key] = openRound(Timelock.next) end
@@ -728,7 +769,7 @@ H["Commit"] = function(base, msg, from, now)
   if int(Timelock.params.heartbeat, 1) == 0 and #(Timelock.pending[tostring(o.round)] or {}) == 0 then
     return fail(base, "Nothing-Pending")
   end
-  if o.phase == "collecting" and now < int(Timelock.lastOpenAt, 0) + int(Timelock.params.cadenceMs, 0) then
+  if o.phase == "collecting" and now < nextOpenAt() then
     return fail(base, "Too-Early")
   end
   -- The validator set is fixed when the round's first commit arrives. A round
@@ -763,6 +804,7 @@ H["Commit"] = function(base, msg, from, now)
       Timelock.foundationReserveAtoms = int(Timelock.foundationReserveAtoms, 0) - sponsorAtoms
       o.sponsorAtoms = sponsorAtoms
     end
+    keepRhythm(now)
     o.phase, o.firstCommitAt, Timelock.lastOpenAt = "commit", now, now
     o.T, o.h = Timelock.params.T, Timelock.params.h
   end
@@ -945,18 +987,26 @@ H["Ready"] = function(base, msg, from)
   if v.exiting then return fail(base, "Validator-Exiting") end
   if v.ready then return reply(base, { ready = true, stake = int(Timelock.bonds[from], 0) }) end
   if overdue(from) then return fail(base, "Not-In-Good-Standing", from, { obligations = roundObligations(from) }) end
+  -- The stake is refilled from earnings as far as they go. The first Ready
+  -- needs the full stake; after that a validator rejoins while its bond still
+  -- covers `rejoinBond' (by default one slash): a slashed validator cannot
+  -- earn while it is out, so requiring the full stake back would lock out one
+  -- that can still pay for every further mistake. A refused Ready changes nothing.
   local unit = int(Timelock.unit, 1)
-  local need = math.max(0, int(Timelock.params.stake, 25000) - int(Timelock.bonds[from], 0))
-  -- All or nothing: a refused Ready changes nothing.
-  if need * unit > earnedAtoms(from) then
-    return fail(base, "Stake-Too-Low", from, { stake = int(Timelock.bonds[from], 0),
-      required = int(Timelock.params.stake, 25000), earnedAtoms = tostring(earnedAtoms(from)) })
+  local bond = int(Timelock.bonds[from], 0)
+  local refill = math.min(math.max(0, int(Timelock.params.stake, 25000) - bond), earnedAtoms(from) // unit)
+  local required = v.joined and int(Timelock.params.rejoinBond, int(Timelock.params.slash, 1000))
+    or int(Timelock.params.stake, 25000)
+  if bond + refill < required then
+    return fail(base, "Stake-Too-Low", from, { stake = bond, required = required,
+      earnedAtoms = tostring(earnedAtoms(from)) })
   end
-  if need > 0 then
-    Timelock.accrued[from], Timelock.accruedAtoms[from] = 0, earnedAtoms(from) - need * unit
-    add(Timelock.bonds, from, need)
+  if refill > 0 then
+    Timelock.accrued[from], Timelock.accruedAtoms[from] = 0, earnedAtoms(from) - refill * unit
+    add(Timelock.bonds, from, refill)
   end
-  local refilled = need
+  local refilled = refill
+  v.joined = true
   v.ready, v.paused = true, false
   return reply(base, { ready = true, stake = int(Timelock.bonds[from], 0), refilled = refilled,
     validators = activeValidators() })
@@ -1018,6 +1068,8 @@ H["Configure"] = function(base, msg)
      or p.roundPrice < 1 or p.requestPrice < 1 or p.subscriptionPrice < 1
      or p.subscriptionRounds < 1 or p.subscriptionRounds > 31536000
      or p.crackBounty < 1 or p.slash < 1 or p.stake < p.slash
+     or p.rejoinBond < p.slash or p.rejoinBond > p.stake
+     or p.cadenceMs < 0 or p.targetIntervalMs < 0 or p.maxInFlight < 1 or p.catchUpMs < 0
      or p.abandonAfterMs < p.revealWindowMs then
     return fail(base, "Bad-Parameter")
   end
@@ -1134,7 +1186,7 @@ local function info()
   return {
     tier = "any-honest", round = Timelock.round, params = params, validators = vs,
     price = price(), token = Timelock.token, unit = Timelock.unit,
-    nextRoundAt = int(Timelock.lastOpenAt, 0) + int(Timelock.params.cadenceMs, 0),
+    nextRoundAt = nextOpenAt(),
     open = roundInfo(current()), revealing = older,
     pendingCount = pendingTotal, activeSubscriptions = activeSubscriptions,
     foundationReserveAtoms = tostring(int(Timelock.foundationReserveAtoms, 0)),

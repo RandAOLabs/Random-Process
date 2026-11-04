@@ -236,13 +236,23 @@ function runTimelockTests()
   eq("c back in good standing", info().validators[3].overdue, false)
 
   -- c pays for its mistakes out of what it earned before it gets work again.
-  r = ready(C)
-  check("stake not refilled by earnings alone: ready refused", r.error == "Stake-Too-Low" and Timelock.bonds[C] < 25000, r.error)
   Timelock.accruedAtoms[C] = 5000 * U
   r = ready(C)
   check("ready refills the stake from earnings", r.ready == true and r.refilled == 25000 - 22980
     and Timelock.bonds[C] == 25000, r.error)
   eq("refill taken from earnings", Timelock.accruedAtoms[C], (5000 - 2020) * U)
+
+  -- Slashed and out, a validator cannot earn: it rejoins on its own bond while
+  -- that still covers rejoinBond (one slash), and only below that needs tokens.
+  local savedBond, savedEarned = Timelock.bonds[C], Timelock.accruedAtoms[C]
+  Timelock.validators[C].ready, Timelock.accrued[C], Timelock.accruedAtoms[C] = false, 0, 0
+  Timelock.bonds[C] = 999
+  r = ready(C)
+  check("below rejoinBond with nothing earned: ready refused", r.error == "Stake-Too-Low" and Timelock.bonds[C] == 999, r.error)
+  Timelock.bonds[C] = 24000
+  r = ready(C)
+  check("a slashed validator rejoins on a bond that covers a slash", r.ready == true and r.refilled == 0 and Timelock.bonds[C] == 24000, r.error)
+  Timelock.bonds[C], Timelock.accruedAtoms[C] = savedBond, savedEarned
 
   -- Round 4: served by 3.
   commit(A, 4, "r4a"); commit(B, 4, "r4b")
@@ -423,6 +433,22 @@ function runTimelockTests()
     and mv.Quantity == string.format("%d", reserve) and mv["X-Foundation"] == "true" and reserve > 0)
   eq("reserve emptied", Timelock.foundationReserveAtoms, 0)
   eq("nothing left to move", send(wallet(F.owner, { Action = "Admin.Move-Reserve" })).error, "Nothing-To-Move")
+  -- The rhythm: round r is due every targetIntervalMs from the anchor. An early
+  -- round waits for its slot; a late one opens as soon as cadenceMs allows.
+  configure({ targetIntervalMs = 500, cadenceMs = 100, maxInFlight = 3, catchUpMs = 30000 })
+  local anchor = clock
+  Timelock.rhythmAt, Timelock.rhythmRound, Timelock.lastOpenAt = anchor, Timelock.next - 1, anchor
+  tick(1)
+  eq("on the rhythm: the next round waits for its slot", info().nextRoundAt, anchor + 500)
+  Timelock.rhythmRound, Timelock.lastOpenAt = Timelock.next - 10, anchor + 20000
+  tick(1)
+  eq("behind the rhythm: the next round opens after cadenceMs only", info().nextRoundAt, anchor + 20100)
+  Timelock.rhythmAt = 0
+  tick(1)
+  eq("no anchor yet: cadenceMs alone", info().nextRoundAt, anchor + 20100)
+  eq("rhythm parameters checked", configure({ maxInFlight = 0 }).error, "Bad-Parameter")
+  configure({ targetIntervalMs = 0, cadenceMs = 0 })
+
   check("mock knew every device call", #misses == 0, table.concat(misses, ", "))
 
   lines[#lines + 1] = passed .. " passed, " .. failed .. " failed"
