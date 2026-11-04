@@ -14,8 +14,11 @@ type Recent = { round: number; value: string; opened?: number; finalizedAt?: num
 type Beacon = { configured: boolean; round?: number; proofValid?: boolean; latest?: Round; recent?: Recent[]; validators?: Validator[]; open?: InFlight; revealing?: InFlight[] };
 type Pulse = { round: number; value: string; ms?: number };
 type Cell = "empty" | "locked" | "lit" | "crack";
-// slot 0: in progress (top), 1: last completed (below), 2: sliding out.
-type Track = { round: number; slot: 0 | 1 | 2; commit: Cell[]; reveal: Cell[]; done: boolean; value?: string };
+// Rows top to bottom: every round still in flight, newest first (rounds
+// overlap: one collects commits while earlier ones wait on reveals), then the
+// last completed round. A completed round that is replaced slides out.
+type Track = { round: number; slot: number; out?: boolean; commit: Cell[]; reveal: Cell[]; done: boolean; value?: string };
+const ROWS = 3;
 
 const STAGES = ["COMMIT", "REVEAL", "COMBINE", "VERIFY"];
 
@@ -27,27 +30,39 @@ const toPulse = (r: Recent): Pulse => ({
 });
 
 function toTracks(beacon: Beacon, validators: Validator[]): Track[] {
-  const tracks: Track[] = [];
   const latest = beacon.latest;
+  const inFlight = [...(beacon.revealing ?? []), ...(beacon.open ? [beacon.open] : [])]
+    .filter((r) => !latest || r.round > latest.round)
+    .sort((x, y) => y.round - x.round).slice(0, latest ? ROWS - 1 : ROWS);
+  // The completed round keeps the bottom row; rounds in flight stack above it,
+  // the oldest nearest to it, so nothing jumps when a round is added.
+  const top = (latest ? ROWS - 1 : ROWS) - inFlight.length;
+  const tracks: Track[] = inFlight.map((r, i) => {
+    const slot = top + i;
+    const committed = members(r.committed), revealed = members(r.revealed);
+    return {
+      round: r.round, slot, done: false,
+      commit: validators.map((v) => committed.has(v.address) ? "locked" : "empty"),
+      reveal: validators.map((v) => revealed.has(v.address) ? "lit" : "empty"),
+    };
+  });
   if (latest) {
     tracks.push({
-      round: latest.round, slot: 1, done: true, value: latest.value,
+      round: latest.round, slot: ROWS - 1, done: true, value: latest.value,
       commit: validators.map((v) => latest.commits[v.address] ? "locked" : "empty"),
       reveal: validators.map((v) => latest.outputs[v.address]?.via === "crack" ? "crack" : latest.outputs[v.address] ? "lit" : "empty"),
     });
   }
-  // The round furthest along after the latest one is the one shown in progress.
-  const current = [...(beacon.revealing ?? []), ...(beacon.open ? [beacon.open] : [])]
-    .filter((r) => !latest || r.round > latest.round).sort((x, y) => x.round - y.round)[0];
-  if (current) {
-    const committed = members(current.committed), revealed = members(current.revealed);
-    tracks.push({
-      round: current.round, slot: 0, done: false,
-      commit: validators.map((v) => committed.has(v.address) ? "locked" : "empty"),
-      reveal: validators.map((v) => revealed.has(v.address) ? "lit" : "empty"),
-    });
-  }
   return tracks;
+}
+
+// Rounds per second over the finalized rounds the beacon still lists.
+function roundRate(recent: Recent[]): number | undefined {
+  const done = recent.filter((r) => r.finalizedAt).sort((x, y) => x.round - y.round);
+  if (done.length < 2) return undefined;
+  const first = done[0], last = done[done.length - 1];
+  const seconds = (last.finalizedAt! - first.finalizedAt!) / 1000;
+  return seconds > 0 ? (last.round - first.round) / seconds : undefined;
 }
 
 function RoundTrack({ track, ok }: { track: Track; ok: boolean }) {
@@ -60,7 +75,7 @@ function RoundTrack({ track, ok }: { track: Track; ok: boolean }) {
     track.done ? "done" : "",
   ];
   return (
-    <div className={`track slot-${track.slot}`} style={{ "--slot": track.slot } as CSSProperties}>
+    <div className={`track${track.done ? "" : " live"}${track.out ? " out" : ""}`} style={{ "--slot": track.slot } as CSSProperties}>
       <div className="track-tag"><b>#{track.round}</b><span>{track.done ? "DONE" : "LIVE"}</span></div>
       <div className={`stage-box ${state[0]}`}>{track.commit.map((c, i) => <span key={i} className={`cell ${c}`} />)}</div>
       <div className={`stage-box ${state[1]}`}>{track.reveal.map((c, i) => <span key={i} className={`cell ${c}`} />)}</div>
@@ -90,6 +105,7 @@ export function ConsoleDashboard() {
 
   const [total, setTotal] = useState<number>();
   const [live, setLive] = useState(false);
+  const [rate, setRate] = useState<number>();
   const seen = useRef(0);
 
   // Reads take longer than a round, so three staggered lanes keep a fresh
@@ -110,10 +126,11 @@ export function ConsoleDashboard() {
       setTracks((prev) => {
         const live = new Set(next.map((t) => t.round));
         // The completed round that was replaced slides down once, then is dropped.
-        return [...next, ...prev.filter((t) => t.slot === 1 && !live.has(t.round)).map((t) => ({ ...t, slot: 2 as const }))];
+        return [...next, ...prev.filter((t) => t.done && !t.out && !live.has(t.round)).map((t) => ({ ...t, slot: ROWS, out: true }))];
       });
       // Backfill rounds that finalized between samples.
       const recent = body.recent ?? (body.latest ? [body.latest] : []);
+      setRate((prev) => roundRate(recent) ?? prev);
       setFeed((prev) => {
         const known = new Set(prev.map((p) => p.round));
         const added = recent.filter((r) => !known.has(r.round)).map(toPulse);
@@ -139,7 +156,7 @@ export function ConsoleDashboard() {
           <ul className="beacon-feed">
             {feed.map((p, i) => <li key={p.round} className={i === 0 ? "fresh" : undefined}><span>#{p.round}</span><code>{p.value.slice(0, 24)}</code><b>{p.ms ? `${p.ms}ms` : ""}</b></li>)}
           </ul>
-          <div className="home-status"><span className={live ? "signal on" : "signal"} /><strong>{live ? "ANY_HONEST::PASS" : "CONNECTING"}</strong><small>{now ? `ROUND_${now.round} // ${validators.length}_VALIDATORS // 1_PER_SEC // HOW_IT_WORKS →` : "READING_NATIVE_TESTNET"}</small></div>
+          <div className="home-status"><span className={live ? "signal on" : "signal"} /><strong>{live ? "ANY_HONEST::PASS" : "CONNECTING"}</strong><small>{now ? `ROUND_${now.round} // ${validators.length}_VALIDATORS // ${rate ? `${rate.toFixed(1)}_PER_SEC` : "MEASURING"} // HOW_IT_WORKS →` : "READING_NATIVE_TESTNET"}</small></div>
         </a>
       </section>
 

@@ -43,7 +43,18 @@ async function readJson<T>(url: string, accept = "application/ao"): Promise<T> {
   return response.json() as Promise<T>;
 }
 
-export async function getAnyHonestStatus() {
+// One read of the beacon serves every viewer for a moment: each open page polls
+// on three lanes, and every poll fans out to several node reads and proofs.
+let anyHonestCache: { at: number; value: Promise<unknown> } | null = null;
+export function getAnyHonestStatus() {
+  if (anyHonestCache && Date.now() - anyHonestCache.at < 300) return anyHonestCache.value;
+  const value = readAnyHonestStatus();
+  anyHonestCache = { at: Date.now(), value };
+  value.catch(() => { anyHonestCache = null; });
+  return value;
+}
+
+async function readAnyHonestStatus() {
   const cfg = extendedNetworkConfig();
   if (!cfg.anyHonest) return { configured: false, status: "not-deployed" };
   const base = `${cfg.node}/${cfg.anyHonest}~process@1.0/now`;
@@ -59,13 +70,19 @@ export async function getAnyHonestStatus() {
   // A lua-patch@1.0 beacon publishes each finalized round in its own key and
   // checkpoints the full state only now and then; older beacons publish the
   // rounds inside timelockstate on every message.
-  const [own, recentKey] = await Promise.all([
-    readJson<Record & { round: number }>(`${base}/beaconround-${info.round % 8}`).catch(() => null),
+  // Rounds finalize faster than these reads complete, so the key for
+  // `info.round' usually already holds a newer round: read all eight and show
+  // the newest. Only a beacon without them falls back to its checkpointed state.
+  const [slots, recentKey] = await Promise.all([
+    Promise.all(Array.from({ length: 8 }, (_, i) =>
+      readJson<Record & { round: number }>(`${base}/beaconround-${i}`).catch(() => null))),
     readJson<Recent>(`${base}/beaconrecent`).catch(() => null),
   ]);
-  const state = own && own.round === info.round && Array.isArray(recentKey)
-    ? null : await readJson<State>(`${base}/timelockstate`);
-  const record = state ? state.rounds[String(info.round)] : own ?? undefined;
+  const own = slots.reduce<(Record & { round: number }) | null>(
+    (best, r) => r && typeof r.round === "number" && (!best || r.round > best.round) ? r : best, null);
+  const state = own && Array.isArray(recentKey) ? null : await readJson<State>(`${base}/timelockstate`);
+  const round = own && !state ? own.round : info.round;
+  const record = state ? state.rounds[String(round)] : own ?? undefined;
   let proofValid = Boolean(record);
   if (record) {
     const addresses = Object.keys(record.commits).sort();
@@ -90,7 +107,7 @@ export async function getAnyHonestStatus() {
     proofValid = checks.every(Boolean);
     if (proofValid) {
       const ys = addresses.map((address) => record.outputs[address].y).join("|");
-      const expected = await sha256Hex(`hyperbeam/rng/any-honest/v1/round|${cfg.anyHonest}|${info.round}|${ys}`);
+      const expected = await sha256Hex(`hyperbeam/rng/any-honest/v1/round|${cfg.anyHonest}|${round}|${ys}`);
       proofValid = expected === record.value;
     }
   }
@@ -101,7 +118,8 @@ export async function getAnyHonestStatus() {
       opened: r.opened, finalizedAt: r.finalizedAt }))
     : [...(recentKey ?? [])])
     .sort((a, b) => b.round - a.round);
-  return { configured: true, process: cfg.anyHonest, ...info, latest: record, recent,
+  return { configured: true, process: cfg.anyHonest, ...info, round: Math.max(info.round, round),
+    latest: record ? { ...record, round } : undefined, recent,
     proofValid, checkedAt: new Date().toISOString() };
 }
 

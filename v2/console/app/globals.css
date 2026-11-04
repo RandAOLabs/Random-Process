@@ -1,3 +1,4 @@
+@import url("https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@600;700&display=swap");
 @import "tailwindcss";
 
 :root {
@@ -7,6 +8,7 @@
   --gray: #aaa9a2;
   --dim: #666660;
   --line: #343431;
+  --display: "Space Grotesk", var(--mono);
   --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
 }
 
@@ -60,7 +62,7 @@ h1 { margin: 0; max-width: 900px; font-size: clamp(52px, 7.2vw, 112px); line-hei
 .ascii-frame, .try-ascii { margin: 34px 0 0; padding: 18px; border: 1px solid var(--line); color: #d9d9d4; background: rgba(0,0,0,.6); overflow-x: auto; font: 12px/1.45 var(--mono); }
 
 .home-simple { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(440px, .95fr); gap: clamp(44px, 6vw, 90px); align-items: center; min-height: 760px; padding-top: 70px; padding-bottom: 70px; }
-.home-message h1 { max-width: 900px; font-size: clamp(68px, 9vw, 138px); }
+.home-message h1 { max-width: 900px; font-family: var(--display); font-weight: 700; font-size: clamp(56px, 6.4vw, 104px); line-height: .9; letter-spacing: -.04em; }
 .rng-visual { position: relative; display: grid; justify-items: center; min-width: 0; min-height: 620px; padding: 34px; border: 1px solid var(--line); background: radial-gradient(circle at center, #171717 0, #080808 46%, #030303 72%); overflow: hidden; }
 .rng-visual::before, .rng-visual::after { content: ""; position: absolute; background: var(--line); }
 .rng-visual::before { top: 0; bottom: 0; left: 50%; width: 1px; }
@@ -80,12 +82,12 @@ a.live-beacon:hover, a.live-beacon:focus-visible { border-color: var(--white); }
 .pipe-head div:first-child { justify-items: start; }
 .pipe-head b { color: var(--white); font-size: 18px; font-weight: 400; }
 .tracks { position: relative; overflow: hidden; }
-.track { position: absolute; left: 0; right: 0; top: calc(var(--slot) * 50%); height: 50%; align-items: center; transition: top .6s cubic-bezier(.65,0,.25,1), opacity .6s; animation: track-in .5s ease-out; }
-.track.slot-2 { opacity: 0; }
+.track { position: absolute; left: 0; right: 0; top: calc(var(--slot) * 100% / 3); height: calc(100% / 3); align-items: center; transition: top .6s cubic-bezier(.65,0,.25,1), opacity .6s; animation: track-in .5s ease-out; }
+.track.out { opacity: 0; }
 .track-tag { display: grid; gap: 4px; font-size: 9px; letter-spacing: .08em; }
 .track-tag b { color: var(--white); font-weight: 400; }
 .track-tag span { color: var(--dim); }
-.slot-0 .track-tag span { color: var(--white); animation: blink-soft 1s ease-in-out infinite; }
+.track.live .track-tag span { color: var(--white); animation: blink-soft 1s ease-in-out infinite; }
 .stage-box { position: relative; display: flex; align-items: center; justify-content: center; gap: 6px; height: min(64px, 70%); border: 1px solid #222220; transition: border-color .3s, box-shadow .3s; }
 .stage-box::before { content: ""; position: absolute; top: 50%; right: 100%; width: 12px; height: 1px; background: #222220; transition: background .3s; }
 .track-tag + .stage-box::before { display: none; }
@@ -105,7 +107,7 @@ a.live-beacon:hover, a.live-beacon:focus-visible { border-color: var(--white); }
 @keyframes box-pulse { 50% { box-shadow: 0 0 16px rgba(255,255,255,.25); } }
 @keyframes blink-soft { 50% { opacity: .35; } }
 @keyframes merge-in { from { width: 20%; opacity: .3; } }
-@media (prefers-reduced-motion: reduce) { .track, .stage-box.active, .slot-0 .track-tag span, .merge, .beacon-feed li.fresh { animation: none; } .track, .cell, .stage-box { transition: none; } }
+@media (prefers-reduced-motion: reduce) { .track, .stage-box.active, .track.live .track-tag span, .merge, .beacon-feed li.fresh { animation: none; } .track, .cell, .stage-box { transition: none; } }
 .beacon-feed { position: relative; z-index: 4; display: grid; gap: 2px; width: 100%; margin: 0 0 12px; padding: 0; list-style: none; font-size: 10px; }
 .beacon-feed li { display: grid; grid-template-columns: 7ch 1fr auto; gap: 10px; color: var(--gray); opacity: .55; }
 .beacon-feed li.fresh { color: var(--white); opacity: 1; animation: feed-in .35s ease-out; }
@@ -311,7 +313,7 @@ h2 { margin: 0; font-size: clamp(32px, 4.5vw, 66px); line-height: .98; letter-sp
   .nav-rail a { min-height: 42px; padding: 8px 10px; }
   .nav-rail a span { display: none; }
   .hero-cyber, .home-simple, .content-hero, .section { padding-top: 58px; padding-bottom: 58px; }
-  .home-message h1 { font-size: clamp(58px, 19vw, 94px); }
+  .home-message h1 { font-size: clamp(44px, 14vw, 80px); }
   .rng-visual { min-height: 440px; padding: 20px; }
   h1 { font-size: clamp(42px, 14vw, 70px); }
   .ascii-frame { font-size: 9px; }
