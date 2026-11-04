@@ -1,15 +1,14 @@
 // Any-Honest validator: commits c = g^alpha with a fresh secret
-// when a round opens, reveals alpha once the beacon shows the round revealing,
-// cracks reveals that are still missing after the deadline. No shared secret
-// with anyone.
+// when a round opens, reveals alpha once the beacon shows the round revealing.
+// No shared secret with anyone. Superseded by the `rng-validator@1.0` device;
+// cracking is its own service (anyhonest-cracker.mjs), never run here.
 //
 //   node provider/anyhonest-validator.mjs init <config>
 //   node provider/anyhonest-validator.mjs run <config>
 //   node provider/anyhonest-validator.mjs exit <config>
 //   node provider/anyhonest-validator.mjs finalize-exit <config>
 //
-// Config: { beacon, hbNode, dataDir, listen? }. Uses RNG_CRACKER (native GMP)
-// for cracks when set, else JavaScript.
+// Config: { beacon, hbNode, dataDir, listen? }.
 import fs from 'node:fs';
 import path from 'node:path';
 import http from 'node:http';
@@ -55,33 +54,6 @@ if (cmd === 'exit' || cmd === 'finalize-exit') {
  *  is sent, so a restart can still reveal. Each send uses a fresh one. */
 const secretFile = (round) => file('secrets', `${round}.json`);
 const secrets = (round) => (fs.existsSync(secretFile(round)) ? JSON.parse(fs.readFileSync(secretFile(round), 'utf8')) : {});
-
-const cracking = new Set();
-async function crack(info, o, target) {
-  const key = `${o.round}|${target}`;
-  // One crack at a time; the loop offers the next one when this finishes. A
-  // node restart left every in-flight round to be cracked at once: 118
-  // crackers ran in parallel on the HyperBEAM host, none finished, and the
-  // node lost 13 of its 16 cores to them (2026-11-04).
-  if (cracking.size > 0) return;
-  cracking.add(key);
-  const c = o.committed[target];
-  const T = o.T ?? info.params.T;
-  log(`cracking ${target.slice(0, 8)} for round ${o.round} (T=${T}, ${process.env.RNG_CRACKER ? 'native' : 'js'})`);
-  const t0 = Date.now();
-  try {
-    const { y, proof } = process.env.RNG_CRACKER
-      ? await tl.crackNative(process.env.RNG_CRACKER, c, T)
-      : tl.crack(c, T);
-    if (!tl.verifyCrack(c, T, y, proof).valid) throw new Error('own crack does not verify');
-    await post('Crack', { round: o.round, validator: target, y, proof });
-    log(`cracked ${target.slice(0, 8)} round ${o.round} in ${((Date.now() - t0) / 1000).toFixed(1)} s`);
-  } catch (e) {
-    log('crack failed:', e.message);
-  } finally {
-    cracking.delete(key);
-  }
-}
 
 let status = { address: me };
 if (cfg.listen) {
@@ -156,18 +128,6 @@ for (;;) {
         if (alpha) slot = await post('Reveal', { round: x.round, alpha });
         else log(`round ${x.round}: no secret on disk for our commit; cannot reveal`);
         revealed.set(x.round, { at: now, slot: Number.isFinite(slot) ? slot : -1 });
-      }
-
-      // Crack reveals still missing after the deadline. Validators take turns
-      // by address order, one reveal window apart, so one cracks and the rest wait.
-      if (x.phase === 'reveal' && x.revealDeadline > 0) {
-        const order = (x.active ?? []).filter((a) => committedX[a]).sort();
-        for (const target of Object.keys(committedX)) {
-          if ((x.revealed ?? []).includes(target) || target === me) continue;
-          const turns = order.filter((a) => a !== target);
-          const myTurn = turns.indexOf(me);
-          if (myTurn >= 0 && now >= x.revealDeadline + myTurn * i.params.revealWindowMs) crack(i, x, target);
-        }
       }
     }
 

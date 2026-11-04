@@ -27,6 +27,12 @@ every commitment it saw, so none can be reused under the same round number.
    canonical output.
 4. **Crack:** after the reveal deadline, anyone may submit the missing output
    and proof to `~rng@1.0/verify-crack`.
+
+Validators run inside HyperBEAM as the `rng-validator@1.0` device (steps 1-3).
+Cracking is a separate service, `provider/anyhonest-cracker.mjs`
+(`provider/Dockerfile.cracker`), that anyone may run for the crack bounty. It
+cracks one puzzle at a time and belongs on its own CPU budget, never on a
+HyperBEAM node's cores.
 5. **Finalize:** canonical outputs ordered by validator address form one round
    value under `hyperbeam/rng/any-honest/v1/round`.
 

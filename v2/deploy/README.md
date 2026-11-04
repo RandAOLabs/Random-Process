@@ -27,3 +27,15 @@ Ordinary runtime and console deployments reuse the existing DAO. A deliberate
 new-network migration must update `native-testnet.json`, the console deployment
 environment, and the Sites runtime environment together.
 
+
+## Any-Honest cracker
+
+Its own container, separate from HyperBEAM, capped at one CPU:
+
+```bash
+docker build -t rng-cracker -f provider/Dockerfile.cracker .
+mkdir -p /opt/rng-cracker && echo '{"beacon":"<anyHonest>","hbNode":"https://hyperbeam.tylerw.ai","dataDir":"/data","listen":7479}' > /opt/rng-cracker/config.json
+docker run --rm -v /opt/rng-cracker:/data rng-cracker init /data/config.json   # prints its address
+docker run -d --name rng-cracker --restart unless-stopped --cpus=1 --network host   -v /opt/rng-cracker:/data rng-cracker run /data/config.json
+docker run --rm -v /opt/rng-cracker:/data rng-cracker claim /data/config.json  # withdraw bounties
+```
