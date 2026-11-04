@@ -86,16 +86,24 @@ if (cfg.listen) {
 }
 log(`validator ${me} watching ${cfg.beacon}`);
 
-// What we last sent per round. The beacon's published state is the truth;
-// this only stops resending more often than every 1-3 s while it catches up.
-const sent = { commit: { round: 0, at: 0 }, close: { round: 0, at: 0 }, rejoin: { round: 0, at: 0 } };
-const due = (kind, round, now, ms = 3000) => sent[kind].round !== round || now - sent[kind].at > ms;
-const mark = (kind, round, now) => { sent[kind] = { round, at: now }; };
+// What we last sent per round, and the slot the node gave it. A scheduled
+// message WILL be computed, so it is never resent while the beacon has not yet
+// reached its slot: resending into a lagging beacon only lengthens its queue
+// (2026-11-04: 14,000 slots behind, growing ~75 a minute). Once the beacon has
+// computed past it and still shows nothing (a void, a refusal), resend.
+let atSlot = 0;
+const fresh = { round: 0, at: 0, slot: -1 };
+const sent = { commit: { ...fresh }, close: { ...fresh }, rejoin: { ...fresh } };
+const settled = (x, now, ms) => x.slot <= atSlot && now - x.at > ms;
+const due = (kind, round, now, ms = 3000) => sent[kind].round !== round || settled(sent[kind], now, ms);
+const mark = (kind, round, now, slot) => { sent[kind] = { round, at: now, slot: Number.isFinite(slot) ? slot : -1 }; };
 // Several rounds can be revealing at once, so reveals are tracked per round.
 const revealed = new Map();
-const dueReveal = (round, now) => !revealed.has(round) || now - revealed.get(round) > 3000;
+const dueReveal = (round, now) => !revealed.has(round) || settled(revealed.get(round), now, 3000);
 for (;;) {
   try {
+    // Before the state read, so the state is at least this far along.
+    atSlot = Number((await readState({ node: cfg.hbNode, process: cfg.beacon, path: 'now/at-slot' })).value) || 0;
     const i = await info();
     const o = i.open ?? {};
     const mine = i.validators.find((v) => v.address === me);
@@ -112,8 +120,7 @@ for (;;) {
     if (mine?.suspended && !mine.exiting && mine.bond >= i.params.slash
       && (mine.idle || quorumLost || i.round >= mine.suspendedAt + i.params.rejoinAfter) && due('rejoin', i.round, now)) {
       log(`${mine.idle ? 'idle' : 'suspended'} since round ${mine.suspendedAt}; rejoining with bond ${mine.bond}`);
-      await post('Rejoin', {});
-      mark('rejoin', i.round, now);
+      mark('rejoin', i.round, now, await post('Rejoin', {}));
     }
 
     // Commit as soon as the cadence allows: every round with the heartbeat
@@ -127,8 +134,7 @@ for (;;) {
       // A fresh secret on every send, also a resend after a void: never reuse one.
       const alpha = tl.newAlpha(), c = tl.commit(alpha);
       fs.writeFileSync(secretFile(o.round), JSON.stringify({ ...secrets(o.round), [c]: alpha }), { mode: 0o600 });
-      await post('Commit', { round: o.round, c });
-      mark('commit', o.round, now);
+      mark('commit', o.round, now, await post('Commit', { round: o.round, c }));
     }
 
     // Rounds overlap: the open round takes commits while older ones reveal.
@@ -138,14 +144,14 @@ for (;;) {
       // Reveal only once the beacon shows the round revealing. If the window
       // has passed by our clock but it still shows commits, ask it to close.
       if (x.phase === 'commit' && x.commitDeadline > 0 && now >= x.commitDeadline && due('close', x.round, now, 2000)) {
-        await post('Close', { round: x.round });
-        mark('close', x.round, now);
+        mark('close', x.round, now, await post('Close', { round: x.round }));
       }
       if (committedX[me] && !(x.revealed ?? []).includes(me) && x.phase === 'reveal' && dueReveal(x.round, now)) {
         const alpha = secrets(x.round)[committedX[me]];
-        if (alpha) await post('Reveal', { round: x.round, alpha });
+        let slot;
+        if (alpha) slot = await post('Reveal', { round: x.round, alpha });
         else log(`round ${x.round}: no secret on disk for our commit; cannot reveal`);
-        revealed.set(x.round, now);
+        revealed.set(x.round, { at: now, slot: Number.isFinite(slot) ? slot : -1 });
       }
 
       // Crack reveals still missing after the deadline. Validators take turns
