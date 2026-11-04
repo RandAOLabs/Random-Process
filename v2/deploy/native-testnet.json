@@ -33,7 +33,12 @@
       "anyHonest": "QAxyTvi39Ems-nWGl6PZsZsIzDuo2Zj1IlYjBgKl2zA",
       "reason": "used set 6.2 MB, 25k slots behind (2026-11-03)",
       "at": "2026-11-03T13:11:11.564Z"
+    },
+    {
+      "anyHonest": "VQMv1Z8-T4pLMkU4MJVfhxO6lHkzSkWSDY4tvB0PA8Q",
+      "reason": "validators flooded it 14k slots behind (2026-11-04)",
+      "at": "2026-11-04T09:59:38.653Z"
     }
   ],
-  "anyHonest": "VQMv1Z8-T4pLMkU4MJVfhxO6lHkzSkWSDY4tvB0PA8Q"
+  "anyHonest": "kqzobErkDpChZlORcOEMj8OJBY_EIoPVjyyelDJlNVw"
 }
