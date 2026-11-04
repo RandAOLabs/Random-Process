@@ -19,7 +19,6 @@ local json = require(".json")
 local SIGNATURE_ALGS = { ["rsa-pss-sha512"] = true, ["rsa-pss-sha256"] = true }
 local CHECKPOINT_EVERY = 1000 -- lua-patch@1.0: messages between full-state checkpoints
 local ROUND_HISTORY = 8      -- finalized round records kept in published state
-local STRIKE_WINDOW = 3600   -- strikes count within this many rounds (~1 h)
 local GUARD_MS = 600000      -- a request is remembered (and a Request-Time accepted) this long
 local SKEW_MS = 120000       -- how far ahead of the scheduler's clock a Request-Time may be
 local CREDIT_KEEP = 1000     -- credit references kept before the oldest fold into `creditFloor`
@@ -50,13 +49,14 @@ local function freshState()
   return {
     rev = 0, self = "", token = "", unit = 1000000,
     params = {
-      T = 134217728, h = "", commitWindowMs = 3000, revealWindowMs = 30000, abandonAfterMs = 1800000,
-      minCommits = 2, cadenceMs = 5000, suspendAfter = 3, slash = 1000, rejoinAfter = 600, heartbeat = 1,
+      T = 134217728, h = "", commitWindowMs = 2000, revealWindowMs = 30000, abandonAfterMs = 360000,
+      minCommits = 2, cadenceMs = 500, stake = 25000, slash = 1000, heartbeat = 1,
       roundPrice = 3, requestPrice = 4, subscriptionPrice = 1, subscriptionRounds = 1000, crackBounty = 10,
     },
-    -- address -> { strikes = { round, ... }, struckAt = ms, missed = n, suspended = bool, idle = bool, suspendedAt = round }
+    -- address -> { ready = bool, paused = bool, faults = n, lastFault = { round, kind, slashed },
+    --              exiting = bool, exitAt = round }
     validators = {},
-    bonds = {},            -- address -> RNG bonded; each suspension takes `slash` of it
+    bonds = {},            -- address -> stake, RNG; every failed duty takes `slash` of it
     round = 0,             -- highest finalized round
     lastRoundAt = 0,
     lastOpenAt = 0,        -- first commit of the newest round; cadence counts from here
@@ -314,8 +314,9 @@ local function roundObligations(address)
   return rounds
 end
 
---- Past a round's reveal deadline with its output still missing: left out
---- of new rounds until every such output is filled.
+--- Past a round's reveal deadline with its output still missing: not in
+--- good standing, so left out of new rounds until every such output is filled
+--- (cracked) or its round is abandoned.
 local function overdue(addr)
   for _, o in pairs(Timelock.opens) do
     if o.late and o.commits[addr] and not o.outputs[addr] then return true end
@@ -323,10 +324,12 @@ local function overdue(addr)
   return false
 end
 
+--- The validators a new round is given to: ready (said so, and stays so only
+--- while it does every duty), not leaving, in good standing.
 local function activeValidators()
   local out = {}
   for addr, v in pairs(Timelock.validators) do
-    if not v.suspended and not v.exiting and not overdue(addr) then out[#out + 1] = addr end
+    if v.ready and not v.exiting and not overdue(addr) then out[#out + 1] = addr end
   end
   table.sort(out)
   return out
@@ -355,38 +358,25 @@ local function device(key, inputs)
   return nil
 end
 
---- An output missing at its reveal deadline. One outage is one strike: at
---- most one per revealWindowMs.
-local function strike(addr, r, now)
+--- A validator failed a duty it took on: `kind` "commit" (in a round's set,
+--- no commit within the window) or "reveal" (output missing at the reveal
+--- deadline). Every failed round is a full `slash` of the stake, paid to the
+--- Treasury, with no allowance and no window that forgives: a mistake must
+--- never be cheaper than doing the work. The validator stops being ready and
+--- gets no new rounds until it is in good standing and sends Ready.
+local function fault(addr, r, kind)
   local v = Timelock.validators[addr]
   if not v then return end
-  if v.struckAt and now < int(v.struckAt, 0) + int(Timelock.params.revealWindowMs, 10000) then return end
-  v.struckAt = now
-  v.strikes = v.strikes or {}
-  v.strikes[#v.strikes + 1] = r
-  local recent = {}
-  for _, s in ipairs(v.strikes) do if int(s, 0) > r - STRIKE_WINDOW then recent[#recent + 1] = s end end
-  v.strikes = recent
-  -- Suspension costs `slash` from the bond, paid to the protocol; an idle
-  -- validator's too, only an already slashed one is not slashed again.
-  if #recent >= int(Timelock.params.suspendAfter, 3) and not (v.suspended and not v.idle) then
-    local cut = math.min(int(Timelock.params.slash, 1000), int(Timelock.bonds[addr], 0))
-    Timelock.bonds[addr] = int(Timelock.bonds[addr], 0) - cut
-    Timelock.treasuryAtoms = int(Timelock.treasuryAtoms, 0) + cut * int(Timelock.unit, 1)
-    v.suspended, v.idle, v.suspendedAt = true, false, r
-  end
+  local cut = math.min(int(Timelock.params.slash, 1000), int(Timelock.bonds[addr], 0))
+  Timelock.bonds[addr] = int(Timelock.bonds[addr], 0) - cut
+  Timelock.treasuryAtoms = int(Timelock.treasuryAtoms, 0) + cut * int(Timelock.unit, 1)
+  v.ready, v.faults = false, int(v.faults, 0) + 1
+  v.lastFault = { round = r, kind = kind, slashed = cut }
 end
 
---- A missed commit costs nothing but the round's fee. `suspendAfter` in a
---- row makes the validator idle (suspended, no slash) so rounds stop waiting
---- out its commit window; it rejoins whenever it is back.
-local function missed(addr, r)
-  local v = Timelock.validators[addr]
-  if not v then return end
-  v.missed = int(v.missed, 0) + 1
-  if v.missed >= int(Timelock.params.suspendAfter, 3) and not v.suspended then
-    v.suspended, v.idle, v.suspendedAt = true, true, r
-  end
+--- What a validator has earned and not claimed, in atoms.
+local function earnedAtoms(addr)
+  return int(Timelock.accrued[addr], 0) * int(Timelock.unit, 1) + int(Timelock.accruedAtoms[addr], 0)
 end
 
 --- `used`: the sha256 of every c committed to this round number, void attempts included.
@@ -412,8 +402,10 @@ local function closeCommits(o, now)
   o.phase = "reveal"
   o.commitClose = math.min(now, o.firstCommitAt + int(Timelock.params.commitWindowMs, 3000))
   o.revealDeadline = o.commitClose + int(Timelock.params.revealWindowMs, 10000)
+  -- Every validator the round was given to must commit: one that did not is
+  -- slashed. The round goes on with those that did.
   for _, addr in ipairs(o.active) do
-    if not o.commits[addr] then missed(addr, o.round) end
+    if not o.commits[addr] then fault(addr, o.round, "commit") end
   end
   if count(o.commits) < int(Timelock.params.minCommits, 2) then
     -- Void: requests stay on this round number; validators commit fresh secrets.
@@ -450,8 +442,10 @@ local function abandon(o)
   Timelock.pending[key], Timelock.opens[key] = nil, nil
 end
 
---- Run before every handler: close due commits, strike outputs missing at a
---- reveal deadline, abandon rounds unfinished abandonAfterMs after it.
+--- Run before every handler: close due commits, slash every output missing at
+--- a reveal deadline (each round is its own failure), abandon rounds still
+--- unfinished abandonAfterMs after it. Rounds after a late one go on without
+--- waiting: only the late round's value waits for its crack.
 local function advance(now)
   closeIfDue(now)
   local rs = {}
@@ -466,9 +460,9 @@ local function advance(now)
       local addrs = {}
       for addr in pairs(o.commits) do if not o.outputs[addr] then addrs[#addrs + 1] = addr end end
       table.sort(addrs)
-      for _, addr in ipairs(addrs) do strike(addr, r, now) end
+      for _, addr in ipairs(addrs) do fault(addr, r, "reveal") end
     end
-    if now >= o.revealDeadline + int(Timelock.params.abandonAfterMs, 1800000) then abandon(o) end
+    if now >= o.revealDeadline + int(Timelock.params.abandonAfterMs, 360000) then abandon(o) end
   end
 end
 
@@ -536,6 +530,9 @@ local function finalize(base, o, now)
   Timelock.rounds[key] = { round = r, opened = o.firstCommitAt, commitClose = o.commitClose, finalizedAt = now,
     T = o.T, h = o.h, commits = o.commits, outputs = o.outputs, value = value,
     requests = served, sponsorAtoms = int(o.sponsorAtoms, 0) }
+  -- Its own key, so a reader checks a round without the full state:
+  -- `beaconround-<round % ROUND_HISTORY>' (the newest ROUND_HISTORY rounds).
+  base["beaconround-" .. string.format("%d", r % ROUND_HISTORY)] = encode(Timelock.rounds[key])
   local recent = Timelock.recent
   recent[#recent + 1] = r
   while #recent > ROUND_HISTORY do Timelock.rounds[tostring(table.remove(recent, 1))] = nil end
@@ -718,9 +715,7 @@ end
 
 local function validatorOf(msg)
   local addr = provenSigner(msg)
-  local v = addr and Timelock.validators[addr]
-  if not v or v.suspended or overdue(addr) then return nil end
-  return addr
+  return addr and Timelock.validators[addr] and addr or nil
 end
 
 H["Commit"] = function(base, msg, from, now)
@@ -740,8 +735,13 @@ H["Commit"] = function(base, msg, from, now)
   -- that cannot reach minCommits only voids and reopens, so it is not opened:
   -- one live validator re-committing into a voiding round every cadence grew
   -- this round's `used` set to 12k puzzles (6.2 MB) on 2026-11-03.
+  -- Only a ready validator opens a round; once open, every validator in its
+  -- set owes a commit, ready or not since.
   if o.phase == "collecting" then
     local active = activeValidators()
+    local inActive = false
+    for _, a in ipairs(active) do if a == addr then inActive = true end end
+    if not inActive then return fail(base, "Not an active validator") end
     if #active < int(Timelock.params.minCommits, 2) then return fail(base, "Too-Few-Validators") end
     o.active = active
   end
@@ -767,7 +767,6 @@ H["Commit"] = function(base, msg, from, now)
     o.T, o.h = Timelock.params.T, Timelock.params.h
   end
   o.commits[addr], o.used[usedKey] = d.c, true
-  Timelock.validators[addr].missed = 0
   local phase = closeIfDue(now) or o.phase
   return reply(base, { round = o.round, committed = count(o.commits), phase = phase })
 end
@@ -850,8 +849,7 @@ H["Act"] = function(base, msg, from, now)
 end
 
 H["Claim"] = function(base, msg, from)
-  local atoms = int(from and Timelock.accrued[from], 0) * int(Timelock.unit, 1)
-    + int(from and Timelock.accruedAtoms[from], 0)
+  local atoms = from and earnedAtoms(from) or 0
   if atoms <= 0 then return fail(base, "Nothing-To-Claim") end
   Timelock.accrued[from], Timelock.accruedAtoms[from] = 0, 0
   return reply(base, { claimedAtoms = tostring(atoms) },
@@ -859,9 +857,6 @@ H["Claim"] = function(base, msg, from)
 end
 
 local function ownerOnly(msg) return isOwner(provenSigner(msg)) end
-
---- A validator is active only while its bond covers the next slash.
-local function bonded(a) return int(Timelock.bonds and Timelock.bonds[a], 0) >= int(Timelock.params.slash, 1000) end
 
 --- The owner names the beacon that replaces this one. A validator device
 --- moves there once the successor names this beacon as its predecessor.
@@ -892,9 +887,8 @@ H["Admin.Add-Validator"] = function(base, msg)
   if not ownerOnly(msg) then return fail(base, "Not authorised") end
   local a = dataOf(msg).address or msg.Address
   if not isAoAddress(a) then return fail(base, "Bad address") end
-  -- Unbonded validators start idle and join with Rejoin once bonded.
-  Timelock.validators[a] = Timelock.validators[a] or { strikes = {}, missed = 0,
-    suspended = not bonded(a), idle = not bonded(a), suspendedAt = 0,
+  -- A new validator is not ready: it says Ready once its stake is in.
+  Timelock.validators[a] = Timelock.validators[a] or { ready = false, paused = false, faults = 0,
     exiting = false, exitAt = 0 }
   return reply(base, { validators = activeValidators() })
 end
@@ -940,30 +934,57 @@ H["Admin.Remove-Validator"] = function(base, msg)
   return reply(base, { validators = activeValidators(), refunded = bond }, { ["rng-bond-refund"] = transferOut(a, bond, "RNG validator bond") })
 end
 
---- A suspended validator brings itself back while its bond still covers
---- another slash: an idle one at once, a slashed one `rejoinAfter` rounds on.
-H["Rejoin"] = function(base, msg, from)
+--- Ready: give me work. Allowed once in good standing (every output it owes
+--- past a deadline is filled or abandoned) with a full stake. A stake below
+--- `stake` is refilled from earnings first, so a validator pays for its own
+--- mistakes out of what it earned; only one that has earned too little needs
+--- new tokens (X-Bond). From here every round it is given must be done.
+H["Ready"] = function(base, msg, from)
   local v = from and Timelock.validators[from]
   if not v then return fail(base, "Not a validator") end
   if v.exiting then return fail(base, "Validator-Exiting") end
-  if not v.suspended then return fail(base, "Not suspended") end
-  if not bonded(from) then return fail(base, "Bond-Too-Low") end
-  -- The cooldown is counted in finished rounds, so it is waived while too few
-  -- validators are active to finish one; otherwise all-suspended is permanent.
-  local quorumLost = #activeValidators() < int(Timelock.params.minCommits, 2)
-  if not v.idle then
-    if not quorumLost and Timelock.round < int(v.suspendedAt, 0) + int(Timelock.params.rejoinAfter, 600) then return fail(base, "Too-Soon") end
-    v.strikes = {}
+  if v.ready then return reply(base, { ready = true, stake = int(Timelock.bonds[from], 0) }) end
+  if overdue(from) then return fail(base, "Not-In-Good-Standing", from, { obligations = roundObligations(from) }) end
+  local unit = int(Timelock.unit, 1)
+  local need = math.max(0, int(Timelock.params.stake, 25000) - int(Timelock.bonds[from], 0))
+  -- All or nothing: a refused Ready changes nothing.
+  if need * unit > earnedAtoms(from) then
+    return fail(base, "Stake-Too-Low", from, { stake = int(Timelock.bonds[from], 0),
+      required = int(Timelock.params.stake, 25000), earnedAtoms = tostring(earnedAtoms(from)) })
   end
-  v.suspended, v.idle, v.missed = false, false, 0
-  return reply(base, { validators = activeValidators(), bond = int(Timelock.bonds[from], 0) })
+  if need > 0 then
+    Timelock.accrued[from], Timelock.accruedAtoms[from] = 0, earnedAtoms(from) - need * unit
+    add(Timelock.bonds, from, need)
+  end
+  local refilled = need
+  v.ready, v.paused = true, false
+  return reply(base, { ready = true, stake = int(Timelock.bonds[from], 0), refilled = refilled,
+    validators = activeValidators() })
+end
+--- The name validators used before Ready.
+H["Rejoin"] = H["Ready"]
+
+--- Pause: no new rounds from now on, no slash. Rounds already given to it are
+--- still owed (commits to a round it is in, every reveal), so a validator that
+--- goes offline pauses, finishes its work, then stops.
+H["Pause"] = function(base, msg, from)
+  local v = from and Timelock.validators[from]
+  if not v then return fail(base, "Not a validator") end
+  v.ready, v.paused = false, true
+  local o = Timelock.opens[tostring(Timelock.next)]
+  if o and o.phase == "collecting" then
+    local keep = {}
+    for _, address in ipairs(o.active or {}) do if address ~= from then keep[#keep + 1] = address end end
+    o.active = keep
+  end
+  return reply(base, { paused = true, obligations = roundObligations(from) })
 end
 
 H["Admin.Reinstate"] = function(base, msg)
   if not ownerOnly(msg) then return fail(base, "Not authorised") end
   local v = Timelock.validators[dataOf(msg).address or msg.Address or ""]
   if not v then return fail(base, "Unknown validator") end
-  v.suspended, v.idle, v.missed, v.strikes, v.exiting = false, false, 0, {}, false
+  v.ready, v.paused, v.exiting = true, false, false
   return reply(base, { validators = activeValidators() })
 end
 
@@ -996,7 +1017,8 @@ H["Configure"] = function(base, msg)
      or (p.heartbeat ~= 0 and p.heartbeat ~= 1)
      or p.roundPrice < 1 or p.requestPrice < 1 or p.subscriptionPrice < 1
      or p.subscriptionRounds < 1 or p.subscriptionRounds > 31536000
-     or p.crackBounty < 1 then
+     or p.crackBounty < 1 or p.slash < 1 or p.stake < p.slash
+     or p.abandonAfterMs < p.revealWindowMs then
     return fail(base, "Bad-Parameter")
   end
   if p.T ~= Timelock.params.T or d.h ~= nil or d.hProof ~= nil then
@@ -1025,7 +1047,8 @@ H["Get-Info"] = function(base) return reply(base, { ok = true }) end
 
 H["Balance"] = function(base, msg, from)
   local who = msg.Account or from
-  return reply(base, { account = who, balance = int(Timelock.balances[who], 0), accrued = int(Timelock.accrued[who], 0) })
+  return reply(base, { account = who, balance = int(Timelock.balances[who], 0),
+    stake = int(Timelock.bonds[who], 0), earnedAtoms = tostring(earnedAtoms(who)) })
 end
 
 ---------------------------------------------------------------------------
@@ -1068,13 +1091,26 @@ local function resolveHandler(action)
   return nil
 end
 
+--- The first 16 hex digits of a commitment: enough for a validator to find
+--- its own secret, a sixth of the bytes. A round past its reveal deadline
+--- (late) shows commitments whole: those are what crackers work on.
+local function commitView(o)
+  if o.late then return o.commits end
+  local out = {}
+  for addr, c in pairs(o.commits) do out[addr] = c:sub(1, 16) end
+  return out
+end
+
+--- What validators, crackers and readers poll, kept small: published on every
+--- message. The group (g, n), h and the finalized rounds have keys of their
+--- own (`beaconparams', `beaconround-<r % 8>', `beaconrecent').
 local function info()
   local vs = {}
   for addr, v in pairs(Timelock.validators) do
-    vs[#vs + 1] = { address = addr, suspended = v.suspended == true, idle = v.idle == true, overdue = overdue(addr),
-                    strikes = #(v.strikes or {}), missed = int(v.missed, 0), bond = int(Timelock.bonds and Timelock.bonds[addr], 0),
-                    suspendedAt = int(v.suspendedAt, 0), exiting = v.exiting == true,
-                    obligations = roundObligations(addr) }
+    vs[#vs + 1] = { address = addr, ready = v.ready == true, paused = v.paused == true,
+                    suspended = v.ready ~= true, overdue = overdue(addr), exiting = v.exiting == true,
+                    stake = int(Timelock.bonds[addr], 0), bond = int(Timelock.bonds[addr], 0),
+                    faults = int(v.faults, 0), lastFault = v.lastFault }
   end
   table.sort(vs, function(a, b) return a.address < b.address end)
   local function roundInfo(o)
@@ -1082,9 +1118,9 @@ local function info()
     for addr in pairs(o.outputs or {}) do revealed[#revealed + 1] = addr end
     table.sort(revealed)
     return { round = o.round, phase = o.phase, pending = #(Timelock.pending[tostring(o.round)] or {}),
-             firstCommitAt = o.firstCommitAt, T = o.T,
+             firstCommitAt = o.firstCommitAt, T = o.T, late = o.late == true,
              commitDeadline = (o.firstCommitAt or 0) > 0 and o.firstCommitAt + Timelock.params.commitWindowMs or 0,
-             revealDeadline = o.revealDeadline, active = o.active, committed = o.commits, revealed = revealed }
+             revealDeadline = o.revealDeadline, active = o.active, committed = commitView(o), revealed = revealed }
   end
   local older = {}
   for _, o in pairs(Timelock.opens) do if o.phase == "reveal" then older[#older + 1] = roundInfo(o) end end
@@ -1093,8 +1129,10 @@ local function info()
   for _, list in pairs(Timelock.pending) do pendingTotal = pendingTotal + #list end
   local activeSubscriptions = 0
   for _, sub in pairs(Timelock.subscriptions or {}) do if sub.active then activeSubscriptions = activeSubscriptions + 1 end end
+  local params = {}
+  for k, v in pairs(Timelock.params) do if k ~= "h" then params[k] = v end end
   return {
-    tier = "any-honest", round = Timelock.round, params = Timelock.params, validators = vs, g = G, n = N,
+    tier = "any-honest", round = Timelock.round, params = params, validators = vs,
     price = price(), token = Timelock.token, unit = Timelock.unit,
     nextRoundAt = int(Timelock.lastOpenAt, 0) + int(Timelock.params.cadenceMs, 0),
     open = roundInfo(current()), revealing = older,
@@ -1107,8 +1145,9 @@ local function info()
       crackBounty = int(Timelock.params.crackBounty, 10) },
     self = Timelock.self,
     successor = Timelock.successor or "", predecessor = Timelock.predecessor or "",
-    -- What this beacon accepts beyond the per-step actions; `act`: H["Act"].
-    features = { "act" },
+    -- What this beacon accepts beyond the per-step actions. `act': H["Act"].
+    -- `ready': validators say Ready/Pause and every failed duty is slashed.
+    features = { "act", "ready" },
   }
 end
 
@@ -1163,6 +1202,14 @@ function compute(base, req)
   end
   result.timelockrev = string.format("%d", Timelock.rev)
   result.beaconinfo = encode(info())
+  -- Rarely changing keys: on lua-patch@1.0 an unchanged value is no patch.
+  result.beaconparams = encode({ g = G, n = N, T = Timelock.params.T, h = Timelock.params.h })
+  local recent = {}
+  for _, r in ipairs(Timelock.recent) do
+    local rec = Timelock.rounds[tostring(r)]
+    if rec then recent[#recent + 1] = { round = r, value = rec.value, opened = rec.opened, finalizedAt = rec.finalizedAt } end
+  end
+  result.beaconrecent = encode(recent)
   collectgarbage("collect")
   return result
 end

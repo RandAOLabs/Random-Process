@@ -39,3 +39,25 @@ docker run --rm -v /opt/rng-cracker:/data rng-cracker init /data/config.json   #
 docker run -d --name rng-cracker --restart unless-stopped --cpuset-cpus=0 --network host   -v /opt/rng-cracker:/data rng-cracker run /data/config.json
 docker run --rm -v /opt/rng-cracker:/data rng-cracker claim /data/config.json  # withdraw bounties
 ```
+
+## Any-Honest beacon cutover
+
+The beacon is a process: replacing it needs no node rebuild. `kqzobErk` (the
+lua@5.3a beacon) has no successor support, so this first cutover changes the
+validators' node config; later ones use `Admin.Set-Successor` and need none.
+
+1. `spawn-anyhonest --replace <reason>` (lua-patch@1.0), then
+   `configure-anyhonest deploy/anyhonest-validators.json` (records the old
+   beacon as `predecessor`).
+2. Fund it: `fund-anyhonest <foundation> <treasury>` from the owner (the
+   reserve of a lua@5.3a beacon cannot move; later beacons use
+   `Admin.Move-Reserve`). It bonds 25,000 per validator.
+3. Roll a node build with the current `rng-validator@1.0`, with
+   `rng-validator.beacon` set to the new id. The devices say Ready on their own.
+4. Point the crackers (`/opt/rng-cracker/data/config.json` on the side nodes)
+   at the new id and restart them; update `native-testnet.json` and the
+   console's `RNG_ANYHONEST_ID`.
+
+Before stopping a validator node, create `pause` in its `secrets-dir` and wait
+for `ready: false` in `/~rng-validator@1.0/status`; a ready validator stopped
+without pausing is slashed for every round it does not finish.

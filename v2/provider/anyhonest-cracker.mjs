@@ -57,13 +57,15 @@ async function info() {
   return JSON.parse(r.value);
 }
 
-/** Every reveal still missing after its deadline: [{ round, target, c, T, giveUpAt }], oldest first. */
+/** Every reveal still missing after its deadline: [{ round, target, c, T, giveUpAt }]. */
 function missing(i, now) {
   const out = [];
   for (const x of i.revealing ?? []) {
     if (x.phase !== 'reveal' || !(x.revealDeadline > 0) || now < x.revealDeadline) continue;
     for (const [target, c] of Object.entries(x.committed ?? {})) {
-      if ((x.revealed ?? []).includes(target)) continue;
+      // A beacon shows a commitment whole only once its round is late; before
+      // that it is a 16-digit prefix, nothing to crack.
+      if ((x.revealed ?? []).includes(target) || typeof c !== 'string' || c.length <= 16) continue;
       out.push({ round: x.round, target, c, T: x.T ?? i.params.T,
         giveUpAt: x.revealDeadline + Number(i.params.abandonAfterMs ?? 1_800_000) });
     }
@@ -72,8 +74,12 @@ function missing(i, now) {
 }
 
 // A crack the beacon will have abandoned before it finishes is not started.
-let lastCrackMs = 5 * 60_000;
+// The estimate starts at a measured native crack of T = 2^27 on one core
+// (~175 s) and then follows this machine's last crack. It must stay below the
+// beacon's abandon time (6 min), or nothing would ever be cracked.
+let lastCrackMs = 180_000;
 const done = new Set(); // `${round}|${target}` already posted
+const jitterMs = Number(cfg.jitterMs ?? 60_000);
 let status = { address: me, cracking: null, cracked: 0, failed: 0, lastCrackMs };
 if (cfg.listen) {
   http.createServer((_, res) => { res.writeHead(200, { 'content-type': 'application/json' }); res.end(JSON.stringify(status)); })
@@ -84,10 +90,13 @@ log(`cracker ${me} watching ${cfg.beacon} (${process.env.RNG_CRACKER ? 'native' 
 for (;;) {
   try {
     const now = Date.now();
-    const job = missing(await info(), now)
-      .find((j) => !done.has(`${j.round}|${j.target}`) && j.giveUpAt - now > lastCrackMs * 1.5);
+    // Any puzzle it can finish in time, picked at random: with one late
+    // puzzle every cracker races for it; with several they spread out.
+    const jobs = missing(await info(), now)
+      .filter((j) => !done.has(`${j.round}|${j.target}`) && j.giveUpAt - now > lastCrackMs * 1.1 + jitterMs);
+    const job = jobs[Math.floor(Math.random() * jobs.length)];
     if (job) {
-      await sleep(Math.random() * Number(cfg.jitterMs ?? 60_000));
+      await sleep(Math.random() * jitterMs);
       if (!missing(await info(), Date.now()).some((j) => j.round === job.round && j.target === job.target)) {
         done.add(`${job.round}|${job.target}`);
         log(`already settled: ${job.target.slice(0, 8)} round ${job.round}`);

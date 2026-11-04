@@ -45,6 +45,8 @@ local function send(body, advance)
 end
 local function info() return json.decode(base.beaconinfo) end
 local function state() return json.decode(base.timelockstate) end
+local function params() return json.decode(base.beaconparams) end
+local function ready(v) return send(wallet(v, { Action = "Ready" })) end
 local function configure(d) return send(wallet(F.owner, { Action = "Configure", Data = type(d) == "string" and d or encode(d) })) end
 local function commit(v, r, name) return send(wallet(v, { Action = "Commit", Data = encode({ round = r, c = P[name].c }) })) end
 local function reveal(v, r, name, alpha) return send(wallet(v, { Action = "Reveal", Data = encode({ round = r, alpha = alpha or P[name].alpha }) })) end
@@ -59,9 +61,10 @@ function runTimelockTests()
   local r, ob = configure(F.config)
   r = send(wallet(F.stranger, { Action = "Configure", Data = F.config }))
   eq("configure owner-only", r.error, "Not authorised")
-  eq("g is the device's generator", info().g, F.dev.generator.g)
-  eq("N is the device's modulus", info().n, F.dev.generator.n)
-  eq("h set with its proof", info().params.h, F.h)
+  eq("g is the device's generator", params().g, F.dev.generator.g)
+  eq("N is the device's modulus", params().n, F.dev.generator.n)
+  check("beaconinfo leaves out g, n and h", info().g == nil and info().n == nil and info().params.h == nil)
+  eq("h set with its proof", params().h, F.h)
 
   -- Configure: floors, h checked as a crack of g, token set once.
   TestHarness = false
@@ -113,9 +116,14 @@ function runTimelockTests()
   end
   eq("bond credited", Timelock.bonds[A], 25000)
   check("bond is not a request balance", Timelock.balances[A] == nil)
+  check("a new validator is not ready", Timelock.validators[A].ready == false and #Timelock.validators[A] == 0)
   send(wallet(F.owner, { Action = "Admin.Add-Validator", Data = encode({ address = F.stranger }) }))
-  check("unbonded validator starts suspended", Timelock.validators[F.stranger].suspended == true)
+  eq("ready needs the full stake", ready(F.stranger).error, "Stake-Too-Low")
   send(wallet(F.owner, { Action = "Admin.Remove-Validator", Data = encode({ address = F.stranger }) }))
+  eq("not a validator: ready refused", ready(F.stranger).error, "Not a validator")
+  for _, v in ipairs(F.v) do ready(v) end
+  check("bonded validators say Ready", Timelock.validators[A].ready and Timelock.validators[B].ready and Timelock.validators[C].ready)
+  eq("ready again is a no-op", ready(A).ready, true)
   eq("price is 3 validators + 1", info().price, 4)
   r, ob = send(delivery(F.token, { Action = "Credit-Notice", Sender = F.game, Quantity = tostring(40 * U), Reference = "t4" }))
   check("credit: no RNG-Funded", r.credited == 40 and next(ob) == nil)
@@ -155,6 +163,7 @@ function runTimelockTests()
   eq("next round commits while round 1 reveals", r.round, 2)
   eq("round 2 is the open round", info().open.round, 2)
   eq("round 1 listed as revealing", info().revealing[1].round, 1)
+  eq("commitments shown as a 16-digit prefix until late", info().revealing[1].committed[A], P.r1a.c:sub(1, 16))
   r = commit(B, 1, "r1b")
   eq("late commit to a revealing round", r.error, "Commits-Closed")
   r = reveal(A, 1, "r1a", P.r1b.alpha)
@@ -175,6 +184,8 @@ function runTimelockTests()
   r, ob = reveal(C, 1, "r1c")
   eq("round 1 finalized", info().round, 1)
   eq("value matches the reference", r.value, F.value1)
+  eq("round record in its own key", json.decode(base["beaconround-1"]).value, F.value1)
+  eq("recent rounds published", json.decode(base.beaconrecent)[1].value, F.value1)
   local res = ob["rng-result-1"] and json.decode(ob["rng-result-1"].Data)
   check("result goes to the game", ob["rng-result-1"] and ob["rng-result-1"].target == F.game)
   eq("request value hashes requester and id", res and res.results[1].value, F.out1)
@@ -196,10 +207,13 @@ function runTimelockTests()
   commit(A, 3, "r3a"); commit(B, 3, "r3b"); commit(C, 3, "r3c")
   reveal(A, 3, "r3a"); reveal(B, 3, "r3b")
   tick(10000)
-  eq("missing reveal struck at its deadline", #Timelock.validators[C].strikes, 1)
+  check("rounds 2 and 3 past their deadlines", Timelock.opens["2"].late == true and Timelock.opens["3"].late == true)
+  eq("every missed reveal is its own full slash", Timelock.bonds[C], 23000)
+  eq("faults counted", Timelock.validators[C].faults, 2)
+  check("missed reveal: no longer ready", Timelock.validators[C].ready == false
+    and Timelock.validators[C].lastFault.kind == "reveal")
   tick(2000)
-  check("round 3 past its deadline too", Timelock.opens["3"].late == true)
-  eq("one outage is one strike", #Timelock.validators[C].strikes, 1)
+  eq("late round shows commitments whole, for crackers", info().revealing[1].committed[C], P.r2c.c)
   eq("overdue validator does not change the fixed price", info().price, 4)
   check("overdue shown", info().validators[3].overdue == true)
   r = request("req-4")
@@ -212,16 +226,25 @@ function runTimelockTests()
   eq("canonical y stored", state().rounds["2"].outputs[C].y, P.r2c.y)
   check("cracker receives the 10 RNG Treasury bounty and pool shares",
     Timelock.accruedAtoms[F.stranger] >= 10 * U, Timelock.accruedAtoms[F.stranger])
-  eq("no strike at crack time", #Timelock.validators[C].strikes, 1)
+  eq("the crack bounty comes out of c's stake", Timelock.bonds[C], 22990)
   eq("overdue membership never reprices requests", info().price, 4)
   r = crack(A, 3, C, F.crack3.y, F.badCrack)
   eq("bad proof refused", r.error, "Bad-Crack")
   r = crack(A, 3, C, F.crack3.y, F.crack3.proof)
   eq("cracked value matches the reference", r.value, F.value3)
   check("a accrued reveal pools and a crack bounty", Timelock.accruedAtoms[A] > 10 * U)
-  eq("c back in new rounds", info().price, 4)
+  eq("c back in good standing", info().validators[3].overdue, false)
 
-  -- Round 4: charged 3 while c was out, served by 3: fees stop at the charge.
+  -- c pays for its mistakes out of what it earned before it gets work again.
+  r = ready(C)
+  check("stake not refilled by earnings alone: ready refused", r.error == "Stake-Too-Low" and Timelock.bonds[C] < 25000, r.error)
+  Timelock.accruedAtoms[C] = 5000 * U
+  r = ready(C)
+  check("ready refills the stake from earnings", r.ready == true and r.refilled == 25000 - 22980
+    and Timelock.bonds[C] == 25000, r.error)
+  eq("refill taken from earnings", Timelock.accruedAtoms[C], (5000 - 2020) * U)
+
+  -- Round 4: served by 3.
   commit(A, 4, "r4a"); commit(B, 4, "r4b")
   r = commit(C, 4, "r4c")
   eq("c joins round 4", r.phase, "reveal")
@@ -232,9 +255,9 @@ function runTimelockTests()
   check("b accrued fixed pool shares", Timelock.accruedAtoms[B] > 0)
   eq("game balance reflects five fixed-price requests", Timelock.balances[F.game], 20)
 
-  -- Round 5: c withholds, then misses rounds 6 and 7 (idle); its strike at
-  -- round 5's deadline still slashes it. Nobody cracks: abandoned.
-  configure({ suspendAfter = 2 })
+  -- Round 5: c withholds; it is still ready, so round 6 is given to it and it
+  -- misses that commit too (slashed); round 7 goes on without it. Nobody
+  -- cracks round 5: abandoned.
   r = request("req-5")
   eq("request binds to round 5", r.round, 5)
   commit(A, 5, "r5a"); commit(B, 5, "r5b"); commit(C, 5, "r5c")
@@ -244,50 +267,43 @@ function runTimelockTests()
     tick(3000)
     reveal(A, n, "r" .. n .. "a"); reveal(B, n, "r" .. n .. "b")
   end
-  eq("rounds 6 and 7 finalized", info().round, 7)
-  check("c idle after 2 missed commits", Timelock.validators[C].suspended == true and Timelock.validators[C].idle == true)
-  eq("two cracked obligations reimbursed Treasury from the bond", Timelock.bonds[C], 24980)
+  eq("rounds 6 and 7 finalized without c", info().round, 7)
+  check("missed commit in a round it was given: slashed",
+    Timelock.bonds[C] == 24000 and Timelock.validators[C].lastFault.kind == "commit" and Timelock.validators[C].lastFault.round == 6)
+  check("round 7 never given to c", Timelock.rounds["7"] and Timelock.rounds["7"].commits[C] == nil)
   r = send(wallet(F.owner, { Action = "Admin.Remove-Validator", Data = encode({ address = C }) }))
   eq("removal refused while c has a commit in flight", r.error, "Validator-Busy")
   local treasuryBefore = Timelock.treasuryAtoms
   tick(3000)
-  check("idle c slashed at its strike", Timelock.validators[C].suspended == true and not Timelock.validators[C].idle)
-  eq("suspension slashes the bond", Timelock.bonds[C], 23980)
+  eq("round 5's missed reveal slashed too", Timelock.bonds[C], 23000)
   eq("slash goes to the DAO Treasury", Timelock.treasuryAtoms - treasuryBefore, 1000 * U)
+  r = ready(C)
+  eq("ready refused while an output is owed", r.error, "Not-In-Good-Standing")
   r, ob = tick(60000)
   check("round 5 abandoned", Timelock.opens["5"] == nil and Timelock.pending["5"] == nil and state().rounds["5"] == nil)
   eq("abandoned request refunded in full", Timelock.balances[F.game], 20)
   local note = ob["rng-abandoned-5-1"]
   check("requester told Round-Abandoned", note and note.target == F.game and json.decode(note.Data).error == "Round-Abandoned")
-
-  r = send(wallet(C, { Action = "Rejoin" }))
-  eq("rejoin waits rejoinAfter rounds", r.error, "Too-Soon")
-  configure({ rejoinAfter = 0 })
-  Timelock.bonds[C] = 999
-  r = send(wallet(C, { Action = "Rejoin" }))
-  eq("rejoin needs a bond covering the next slash", r.error, "Bond-Too-Low")
-  Timelock.bonds[C] = 24000
-  r = send(wallet(A, { Action = "Rejoin" }))
-  eq("only a suspended validator rejoins", r.error, "Not suspended")
-  send(wallet(C, { Action = "Rejoin" }))
-  check("c rejoined", Timelock.validators[C].suspended == false)
-  eq("rejoin clears strikes", #Timelock.validators[C].strikes, 0)
+  local earned = Timelock.accruedAtoms[C]
+  r = ready(C)
+  check("after the abandon, ready again, refilled from earnings", r.ready == true and Timelock.bonds[C] == 25000
+    and Timelock.accruedAtoms[C] == earned - 2000 * U, r.error)
   eq("price back to 4", info().price, 4)
+
+  -- Pause: no new rounds, no slash; Ready brings it back.
+  r = send(wallet(A, { Action = "Pause" }))
+  check("pause: not ready, not slashed", r.paused == true and Timelock.validators[A].ready == false and Timelock.bonds[A] == 25000)
+  check("paused shown", info().validators[1].paused == true or info().validators[2].paused == true or info().validators[3].paused == true)
+  ready(A)
+  check("ready after a pause", Timelock.validators[A].ready == true and Timelock.validators[A].paused == false)
 
   -- One live validator cannot open a round it could only void: on 2026-11-03
   -- a lone validator re-committing into a voiding round grew `used` to 6.2 MB.
-  Timelock.validators[B].suspended, Timelock.validators[C].suspended = true, true
+  Timelock.validators[B].ready, Timelock.validators[C].ready = false, false
   r = commit(A, 8, "r8a")
   eq("one active validator cannot open a round", r.error, "Too-Few-Validators")
   check("a refused open records no commitment", Timelock.opens["8"] == nil or next(Timelock.opens["8"].used) == nil)
-  -- Too few active to finish a round, so the round-counted cooldown could
-  -- never elapse: on 2026-11-03 all three sat suspended for hours.
-  configure({ rejoinAfter = 600 })
-  Timelock.validators[C].suspendedAt, Timelock.validators[C].idle = Timelock.round + 1, false
-  r = send(wallet(C, { Action = "Rejoin" }))
-  check("rejoin skips the cooldown while quorum is lost", r.error == nil and Timelock.validators[C].suspended == false)
-  configure({ rejoinAfter = 0 })
-  Timelock.validators[B].suspended, Timelock.validators[C].suspended = false, false
+  Timelock.validators[B].ready, Timelock.validators[C].ready = true, true
 
   -- Round 8: only a commits: void; its commitment can't come back.
   r = request("req-8")
@@ -297,6 +313,10 @@ function runTimelockTests()
   eq("too few commits: void, round reopens", r.phase, "collecting")
   eq("void round keeps its number", info().open.round, 8)
   eq("request still pending", info().open.pending, 1)
+  check("b and c slashed for the commits they owed", Timelock.bonds[B] == 24000 and Timelock.bonds[C] == 24000
+    and not Timelock.validators[B].ready and not Timelock.validators[C].ready)
+  Timelock.accruedAtoms[B], Timelock.accruedAtoms[C] = Timelock.accruedAtoms[B] + 1000 * U, Timelock.accruedAtoms[C] + 1000 * U
+  ready(B); ready(C)
   r = commit(A, 8, "r8a")
   eq("commitment from the void attempt refused", r.error, "Reused-Commitment")
   commit(A, 8, "r8a2")

@@ -250,16 +250,17 @@ if (cmd === 'configure-anyhonest') {
   const configured = await send(state.anyHonest, 'Configure', { data: JSON.stringify({
     self: state.anyHonest, token: state.token, unit: 1000000,
     T, h: puzzle.h, hProof: puzzle.hProof,
-    // Validators run in-node (rng-validator@1.0) and push their slots: every
-    // commit lands within ~0.7 s, so a 1 s window and 0.5 s cadence. Reveals
-    // keep 30 s for a busy node.
-    commitWindowMs: 1000, revealWindowMs: 30000,
-    abandonAfterMs: 1800000, minCommits: 2, cadenceMs: 500,
+    // Validators run in-node (rng-validator@1.0) and push their slots: a
+    // commit lands within ~0.7 s. A missed commit is a full slash, so the
+    // window is 2 s, not 1. Reveals keep 30 s for a busy node; a round still
+    // uncracked 6 min (two crack times) after its deadline is abandoned.
+    commitWindowMs: 2000, revealWindowMs: 30000,
+    abandonAfterMs: 360000, minCommits: 2, cadenceMs: 500,
     // The beacon this one replaces: validator devices follow its successor.
     ...(state.retired?.at(-1)?.anyHonest ? { predecessor: state.retired.at(-1).anyHonest } : {}),
     heartbeat: 1, roundPrice: 3, requestPrice: 4,
     subscriptionPrice: 1, subscriptionRounds: 1000, crackBounty: 10,
-    suspendAfter: 3, slash: 1000, rejoinAfter: 0,
+    stake: 25000, slash: 1000,
   }) });
   console.log('configure', configured.output);
   for (const address of validators) {
@@ -300,7 +301,7 @@ if (cmd === 'fund-anyhonest') {
 }
 
 // Re-bond validators a slashing run emptied (bond below the slash, so they
-// cannot rejoin): `bond-anyhonest [units] [address...]`, default every
+// cannot say Ready): `bond-anyhonest [units] [address...]`, default every
 // recorded validator whose bond is under one slash.
 if (cmd === 'bond-anyhonest') {
   if (!state.anyHonest || !state.token) throw new Error('token and Any-Honest beacon are required');
@@ -308,7 +309,7 @@ if (cmd === 'bond-anyhonest') {
   if (!Number.isSafeInteger(units) || units < 1) throw new Error('invalid bond amount');
   const info = await anyHonestInfo();
   const targets = args.length > 1 ? args.slice(1)
-    : (info.validators || []).filter((v) => Number(v.bond) < Number(info.params.slash)).map((v) => v.address);
+    : (info.validators || []).filter((v) => Number(v.bond) < Number(info.params.stake ?? info.params.slash)).map((v) => v.address);
   for (const address of targets) {
     console.log('bond', address, (await send(state.token, 'Transfer', {
       tags: { Recipient: state.anyHonest, Quantity: String(units * 1000000),
@@ -393,9 +394,14 @@ if (cmd === 'test-subscription') {
     await new Promise((resolve) => setTimeout(resolve, 1000));
   }
   if (!receipt) throw new Error('subscription did not deliver within 30 seconds');
-  const published = await readState({ node: NODE, process: state.anyHonest, path: 'now/timelockstate' });
-  const beaconState = JSON.parse(published.value);
-  const round = beaconState.rounds[String(receipt.lastRound)];
+  // The round's own key (beaconround-<r % 8>); a lua@5.3a beacon only has it
+  // inside timelockstate.
+  const own = await readState({ node: NODE, process: state.anyHonest, path: `now/beaconround-${receipt.lastRound % 8}` });
+  let round = own.status === 200 ? JSON.parse(own.value) : null;
+  if (!round || round.round !== receipt.lastRound) {
+    const published = await readState({ node: NODE, process: state.anyHonest, path: 'now/timelockstate' });
+    round = JSON.parse(published.value).rounds[String(receipt.lastRound)];
+  }
   if (!round) throw new Error(`subscription round ${receipt.lastRound} is not retained`);
   const expected = createHash('sha256').update(
     `hyperbeam/rng/subscription/v1|${round.value}|${id}|${receipt.lastRound}`,

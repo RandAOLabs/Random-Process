@@ -54,11 +54,18 @@ export async function getAnyHonestStatus() {
     foundationReserveAtoms: string; treasuryAtoms: string; activeSubscriptions: number;
     priceSchedule: { round: number; request: number; subscription: number; subscriptionRounds: number; crackBounty: number } };
   type State = { rounds: { [round: string]: Record } };
-  const [info, state] = await Promise.all([
-    readJson<Info>(`${base}/beaconinfo`),
-    readJson<State>(`${base}/timelockstate`),
+  type Recent = Array<{ round: number; value: string; opened?: number; finalizedAt?: number }>;
+  const info = await readJson<Info>(`${base}/beaconinfo`);
+  // A lua-patch@1.0 beacon publishes each finalized round in its own key and
+  // checkpoints the full state only now and then; older beacons publish the
+  // rounds inside timelockstate on every message.
+  const [own, recentKey] = await Promise.all([
+    readJson<Record & { round: number }>(`${base}/beaconround-${info.round % 8}`).catch(() => null),
+    readJson<Recent>(`${base}/beaconrecent`).catch(() => null),
   ]);
-  const record = state.rounds[String(info.round)];
+  const state = own && own.round === info.round && Array.isArray(recentKey)
+    ? null : await readJson<State>(`${base}/timelockstate`);
+  const record = state ? state.rounds[String(info.round)] : own ?? undefined;
   let proofValid = Boolean(record);
   if (record) {
     const addresses = Object.keys(record.commits).sort();
@@ -89,8 +96,10 @@ export async function getAnyHonestStatus() {
   }
   // The process keeps its last few finalized rounds; clients use them to fill
   // in rounds that finalized between polls.
-  const recent = Object.entries(state.rounds).map(([round, r]) => ({ round: Number(round), value: r.value,
-    opened: r.opened, finalizedAt: r.finalizedAt }))
+  const recent = (state
+    ? Object.entries(state.rounds).map(([round, r]) => ({ round: Number(round), value: r.value,
+      opened: r.opened, finalizedAt: r.finalizedAt }))
+    : [...(recentKey ?? [])])
     .sort((a, b) => b.round - a.round);
   return { configured: true, process: cfg.anyHonest, ...info, latest: record, recent,
     proofValid, checkedAt: new Date().toISOString() };

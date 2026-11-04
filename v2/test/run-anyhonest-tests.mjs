@@ -135,7 +135,7 @@ F.value2 = value(2, ['r2a', 'r2b', 'r2c']);
 F.value3 = value(3, ['r3a', 'r3b', 'r3c']);
 F.out1 = sha(`hyperbeam/rng/any-honest/v1/request|${F.value1}|${F.game}|req-1`);
 F.config = JSON.stringify({ self: F.beacon, token: F.token, unit: F.unit, T, h: F.h, hProof: F.hProof,
-  commitWindowMs: 3000, revealWindowMs: 10000, abandonAfterMs: 60000, minCommits: 2, cadenceMs: 0, suspendAfter: 3,
+  commitWindowMs: 3000, revealWindowMs: 10000, abandonAfterMs: 60000, minCommits: 2, cadenceMs: 0, stake: 25000, slash: 1000,
   heartbeat: 1, roundPrice: 3, requestPrice: 4, subscriptionPrice: 1, subscriptionRounds: 1000, crackBounty: 10 });
 F.dev = dev;
 
