@@ -873,6 +873,21 @@ H["Admin.Set-Successor"] = function(base, msg)
   return reply(base, { successor = id })
 end
 
+--- The owner moves the unspent Foundation reserve to the named successor,
+--- where it arrives as that beacon's reserve (X-Foundation). Only to the
+--- successor, so the reserve can only ever fund rounds.
+H["Admin.Move-Reserve"] = function(base, msg)
+  if not ownerOnly(msg) then return fail(base, "Not authorised") end
+  local to = Timelock.successor
+  if not isAoAddress(to) then return fail(base, "No-Successor") end
+  local atoms = int(Timelock.foundationReserveAtoms, 0)
+  if atoms <= 0 then return fail(base, "Nothing-To-Move") end
+  Timelock.foundationReserveAtoms = 0
+  local t = transferAtoms(to, atoms, "RNG Foundation reserve to successor beacon")
+  t["X-For"], t["X-Foundation"] = Owner, "true"
+  return reply(base, { movedAtoms = tostring(atoms), to = to }, { ["rng-reserve-move"] = t })
+end
+
 H["Admin.Add-Validator"] = function(base, msg)
   if not ownerOnly(msg) then return fail(base, "Not authorised") end
   local a = dataOf(msg).address or msg.Address

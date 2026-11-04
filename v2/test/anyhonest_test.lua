@@ -390,6 +390,19 @@ function runTimelockTests()
 
   r, ob = send(wallet(F.owner, { Action = "Admin.Remove-Validator", Data = encode({ address = B }) }))
   check("removal refunds the bond", ob["rng-bond-refund"] and ob["rng-bond-refund"].Recipient == B and ob["rng-bond-refund"].Quantity == string.format("%d", 25000 * U))
+  -- Retiring: the unspent Foundation reserve goes to the successor, nowhere else.
+  r = send(wallet(F.owner, { Action = "Admin.Move-Reserve" }))
+  eq("reserve moves only to a successor", r.error, "No-Successor")
+  send(wallet(F.owner, { Action = "Admin.Set-Successor", Data = encode({ successor = string.rep("s", 43) }) }))
+  r = send(wallet(F.stranger, { Action = "Admin.Move-Reserve" }))
+  eq("move reserve owner-only", r.error, "Not authorised")
+  local reserve = Timelock.foundationReserveAtoms
+  r, ob = send(wallet(F.owner, { Action = "Admin.Move-Reserve" }))
+  local mv = ob["rng-reserve-move"]
+  check("reserve sent to the successor as its reserve", mv and mv.target == F.token and mv.Recipient == string.rep("s", 43)
+    and mv.Quantity == string.format("%d", reserve) and mv["X-Foundation"] == "true" and reserve > 0)
+  eq("reserve emptied", Timelock.foundationReserveAtoms, 0)
+  eq("nothing left to move", send(wallet(F.owner, { Action = "Admin.Move-Reserve" })).error, "Nothing-To-Move")
   check("mock knew every device call", #misses == 0, table.concat(misses, ", "))
 
   lines[#lines + 1] = passed .. " passed, " .. failed .. " failed"
