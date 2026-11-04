@@ -153,6 +153,25 @@ if (cmd === 'spawn') {
   console.log('beacon info', (await send(state.beacon, 'Get-Info')).output);
 }
 
+// A fresh TEST-RNG token alone (the Any-Honest beacon, the DAO and their
+// funding follow it); the recorded one is retired.
+if (cmd === 'spawn-token') {
+  if (state.token) (state.retiredTokens ||= []).push(state.token);
+  state.owner = me;
+  state.token = await spawnProcess({ node: NODE, jwk, lua: tokenSource(), name: 'TEST-RNG' });
+  save();
+  console.log('token', state.token);
+  console.log('token info', (await send(state.token, 'Info')).output);
+}
+
+// The owner points a retired Any-Honest beacon at its replacement, so the
+// validator devices walk over to it: `set-successor <old> <new>`.
+if (cmd === 'set-successor') {
+  const [from, to] = args;
+  if (!from || !to) throw new Error('set-successor needs the old and the new beacon');
+  console.log((await send(from, 'Admin.Set-Successor', { data: JSON.stringify({ successor: to }) })).output);
+}
+
 if (cmd === 'spawn-beacon') {
   if (state.beacon) (state.retired ||= []).push(state.beacon);
   state.beacon = await spawnProcess({ node: NODE, jwk, lua: beaconSource(), name: 'HyperBEAM-RNG-Beacon' });
@@ -332,6 +351,14 @@ if (cmd === 'reinstate-anyhonest') {
 }
 
 if (cmd === 'spawn-dao') {
+  // `--replace <reason>` retires the recorded DAO (it stakes a retired token).
+  const replace = args.indexOf('--replace');
+  if (state.dao && replace >= 0) {
+    (state.retired ||= []).push({ dao: state.dao, reason: args[replace + 1] || 'replaced',
+      at: new Date().toISOString() });
+    delete state.dao;
+    save();
+  }
   if (state.dao) throw new Error(`DAO already deployed (${state.dao})`);
   state.dao = await spawnProcess({ node: NODE, jwk, lua: daoSource(), name: 'RNG-DAO-Advisory' });
   save();

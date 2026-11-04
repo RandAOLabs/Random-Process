@@ -1,6 +1,6 @@
 {
   "owner": "DA9qhP25ZPz6MHIhO-7aNHDN3LsTAL7yCKYIkqr13Z8",
-  "token": "qFXxcvw12vB213eOsThBXiB_A9I-gaqFydWuCMTHouA",
+  "token": "Tk0E1Vfr0KJl_ChcvLUgY9e3-vrEFcLDdQCu40RxSNE",
   "beacon": "iRWVCsShDNboHKSgXHe0_ZVZ89RhBdoRA0hU1wt468c",
   "groupKey": "8085ed55cb08a9193f3ef23ee16b3212033aa5f228402508502667d381d0b4e665ef32948a248634faa796a37e3a4658",
   "committee": [
@@ -19,7 +19,6 @@
     "JZeSPxl06ay3HsZKJWz2l_HbPs03uJj1WcB1tUnctcQ",
     "G8nfKNw1wKnCd9bGYnr-3Os1j3a-pnWU7ovtLq5bPqU"
   ],
-  "dao": "_CJpu0Rq03Jk1xmslJPcNbH7zSrrVCUI_w8Aw67SUYQ",
   "node": "https://hyperbeam.tylerw.ai",
   "retired": [
     {
@@ -43,8 +42,22 @@
       "anyHonest": "kqzobErkDpChZlORcOEMj8OJBY_EIoPVjyyelDJlNVw",
       "reason": "lua-patch@1.0 cutover: Act, ready/pause duty, full slashing",
       "at": "2026-11-04T17:19:19.800Z"
+    },
+    {
+      "anyHonest": "Olf8H3DxnyNIm2DQwi_jgPuMuObT54UZhthwn4lDqMQ",
+      "reason": "fresh 2026-11-04: 1 s reveal window got validators slashed after the node overload; new token",
+      "at": "2026-11-04T21:51:29.425Z"
+    },
+    {
+      "dao": "_CJpu0Rq03Jk1xmslJPcNbH7zSrrVCUI_w8Aw67SUYQ",
+      "reason": "stakes the retired token qFXxcvw1",
+      "at": "2026-11-04T21:52:21.553Z"
     }
   ],
-  "anyHonest": "Olf8H3DxnyNIm2DQwi_jgPuMuObT54UZhthwn4lDqMQ",
-  "anyHonestDevice": "lua-patch@1.0"
+  "anyHonestDevice": "lua-patch@1.0",
+  "retiredTokens": [
+    "qFXxcvw12vB213eOsThBXiB_A9I-gaqFydWuCMTHouA"
+  ],
+  "anyHonest": "DdOUCqTQV4DAh2Ev4436HVnHtQhpQNuC-9WtvnXQgVQ",
+  "dao": "FWL1QREmxYJfkt-NHgAtF4M351t4vtXhqQZgR-qMhU0"
 }
