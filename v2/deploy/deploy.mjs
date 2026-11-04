@@ -26,7 +26,7 @@ import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import {
-  spawnProcess, sendMessage, readState, jwkToAddress, awaitComputedSlot, pendingPushes,
+  spawnProcess, sendMessage, readState, jwkToAddress, awaitComputedSlot, pendingPushes, nodeAddress,
 } from '../vendor/hbclient.mjs';
 import * as bls from '../provider/bls.mjs';
 
@@ -54,6 +54,27 @@ const json = () => [
 const tokenSource = () => [...json(), read('token/rng-token.lua')].join('\n');
 const beaconSource = () => [...json(), 'rng = (function()', read('lib/rng.lua'), 'end)()', read('beacon/beacon.lua')].join('\n');
 const anyHonestSource = () => [...json(), 'rng = (function()', read('lib/rng.lua'), 'end)()', read('beacon/anyhonest.lua')].join('\n');
+// The same beacon on lua-patch@1.0 (paralith-mono's lua53b.lua adapter): only
+// changed keys are published, and the VM keeps the state between messages.
+// The adapter's compute calls the beacon's, so the beacon's final full collect
+// moves out to it; the bootstrap gives the owner and scheduler checks the
+// facts they read from `base.process` on lua@5.3a.
+const anyHonestPatchSource = (owner, scheduler) => {
+  const src = anyHonestSource();
+  const collect = 'collectgarbage("collect")';
+  const at = src.lastIndexOf(collect);
+  if (at === -1) throw new Error('beacon has no final full collect');
+  const q = JSON.stringify;
+  return [
+    src.slice(0, at) + src.slice(at + collect.length),
+    `Lua53bBootstrapBase = { process = { commitments = { owner = { committer = ${q(owner)}, type = "rsa-pss-sha512" } },`
+      + ` ["scheduler-location"] = ${q(scheduler)} }, ["scheduler-location"] = ${q(scheduler)} }`,
+    'Lua53bKeepaliveKey = "timelockrev"',
+    'Lua53bGcStep = 5000',
+    'Lua53bPatchMode = true',
+    read('vendor/lua53b.lua'),
+  ].join('\n');
+};
 const daoSource = () => [...json(), read('governance/dao.lua')].join('\n');
 const subscriptionConsumerSource = (beacon, id) => [...json(), read('test/subscription-consumer.lua')]
   .join('\n').replaceAll('__BEACON__', beacon).replaceAll('__SUBSCRIPTION_ID__', id);
@@ -207,7 +228,13 @@ if (cmd === 'spawn-anyhonest') {
     save();
   }
   if (state.anyHonest) throw new Error(`Any-Honest beacon already deployed (${state.anyHonest})`);
-  state.anyHonest = await spawnProcess({ node: NODE, jwk, lua: anyHonestSource(), name: 'RNG-Any-Honest-Beacon' });
+  // lua-patch@1.0 unless `--lua53a`; the scheduler is this node.
+  const legacy = args.includes('--lua53a');
+  const scheduler = await nodeAddress(NODE);
+  state.anyHonest = await spawnProcess({ node: NODE, jwk, scheduler, name: 'RNG-Any-Honest-Beacon',
+    executionDevice: legacy ? 'lua@5.3a' : 'lua-patch@1.0',
+    lua: legacy ? anyHonestSource() : anyHonestPatchSource(me, scheduler) });
+  state.anyHonestDevice = legacy ? 'lua@5.3a' : 'lua-patch@1.0';
   save();
   console.log('any-honest', state.anyHonest);
   console.log('info', (await send(state.anyHonest, 'Get-Info')).output);
@@ -223,10 +250,13 @@ if (cmd === 'configure-anyhonest') {
   const configured = await send(state.anyHonest, 'Configure', { data: JSON.stringify({
     self: state.anyHonest, token: state.token, unit: 1000000,
     T, h: puzzle.h, hProof: puzzle.hProof,
-    // The beacon shares a busy node: a reveal has to land through 20 s round
-    // trips, and a 1 s cadence slashed every validator dry (2026-11-02).
-    commitWindowMs: 3000, revealWindowMs: 30000,
-    abandonAfterMs: 1800000, minCommits: 2, cadenceMs: 5000,
+    // Validators run in-node (rng-validator@1.0) and push their slots: every
+    // commit lands within ~0.7 s, so a 1 s window and 0.5 s cadence. Reveals
+    // keep 30 s for a busy node.
+    commitWindowMs: 1000, revealWindowMs: 30000,
+    abandonAfterMs: 1800000, minCommits: 2, cadenceMs: 500,
+    // The beacon this one replaces: validator devices follow its successor.
+    ...(state.retired?.at(-1)?.anyHonest ? { predecessor: state.retired.at(-1).anyHonest } : {}),
     heartbeat: 1, roundPrice: 3, requestPrice: 4,
     subscriptionPrice: 1, subscriptionRounds: 1000, crackBounty: 10,
     suspendAfter: 3, slash: 1000, rejoinAfter: 0,

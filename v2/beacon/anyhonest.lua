@@ -17,6 +17,7 @@
 
 local json = require(".json")
 local SIGNATURE_ALGS = { ["rsa-pss-sha512"] = true, ["rsa-pss-sha256"] = true }
+local CHECKPOINT_EVERY = 1000 -- lua-patch@1.0: messages between full-state checkpoints
 local ROUND_HISTORY = 8      -- finalized round records kept in published state
 local STRIKE_WINDOW = 3600   -- strikes count within this many rounds (~1 h)
 local GUARD_MS = 600000      -- a request is remembered (and a Request-Time accepted) this long
@@ -150,6 +151,36 @@ local function restore(base)
     end
   end
 end
+
+--- A message must be signed for THIS beacon: a validator's Commit or Reveal
+--- signed for another beacon (an old one, a test one) is refused, not replayed.
+-- BEGIN target door (game/kernel/door.lua; copies checked by target-door.test.mjs)
+function TargetRefusal(msg, req)
+  local c = type(msg) == "table" and (msg.commitments or msg.Commitments) or nil
+  if type(c) ~= "table" or next(c) == nil then return nil end
+  local algs = { ["rsa-pss-sha512"] = true, ["rsa-pss-sha256"] = true }
+  local signatures, ids = {}, {}
+  for id, s in pairs(c) do
+    if type(s) == "table" and s.committer and algs[s.type or s.alg] then
+      signatures[#signatures + 1] = s
+      ids[#ids + 1] = id
+    end
+  end
+  if #signatures == 0 then return "Refused: not signed" end
+  local self = type(req) == "table" and req.process or nil
+  if type(self) ~= "string" or #self ~= 43 then return "Refused: this process id is unknown" end
+  if #signatures == 1 and ids[1] == self then return nil end
+  if msg.target ~= self then return "Refused: not signed for this process" end
+  for _, s in ipairs(signatures) do
+    local bound = false
+    for _, key in pairs(type(s.committed) == "table" and s.committed or {}) do
+      if key == "target" then bound = true end
+    end
+    if not bound then return "Refused: the signature does not commit target" end
+  end
+  return nil
+end
+-- END target door
 
 ---------------------------------------------------------------------------
 -- Identity (paralith-mono conventions)
@@ -790,6 +821,34 @@ H["Close"] = function(base, msg)
   return reply(base, { round = r, phase = o and o.phase or (Timelock.rounds[tostring(r)] and "finalized") or "unknown" })
 end
 
+--- One message for what a validator does each round: reveal its secrets for
+--- the rounds now revealing, then commit to the open round. Data:
+--- { reveals = { { round, alpha }, ... }, commit = { round, c } }, either part
+--- optional. Each part runs exactly as its own Reveal or Commit would (same
+--- signer, same checks); one part's refusal does not stop the others. Halves
+--- the messages a round costs.
+H["Act"] = function(base, msg, from, now)
+  local d = dataOf(msg)
+  local parts = {}
+  for _, rv in ipairs(type(d.reveals) == "table" and d.reveals or {}) do
+    parts[#parts + 1] = { "Reveal", { round = rv.round, alpha = rv.alpha } }
+  end
+  if type(d.commit) == "table" then parts[#parts + 1] = { "Commit", { round = d.commit.round, c = d.commit.c } } end
+  if #parts == 0 or #parts > 16 then return fail(base, "Bad-Act") end
+  local out, outbox = {}, {}
+  for i, part in ipairs(parts) do
+    local sub = { commitments = msg.commitments, Commitments = msg.Commitments, Data = part[2] }
+    local ok, res = pcall(H[part[1]], base, sub, from, now)
+    local data = ok and type(res) == "table" and res.results and res.results.output and res.results.output.data
+    local okd, v = pcall(json.decode, data or "")
+    out[i] = { action = part[1], round = part[2].round, result = (okd and v) or { error = ok and "Bad-Result" or tostring(res) } }
+    if ok and type(res) == "table" and res.results then
+      for k, m in pairs(res.results.outbox or {}) do outbox[k] = m end
+    end
+  end
+  return reply(base, { act = out }, outbox)
+end
+
 H["Claim"] = function(base, msg, from)
   local atoms = int(from and Timelock.accrued[from], 0) * int(Timelock.unit, 1)
     + int(from and Timelock.accruedAtoms[from], 0)
@@ -803,6 +862,16 @@ local function ownerOnly(msg) return isOwner(provenSigner(msg)) end
 
 --- A validator is active only while its bond covers the next slash.
 local function bonded(a) return int(Timelock.bonds and Timelock.bonds[a], 0) >= int(Timelock.params.slash, 1000) end
+
+--- The owner names the beacon that replaces this one. A validator device
+--- moves there once the successor names this beacon as its predecessor.
+H["Admin.Set-Successor"] = function(base, msg)
+  if not ownerOnly(msg) then return fail(base, "Not authorised") end
+  local id = dataOf(msg).successor
+  if id ~= "" and not isAoAddress(id) then return fail(base, "Bad-Successor") end
+  Timelock.successor = id
+  return reply(base, { successor = id })
+end
 
 H["Admin.Add-Validator"] = function(base, msg)
   if not ownerOnly(msg) then return fail(base, "Not authorised") end
@@ -923,6 +992,10 @@ H["Configure"] = function(base, msg)
     p.h = d.h
   end
   if d.self then Timelock.self = d.self end
+  if d.predecessor ~= nil then
+    if d.predecessor ~= "" and not isAoAddress(d.predecessor) then return fail(base, "Bad-Parameter") end
+    Timelock.predecessor = d.predecessor
+  end
   if d.token and d.token ~= Timelock.token then
     -- A new token numbers its references from 1 again.
     Timelock.token, Timelock.credited, Timelock.creditFloor = d.token, {}, 0
@@ -1018,6 +1091,9 @@ local function info()
       subscriptionRounds = int(Timelock.params.subscriptionRounds, 1000),
       crackBounty = int(Timelock.params.crackBounty, 10) },
     self = Timelock.self,
+    successor = Timelock.successor or "", predecessor = Timelock.predecessor or "",
+    -- What this beacon accepts beyond the per-step actions; `act`: H["Act"].
+    features = { "act" },
   }
 end
 
@@ -1032,7 +1108,10 @@ function compute(base, req)
   Notices, GuardsChanged, SeenDirty = {}, false, {}
   local handler = resolveHandler(msg.Action or "none")
   local result
-  if not handler then
+  local refused = TargetRefusal(raw, req)
+  if refused then
+    result = fail(base, refused)
+  elseif not handler then
     result = fail(base, "unknown action '" .. tostring(msg.Action) .. "'")
   else
     local ok, out = pcall(function()
@@ -1045,7 +1124,12 @@ function compute(base, req)
   Timelock.rev = int(Timelock.rev, 0) + 1
   local saved = {}
   for k, v in pairs(Timelock) do if not GUARDS[k] then saved[k] = v end end
-  result.timelockstate = encode(saved)
+  -- On lua-patch@1.0 the state lives in the resident VM (and its snapshots);
+  -- the full encode (~37 KB) is only a recovery checkpoint, every
+  -- CHECKPOINT_EVERY messages. On lua@5.3a it is the state, every message.
+  if Lua53bPatchMode ~= true or Timelock.rev % CHECKPOINT_EVERY == 0 or result.timelockstate == nil then
+    result.timelockstate = encode(saved)
+  end
   if result.timelockguards == nil then
     for sh in pairs(seenIndex()) do SeenDirty[sh] = true end
   end

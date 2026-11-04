@@ -24,8 +24,11 @@ local base = { ["scheduler-location"] = F.sched, process = { commitments = { p =
 local clock = 1700000000000
 local A, B, C = F.v[1], F.v[2], F.v[3]
 
+-- Every message is signed for this beacon, as the target door requires.
+local SELF = string.rep("b", 43)
 local function wallet(signer, fields)
-  local body = { commitments = { c = { type = "rsa-pss-sha256", committer = signer } } }
+  local body = { target = SELF,
+    commitments = { c = { type = "rsa-pss-sha256", committer = signer, committed = { "target", "data", "action" } } } }
   for k, v in pairs(fields) do body[k] = v end
   return body
 end
@@ -36,7 +39,7 @@ local function delivery(pid, fields)
 end
 local function send(body, advance)
   clock = clock + (advance or 100)
-  base = compute(base, { body = body, timestamp = clock })
+  base = compute(base, { body = body, timestamp = clock, process = SELF })
   local ok, d = pcall(json.decode, base.results.output.data or "")
   return ok and d or {}, base.results.outbox or {}
 end
@@ -75,6 +78,29 @@ function runTimelockTests()
   eq("token set once", configure({ token = F.stranger }).error, "Token-Locked")
   eq("unit set once", configure({ unit = 1 }).error, "Token-Locked")
   check("same config again accepted", configure(F.config).ok == true)
+
+  -- The target door: only messages signed for this beacon.
+  r = send(wallet(F.owner, { Action = "Configure", Data = encode(F.config), target = string.rep("o", 43) }))
+  eq("message for another process refused", r.error, "Refused: not signed for this process")
+  local loose = wallet(F.owner, { Action = "Configure", Data = encode(F.config) })
+  loose.commitments.c.committed = { "data", "action" }
+  r = send(loose)
+  eq("signature not committing target refused", r.error, "Refused: the signature does not commit target")
+  r = send({ target = SELF, Action = "Configure", commitments = { c = { type = "hmac-sha256", committer = F.owner } } })
+  eq("unsigned refused", r.error, "Refused: not signed")
+
+  -- Successor: owner-only; published for validator devices to follow.
+  r = send(wallet(F.stranger, { Action = "Admin.Set-Successor", Data = encode({ successor = string.rep("s", 43) }) }))
+  eq("set successor owner-only", r.error, "Not authorised")
+  r = send(wallet(F.owner, { Action = "Admin.Set-Successor", Data = encode({ successor = "nope" }) }))
+  eq("bad successor refused", r.error, "Bad-Successor")
+  send(wallet(F.owner, { Action = "Admin.Set-Successor", Data = encode({ successor = string.rep("s", 43) }) }))
+  eq("successor published", info().successor, string.rep("s", 43))
+  send(wallet(F.owner, { Action = "Admin.Set-Successor", Data = encode({ successor = "" }) }))
+  eq("successor cleared", info().successor, "")
+  eq("predecessor refused unless an address", configure({ predecessor = "x" }).error, "Bad-Parameter")
+  configure({ predecessor = string.rep("p", 43) })
+  eq("predecessor published", info().predecessor, string.rep("p", 43))
 
   r = send(wallet(F.stranger, { Action = "Admin.Add-Validator", Data = encode({ address = A }) }))
   eq("add validator owner-only", r.error, "Not authorised")
@@ -134,7 +160,18 @@ function runTimelockTests()
   r = reveal(A, 1, "r1a", P.r1b.alpha)
   eq("wrong secret refused", r.error, "Bad-Reveal")
   reveal(A, 1, "r1a")
-  reveal(B, 1, "r1b")
+  -- Act: b reveals round 1 and commits to round 2 in one message.
+  eq("beacon advertises act", info().features[1], "act")
+  r = send(wallet(B, { Action = "Act", Data = encode({ reveals = { { round = 1, alpha = P.r1b.alpha } },
+    commit = { round = 2, c = P.r2b.c } }) }))
+  check("act: reveal and commit both applied", r.act and r.act[1].result.revealed == 3 - 1
+    and r.act[2].result.round == 2 and r.act[2].result.error == nil, encode(r))
+  check("act: b's round 1 output recorded", Timelock.opens["1"].outputs[B] ~= nil)
+  eq("act: b committed round 2", Timelock.opens["2"].commits[B], P.r2b.c)
+  r = send(wallet(B, { Action = "Act", Data = encode({}) }))
+  eq("empty act refused", r.error, "Bad-Act")
+  r = send(wallet(F.stranger, { Action = "Act", Data = encode({ commit = { round = 2, c = P.r2c.c } }) }))
+  eq("act part refused like its own action", r.act[1].result.error, "Not an active validator")
   r, ob = reveal(C, 1, "r1c")
   eq("round 1 finalized", info().round, 1)
   eq("value matches the reference", r.value, F.value1)
@@ -149,8 +186,8 @@ function runTimelockTests()
   check("round record keeps T, commits and outputs", rec and rec.T == F.T and rec.commits[A] == P.r1a.c
     and rec.outputs[B].alpha == P.r1b.alpha and rec.outputs[B].y == P.r1b.y and rec.outputs[B].via == "reveal")
 
-  -- Rounds 2 and 3: c withholds both.
-  commit(B, 2, "r2b"); commit(C, 2, "r2c")
+  -- Rounds 2 and 3: c withholds both. (b committed round 2 by Act.)
+  commit(C, 2, "r2c")
   reveal(A, 2, "r2a"); reveal(B, 2, "r2b")
   r = crack(F.stranger, 2, C, F.crack2.y, F.crack2.proof)
   eq("crack before the deadline refused", r.error, "Too-Early")
