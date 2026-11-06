@@ -1,0 +1,78 @@
+{
+  "owner": "DA9qhP25ZPz6MHIhO-7aNHDN3LsTAL7yCKYIkqr13Z8",
+  "token": "Tk0E1Vfr0KJl_ChcvLUgY9e3-vrEFcLDdQCu40RxSNE",
+  "beacon": "iRWVCsShDNboHKSgXHe0_ZVZ89RhBdoRA0hU1wt468c",
+  "groupKey": "8085ed55cb08a9193f3ef23ee16b3212033aa5f228402508502667d381d0b4e665ef32948a248634faa796a37e3a4658",
+  "committee": [
+    "mLw9gcjBKLekLhNDOrejq6l0MvQ9AOMFiMFDajFvvSI",
+    "AsQvMA7NYngw6rDw4D2CBcFDnOsWDXh0FOn0ZpiyRJw",
+    "ujHrIEF34b7IZ4vPMA7d4OX-ZknETCwG3uxk51Wqvm4"
+  ],
+  "sharePublicKeys": [
+    "b051c160372d5c6c36dbbcdc19636340b1f895f9222f8b0b42792090207b21d80f8377a173de2a17ca78f9a20ab85ede",
+    "8fb09dcf0b3d6c44931415861192d738356cf9f8a0bfa9969d49ce355388cc4668b35fd22d333d2b35cac733b0b8690e",
+    "b2168205a8d3b24a231d2c1d2c0efebbedb355248f5d754423849109f281265c3de977c380585696f1fb46459868f73c"
+  ],
+  "verification": "device",
+  "anyHonestValidators": [
+    "apkIrBZxqKh1oyUVJtCXOrHMviL3vtQaD7j0DTfJ0KY",
+    "JZeSPxl06ay3HsZKJWz2l_HbPs03uJj1WcB1tUnctcQ",
+    "G8nfKNw1wKnCd9bGYnr-3Os1j3a-pnWU7ovtLq5bPqU"
+  ],
+  "node": "https://hyperbeam.tylerw.ai",
+  "retired": [
+    {
+      "token": "xYts6hTg3dbs7OfJCPuORogtmcD3iVaimATQ_686hY8",
+      "beacon": "4Uc_5UwuhxXYzN9BdB09jyOn-C66VSNHq5ikb3aMNg0",
+      "anyHonest": "wKbfFswhCWvm6AhsUF_8kHDVvZMJnspqlnVDgZyq3AY",
+      "dao": "I4kC2K3GFvuQfFlR0d2Qnaes0I4YG85IJ2mYJkY_Ql0",
+      "reason": "stage node store hit ext4 directory limit 2026-11-02; moved to shared node"
+    },
+    {
+      "anyHonest": "QAxyTvi39Ems-nWGl6PZsZsIzDuo2Zj1IlYjBgKl2zA",
+      "reason": "used set 6.2 MB, 25k slots behind (2026-11-03)",
+      "at": "2026-11-03T13:11:11.564Z"
+    },
+    {
+      "anyHonest": "VQMv1Z8-T4pLMkU4MJVfhxO6lHkzSkWSDY4tvB0PA8Q",
+      "reason": "validators flooded it 14k slots behind (2026-11-04)",
+      "at": "2026-11-04T09:59:38.653Z"
+    },
+    {
+      "anyHonest": "kqzobErkDpChZlORcOEMj8OJBY_EIoPVjyyelDJlNVw",
+      "reason": "lua-patch@1.0 cutover: Act, ready/pause duty, full slashing",
+      "at": "2026-11-04T17:19:19.800Z"
+    },
+    {
+      "anyHonest": "Olf8H3DxnyNIm2DQwi_jgPuMuObT54UZhthwn4lDqMQ",
+      "reason": "fresh 2026-11-04: 1 s reveal window got validators slashed after the node overload; new token",
+      "at": "2026-11-04T21:51:29.425Z"
+    },
+    {
+      "dao": "_CJpu0Rq03Jk1xmslJPcNbH7zSrrVCUI_w8Aw67SUYQ",
+      "reason": "stakes the retired token qFXxcvw1",
+      "at": "2026-11-04T21:52:21.553Z"
+    },
+    {
+      "anyHonest": "DdOUCqTQV4DAh2Ev4436HVnHtQhpQNuC-9WtvnXQgVQ",
+      "reason": "rejoin on bond (rejoinBond = one slash); 350 ms cadence for ~2 rounds/s",
+      "at": "2026-11-04T23:30:59.518Z"
+    },
+    {
+      "anyHonest": "jUNwpUHjlArYUISCLkze5sW5D55SsEdmr51i4pWvNOw",
+      "reason": "self-adjusting rhythm: 2 rounds/s target, max 3 in flight",
+      "at": "2026-11-04T23:33:55.219Z"
+    },
+    {
+      "anyHonest": "KRB9JTf3uDYJYSqtJo_v1U_MYsIYKjculScArHXAMkw",
+      "reason": "rejoin spiral 2026-11-06: fault cooldown, 5 s commit window",
+      "at": "2026-11-06T16:00:00.341Z"
+    }
+  ],
+  "anyHonestDevice": "lua-patch@1.0",
+  "retiredTokens": [
+    "qFXxcvw12vB213eOsThBXiB_A9I-gaqFydWuCMTHouA"
+  ],
+  "dao": "FWL1QREmxYJfkt-NHgAtF4M351t4vtXhqQZgR-qMhU0",
+  "anyHonest": "MZMoXv-2aLD1MaR5tHEpXNrZgc6DoUpdw2q4DvlfxC0"
+}

@@ -5,7 +5,7 @@ global DB: db
 global Configured: boolean
 
 global Info = {
-    name = "RandAO-Random-Process",
+    name = "HyperBEAM-RNG-Process",
     version = "1.0.0"
 }
 if not Configured then

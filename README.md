@@ -1,73 +1,104 @@
-# 🌀 RandAO: Verifiable Random Number Generation Protocol
+# HyperBEAM RNG
 
-**RandAO** is a secure, decentralized random number generation (RNG) protocol built as an AO blockchain process. Designed to eliminate bias and manipulation, RandAO ensures randomness by leveraging multiple participants in the process, each contributing entropy in a transparent and verifiable way.
+Verifiable randomness for AO, created and operated by **RNG Labs**, a product
+of **CipherPlay Inc.**
 
-## 🌐 How It Works
+## Protocol
 
-At the core of RandAO is a **multi-party commit-and-reveal scheme** that ensures the integrity and unpredictability of the generated random numbers.
+HyperBEAM RNG is a multi-surface randomness primitive for AO processes. It
+provides deterministic local streams, request-bound threshold BLS, and a
+continuous Any-Honest time-lock beacon. HyperBEAM's preloaded `~rng@1.0`
+device verifies BLS signatures, time-lock reveals and cracks, and deterministic
+byte derivation.
 
-1. **Hash Commitment Phase**:  
-   All **randomness providers** submit a hashed version of their input. These commitments are collected without revealing the actual inputs.
+The threshold protocol is in [`v2/SPEC.md`](./v2/SPEC.md); the time-lock beacon,
+fixed economics, subscriptions, and validator exits are in
+[`v2/ANY_HONEST.md`](./v2/ANY_HONEST.md).
 
-2. **Reveal Phase**:  
-   After all providers commit, each reveals their original input. These inputs are hashed again to verify the correctness of the commitments.
+## Components
 
-3. **Final Random Number Generation**:  
-   Once all inputs are verified, the revealed values are **hashed together** to produce the final, verifiably random number.
+- `v2/lib/rng.lua`: deterministic local and beacon-backed Lua API;
+- `v2/beacon/beacon.lua`: prepaid, round-locked threshold beacon process;
+- `v2/beacon/anyhonest.lua`: Foundation-funded Any-Honest beacon (one round every 5 s);
+- `v2/provider/`: 2-of-3 BLS committee daemon and joint Feldman DKG;
+- `v2/governance/dao.lua`: advisory staked governance with manual execution;
+- `v2/token/rng-token.lua`: replay-safe test payment token;
+- `v2/deploy/`: HyperBEAM testnet and provider operations;
+- `v2/console/`: live console, documentation, deterministic demo, and MCP
+  server; and
+- `v2/test/`: RNG, token, beacon, DKG, BLS, and interoperability coverage.
 
-This process guarantees:
-- **Unpredictability**: The random output is unknown until all inputs are revealed.
-- **Transparency**: Anyone can audit the process to verify that no input was tampered with.
-- **Decentralization**: Multiple participants provide entropy, ensuring no single entity controls the outcome.
+## Use it
 
----
+Local deterministic randomness is free and needs no wallet or token:
 
-## 🔒 Security Model
+```lua
+local rng = require("rng")
 
-RandAO uses a **commit-and-reveal scheme** to protect against premature revelation or tampering. The final random number is based on the hashed combination of all revealed inputs, ensuring:
+rng.on("Loot-Roll", function(stream, ctx)
+  grantLoot(ctx.player, stream:int(1, 6))
+end)
 
-- **Resistance to Bias**: No single participant can influence the result.
-- **Verifiability**: Anyone can verify that the inputs match the original commitments.
-- **Tamper-Proof Execution**: The process leverages AO’s secure, message-based environment to ensure fair coordination between participants.
+rng.request(msg, { on = "Loot-Roll", ctx = { player = msg.From } })
+```
 
----
+For value-bearing actions, configure the beacon and request the `beacon` tier.
+The testnet currently charges 3 TEST-RNG per request: one unit for each of two
+serving committee members and one protocol unit. Test credits have no monetary
+value and are available from the signed faucet. Applications should prepay
+their process balance so end users do not need to manage RNG credits.
 
-## 💼 Use Cases
+The live [RNG Labs Console](https://randao.net) shows the current committee,
+price, verification mode, and an independently verified round. It also offers
+a five-surface [`/try`](https://randao.net/try) console for local derivation,
+threshold requests, the continuous Any-Honest beacon, one-shot Any-Honest
+requests, and proof exploration. Live proofs and funding state are shown
+directly from the native testnet.
 
-RandAO is ideal for applications requiring secure randomness, such as:
+## Agent tools
 
-- **Lotteries and Raffles**: Fair prize distribution without bias.
-- **Gaming**: Randomized in-game events or loot drops.
-- **Governance**: Random selection of committees or jury members.
-- **Decentralized Systems**: Any protocol needing unbiased, transparent randomness.
+The console exposes an MCP 2026-07-28 endpoint at
+`https://randao.net/mcp` with these tools:
 
----
+- `rng_status`
+- `rng_verify_round`
+- `rng_anyhonest_status`
+- `rng_governance_status`
+- `rng_derive`
+- `rng_integration_guide`
+- `rng_request_plan`
 
-## 🎯 Why RandAO?
+The initial agent surface is read-only except for pure deterministic
+derivation. It never accepts or stores wallet keys.
 
-- **Verifiably Random**: Uses cryptographic commitments to ensure fairness.
-- **Decentralized**: Multiple participants generate randomness collaboratively.
-- **Lightweight**: Seamlessly integrated with AO’s message-based processes.
+## Development
 
----
+```bash
+cd v2
+npm ci
+npm test
+```
 
-## 👥 Contributing
+Live deployment commands require `HB_NODE`, `HB_WALLET`, and `SSH_KEY`; no
+production endpoint or credential is embedded in the source.
 
-This is just the beginning of RandAO! We welcome contributions to expand and refine the protocol. If you’d like to get involved:
-1. Fork the repository  
-2. Create a feature branch  
-3. Submit a pull request with detailed notes
+## Security model
 
----
+- A request set locks before its first partial signature is published.
+- Any threshold of valid BLS shares produces the unique round signature.
+- Production mode verifies partials and the group signature through
+  HyperBEAM's `~rng@1.0` device.
+- The current testnet can use a weaker threshold wallet-attestation fallback.
+- Committee censorship and threshold compromise remain explicit trust risks.
 
-## 📜 License
+See [`v2/SPEC.md`](./v2/SPEC.md) for the complete guarantees and non-guarantees.
 
-RandAO is released under the MIT License. See the [LICENSE](./LICENSE) file for more details.
+## Ownership and licensing
 
----
+Copyright © 2026 **CipherPlay Inc.** and contributors. RNG Labs is a CipherPlay
+Inc. product and the protocol steward.
 
-## 📧 Contact
-
-Feel free to open an issue if you have questions or ideas!
-
----
+All rights are reserved unless an explicit license says otherwise. This
+repository does not currently grant an open-source or commercial license to
+the protocol implementation, provider software, beacon service, or SDK.
+Contact CipherPlay Inc. for licensing.

@@ -1,0 +1,12 @@
+services:
+  console:
+    image: rng-console:current
+    container_name: rng-console
+    restart: unless-stopped
+    network_mode: bridge
+    extra_hosts:
+      - host.docker.internal:host-gateway
+    ports:
+      - 127.0.0.1:4180:4180
+    env_file:
+      - native-testnet.env

@@ -1,0 +1,20 @@
+# Any-Honest cracker: its own service. Node.js watcher plus native GMP solver.
+# Run it with a CPU budget of its own, e.g. `docker run --cpus=1`.
+FROM node:22-slim AS build
+RUN apt-get update && apt-get install -y --no-install-recommends gcc libc6-dev libgmp-dev && rm -rf /var/lib/apt/lists/*
+COPY provider/cracker.c /src/cracker.c
+RUN gcc -O2 -o /src/cracker /src/cracker.c -lgmp
+
+FROM node:22-slim
+RUN apt-get update && apt-get install -y --no-install-recommends libgmp10 && rm -rf /var/lib/apt/lists/*
+WORKDIR /app
+COPY package.json ./
+COPY provider ./provider
+COPY vendor ./vendor
+COPY --from=build /src/cracker /usr/local/bin/rng-cracker
+ENV RNG_CRACKER=/usr/local/bin/rng-cracker
+# Unprivileged runtime. /data is the conventional dataDir mount; a host bind
+# mount must be owned by uid 1000 (node), e.g. `chown -R 1000:1000 <dir>`.
+RUN mkdir -p /data && chown node:node /data
+USER node
+ENTRYPOINT ["node", "provider/anyhonest-cracker.mjs"]

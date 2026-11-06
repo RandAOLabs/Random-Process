@@ -1,0 +1,20 @@
+{
+  "node-host": "randao.net",
+  "scheduling-mode": "local_confirmation",
+  "scheduler-lookahead": false,
+  "scheduler-publish-remote": false,
+  "scheduler-default-commitment-spec": "ans104@1.0",
+  "force-signed": false,
+  "store-all-signed": false,
+  "rate-limit-requests": 5000,
+  "rate-limit-period": 60,
+  "rate-limit-max": 5000,
+  "rate-limit-min": -5000,
+  "store": [
+    {
+      "store-module": "hb_store_fs",
+      "name": "/app/cache-mainnet",
+      "ao-types": "store-module=\"atom\""
+    }
+  ]
+}

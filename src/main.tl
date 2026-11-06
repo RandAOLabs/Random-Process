@@ -716,4 +716,4 @@ Handlers.utils.hasMatchingTag('Action', 'Reinitialize-Provider'),
 wrapHandler(reinitializeProviderHandler))
 
 -- Logging
-print("RandAO Process Initialized")
+print("HyperBEAM RNG Process Initialized")

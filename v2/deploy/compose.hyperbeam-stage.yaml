@@ -1,0 +1,17 @@
+services:
+  hyperbeam:
+    image: runerealm-hb:rng-current
+    container_name: hyperbeam-rng-overlay-stage
+    restart: unless-stopped
+    network_mode: bridge
+    ports:
+      - 127.0.0.1:10002:10002
+    environment:
+      HB_PORT: "10002"
+      HB_KEY: /app/keys/node-key.json
+      HB_CONFIG: /app/node-config.json
+    volumes:
+      - /opt/hyperbeam-rng-stage/store-overlay5:/app/cache-mainnet
+      - /opt/hyperbeam-rng-stage/keys:/app/keys
+      - /opt/hyperbeam-rng-stage/config/node-config.json:/app/node-config.json:ro
+
