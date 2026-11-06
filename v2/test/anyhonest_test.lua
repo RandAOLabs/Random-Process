@@ -235,8 +235,17 @@ function runTimelockTests()
   check("a accrued reveal pools and a crack bounty", Timelock.accruedAtoms[A] > 10 * U)
   eq("c back in good standing", info().validators[3].overdue, false)
 
-  -- c pays for its mistakes out of what it earned before it gets work again.
+  -- A fault starts a cooldown: Ready is refused until rejoinAt, and both
+  -- missed reveals were one incident (one strike).
   Timelock.accruedAtoms[C] = 5000 * U
+  r = ready(C)
+  check("ready refused while cooling down after a fault", r.error == "Cooling-Down"
+    and Timelock.validators[C].ready == false, r.error)
+  local vc = info().validators[3]
+  check("cooldown published in Info", vc.rejoinAt == Timelock.validators[C].rejoinAt and vc.suspendedAt == 2
+    and vc.strikes == 1 and vc.rejoinAt - vc.suspendedAtMs == 5000, encode(vc))
+  tick(5000)
+  -- c pays for its mistakes out of what it earned before it gets work again.
   r = ready(C)
   check("ready refills the stake from earnings", r.ready == true and r.refilled == 25000 - 22980
     and Timelock.bonds[C] == 25000, r.error)
@@ -326,6 +335,8 @@ function runTimelockTests()
   check("b and c slashed for the commits they owed", Timelock.bonds[B] == 24000 and Timelock.bonds[C] == 24000
     and not Timelock.validators[B].ready and not Timelock.validators[C].ready)
   Timelock.accruedAtoms[B], Timelock.accruedAtoms[C] = Timelock.accruedAtoms[B] + 1000 * U, Timelock.accruedAtoms[C] + 1000 * U
+  eq("no Ready inside the cooldown", ready(B).error, "Cooling-Down")
+  tick(20000)
   ready(B); ready(C)
   r = commit(A, 8, "r8a")
   eq("commitment from the void attempt refused", r.error, "Reused-Commitment")
@@ -382,6 +393,75 @@ function runTimelockTests()
   r = send({ Action = "Request-Random", Tier = "any-honest", ["Request-Id"] = "forged", ["from-process"] = F.game })
   eq("unsigned from-process is nobody on a node", r.error, "Unsigned")
   TestHarness = true
+
+  -- The rejoin spiral (2026-11-06): validators too slow for the commit window
+  -- missed a commit, rejoined at once, missed again: 108 slashes each. Now a
+  -- fault costs only the rounds already held, keeps the validator out of new
+  -- ones, and Ready waits rejoinBaseMs, doubling per incident up to rejoinCapMs.
+  Timelock.foundationReserveAtoms = Timelock.foundationReserveAtoms + 1000 * U
+  for _, v in ipairs({ A, B, C }) do Timelock.bonds[v] = 25000 end
+  local function has(list, x) for _, y in ipairs(list or {}) do if y == x then return true end end return false end
+  tick(20000) -- ready for rejoinCapMs: strikes start over
+  local s = math.tointeger(info().open.round)
+  local fA, fB = Timelock.validators[A].faults, Timelock.validators[B].faults
+  -- Two of three miss the commit (as on prod): void, quorum lost.
+  for k, name in ipairs({ "q1c", "q2c", "q3c", "q4c" }) do
+    -- Ready refills the stake from earnings, so losses count per incident.
+    local bonds = { [A] = Timelock.bonds[A], [B] = Timelock.bonds[B] }
+    r = commit(C, s, name)
+    check("spiral " .. k .. ": c opens round " .. s .. " with all three", r.round == s and r.error == nil, r.error)
+    tick(3000)
+    eq("spiral " .. k .. ": void", info().open.phase, "collecting")
+    local want = math.min(5000 * 2 ^ (k - 1), 20000)
+    for _, v in ipairs({ A, B }) do
+      local x = Timelock.validators[v]
+      check("spiral " .. k .. ": one slash per incident", x.faults == (v == A and fA or fB) + k
+        and Timelock.bonds[v] == bonds[v] - 1000 and x.ready == false, x.faults)
+      check("spiral " .. k .. ": cooldown doubles up to the cap", x.strikes == k and x.rejoinAt - x.suspendedAtMs == want,
+        tostring(x.rejoinAt - x.suspendedAtMs))
+    end
+    -- A naive device saying Ready on every pass while quorum is lost: refused,
+    -- never slashed again, and the beacon refuses new work instead of wedging.
+    for _ = 1, 10 do
+      check("spiral " .. k .. ": no rejoin inside the cooldown", ready(A).error == "Cooling-Down" and ready(B).error == "Cooling-Down")
+    end
+    eq("spiral " .. k .. ": c cannot open a round alone", commit(C, s, "q4c").error, "Too-Few-Validators")
+    eq("spiral " .. k .. ": requests refused, not stuck", request("spiral-" .. k).error, "Too-Few-Validators")
+    check("spiral " .. k .. ": no further slash while suspended",
+      Timelock.bonds[A] == bonds[A] - 1000 and Timelock.bonds[B] == bonds[B] - 1000)
+    tick(want)
+    check("spiral " .. k .. ": ready once the cooldown passes", ready(A).ready == true and ready(B).ready == true)
+  end
+  -- Overlapping rounds: c holds rounds s and s+1 (committed) and s+2 (in its
+  -- set), then goes dark. It is slashed for those three and nothing after.
+  for _, v in ipairs({ A, B, C }) do Timelock.bonds[v] = 25000 end
+  local fC = Timelock.validators[C].faults
+  commit(A, s, "o1a"); commit(B, s, "o1b"); commit(C, s, "o1c")
+  commit(A, s + 1, "o2a"); commit(B, s + 1, "o2b"); commit(C, s + 1, "o2c")
+  commit(A, s + 2, "o3a"); commit(B, s + 2, "o3b")
+  check("c is in round s+2's set", has(Timelock.opens[tostring(s + 2)].active, C))
+  tick(3000)
+  check("missed commit: c suspended", Timelock.validators[C].ready == false and Timelock.bonds[C] == 24000)
+  for _, x in ipairs({ { s, "o1" }, { s + 1, "o2" }, { s + 2, "o3" } }) do
+    reveal(A, x[1], x[2] .. "a"); reveal(B, x[1], x[2] .. "b")
+  end
+  eq("round s+2 finalized without c", info().round, s + 2)
+  for k, n in ipairs({ "o4", "o5" }) do
+    commit(A, s + 2 + k, n .. "a")
+    check("round " .. (s + 2 + k) .. " not given to c", not has(Timelock.opens[tostring(s + 2 + k)].active, C))
+    commit(B, s + 2 + k, n .. "b")
+    reveal(A, s + 2 + k, n .. "a"); reveal(B, s + 2 + k, n .. "b")
+    tick(10000)
+  end
+  eq("rounds go on without c", info().round, s + 4)
+  check("one incident: slashed for the three rounds it held, no more",
+    Timelock.bonds[C] == 22000 and Timelock.validators[C].faults == fC + 3, Timelock.bonds[C])
+  eq("owed outputs block Ready", ready(C).error, "Not-In-Good-Standing")
+  tick(60000)
+  check("held rounds abandoned", Timelock.opens[tostring(s)] == nil and Timelock.opens[tostring(s + 1)] == nil)
+  eq("still nothing more slashed", Timelock.bonds[C], 22000)
+  check("c turns itself on again", ready(C).ready == true)
+  for _, v in ipairs({ A, B, C }) do Timelock.bonds[v] = 25000 end
 
   -- Heartbeat on (the default), rounds run from the Foundation reserve. A
   -- process subscription binds before reveal and receives an authenticated push.

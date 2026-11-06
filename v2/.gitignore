@@ -1,2 +1,13 @@
 node_modules/
 !package-lock.json
+
+# Keys and local secrets (provider/validator/cracker dataDir output included)
+*.pem
+*.key
+*.jwk
+.env*
+!.env.example
+secrets/
+*wallet*.json
+share.json
+dkg-own.json

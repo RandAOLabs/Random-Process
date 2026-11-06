@@ -14,11 +14,15 @@ type Recent = { round: number; value: string; opened?: number; finalizedAt?: num
 type Beacon = { configured: boolean; round?: number; proofValid?: boolean; latest?: Round; recent?: Recent[]; validators?: Validator[]; open?: InFlight; revealing?: InFlight[] };
 type Pulse = { round: number; value: string; ms?: number };
 type Cell = "empty" | "locked" | "lit" | "crack";
-// Rows top to bottom: every round still in flight, newest first (rounds
-// overlap: one collects commits while earlier ones wait on reveals), then the
-// last completed round. A completed round that is replaced slides out.
-type Track = { round: number; slot: number; out?: boolean; commit: Cell[]; reveal: Cell[]; done: boolean; value?: string };
-const ROWS = 3;
+// Three fixed slots, top to bottom: NEXT (the newest round in flight), CURRENT
+// (the oldest round in flight) and RESOLVED (the last completed round). Rounds
+// overlap, so any in flight between NEXT and CURRENT are not shown. A new round
+// fades in as NEXT while the others step down one slot; a round that leaves
+// the slots slides out below and fades (`out` is when it left).
+type Track = { round: number; slot: number; out?: number; commit: Cell[]; reveal: Cell[]; done: boolean; value?: string };
+const SLOTS = ["NEXT", "CURRENT", "RESOLVED"];
+const ROWS = SLOTS.length;
+const OUT_MS = 800;
 
 const STAGES = ["COMMIT", "REVEAL", "COMBINE", "VERIFY"];
 
@@ -33,12 +37,10 @@ function toTracks(beacon: Beacon, validators: Validator[]): Track[] {
   const latest = beacon.latest;
   const inFlight = [...(beacon.revealing ?? []), ...(beacon.open ? [beacon.open] : [])]
     .filter((r) => !latest || r.round > latest.round)
-    .sort((x, y) => y.round - x.round).slice(0, latest ? ROWS - 1 : ROWS);
-  // The completed round keeps the bottom row; rounds in flight stack above it,
-  // the oldest nearest to it, so nothing jumps when a round is added.
-  const top = (latest ? ROWS - 1 : ROWS) - inFlight.length;
-  const tracks: Track[] = inFlight.map((r, i) => {
-    const slot = top + i;
+    .sort((x, y) => x.round - y.round);
+  // A lone round in flight is CURRENT, so each round only ever steps down.
+  const shown: [InFlight, number][] = inFlight.length > 1 ? [[inFlight[inFlight.length - 1], 0], [inFlight[0], 1]] : inFlight.map((r) => [r, 1]);
+  const tracks: Track[] = shown.map(([r, slot]) => {
     const committed = members(r.committed), revealed = members(r.revealed);
     return {
       round: r.round, slot, done: false,
@@ -76,7 +78,7 @@ function RoundTrack({ track, ok }: { track: Track; ok: boolean }) {
   ];
   return (
     <div className={`track${track.done ? "" : " live"}${track.out ? " out" : ""}`} style={{ "--slot": track.slot } as CSSProperties}>
-      <div className="track-tag"><b>#{track.round}</b><span>{track.done ? "DONE" : "LIVE"}</span></div>
+      <div className="track-tag"><b>#{track.round}</b><span>{SLOTS[Math.min(track.slot, ROWS - 1)]}</span></div>
       <div className={`stage-box ${state[0]}`}>{track.commit.map((c, i) => <span key={i} className={`cell ${c}`} />)}</div>
       <div className={`stage-box ${state[1]}`}>{track.reveal.map((c, i) => <span key={i} className={`cell ${c}`} />)}</div>
       <div className={`stage-box ${state[2]}`}>{track.done ? <span className="merge" /> : track.reveal.map((_, i) => <span key={i} className="cell empty" />)}</div>
@@ -126,9 +128,12 @@ export function ConsoleDashboard() {
       setLive(Boolean(body.proofValid));
       const next = toTracks(body, active);
       setTracks((prev) => {
-        const live = new Set(next.map((t) => t.round));
-        // The completed round that was replaced slides down once, then is dropped.
-        return [...next, ...prev.filter((t) => t.done && !t.out && !live.has(t.round)).map((t) => ({ ...t, slot: ROWS, out: true }))];
+        const shown = new Set(next.map((t) => t.round));
+        const now = Date.now();
+        // A round that left the slots slides out below, then is dropped once faded.
+        const leaving = prev.filter((t) => !shown.has(t.round) && (!t.out || now - t.out < OUT_MS))
+          .map((t) => t.out ? t : { ...t, slot: ROWS, out: now });
+        return [...next, ...leaving];
       });
       // Backfill rounds that finalized between samples.
       const recent = body.recent ?? (body.latest ? [body.latest] : []);

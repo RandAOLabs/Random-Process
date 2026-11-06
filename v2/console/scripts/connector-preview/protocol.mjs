@@ -10,7 +10,7 @@ const fields = { connectorId: name, actionName: name };
 // Reject extra invocation fields: account selection and native tool names belong
 // to the owning agent, not to the generated Site's request envelope.
 export const invocationSchema = z
-  .object({ ...fields, arguments: z.record(z.unknown()) })
+  .object({ ...fields, arguments: z.record(z.string(), z.unknown()) })
   .strict();
 export const grantSchema = z
   .object({ ...fields, readOnly: z.literal(true) })
@@ -41,7 +41,7 @@ export const driverMessageSchema = z.union([
     .object({
       jsonrpc: z.literal("2.0"),
       id: z.string().uuid(),
-      result: z.record(z.unknown()),
+      result: z.record(z.string(), z.unknown()),
     })
     .strict(),
   z

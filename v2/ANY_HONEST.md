@@ -35,7 +35,7 @@ rounds reveal or wait for a crack.
    there are enough validators) are ready; with fewer it could only void.
 2. **Commit:** every validator in the set posts `c = g^alpha mod N` for a fresh
    `alpha`. Commits close as soon as the whole set has committed, or after
-   `commitWindowMs` (2,000).
+   `commitWindowMs` (5,000).
 3. **Reveal:** validators reveal `alpha` within `revealWindowMs` (30,000);
    `~rng@1.0/verify-reveal` returns the canonical output.
 4. **Crack:** after the reveal deadline, anyone may submit the missing output
@@ -80,6 +80,14 @@ There is no allowance and no window that forgives: a mistake must never be
 cheaper than doing the work. A slashed validator gets no new rounds until it
 is in good standing again (its late outputs cracked or abandoned) and sends
 Ready.
+
+One incident costs at most the rounds the validator already holds: the first
+fault takes it out of every round opened after it. Ready is then refused
+(`Cooling-Down`) until `rejoinAt`: `rejoinBaseMs` (60,000) after the fault,
+doubling per incident up to `rejoinCapMs` (3,600,000); a validator ready for
+`rejoinCapMs` starts over. Info shows `suspendedAt`, `suspendedAtMs`,
+`rejoinAt` and `strikes`. A device rejoins only after that, and only once its
+own round trip is well inside the commit window.
 
 ## Validator money
 

@@ -42,7 +42,14 @@ async function info() {
   if (r.status !== 200) throw new Error(`beaconinfo: HTTP ${r.status}`);
   return JSON.parse(r.value);
 }
-const post = (action, data) => message({ node: cfg.hbNode, jwk, process: cfg.beacon, action, data: JSON.stringify(data) });
+// Round trips of recent reads and sends (ms), for the rejoin health probe.
+const probe = { reads: [], posts: [], seen: new Set() };
+const sample = (list, ms) => { list.push(ms); if (list.length > 20) list.shift(); };
+const post = async (action, data) => {
+  const t0 = Date.now();
+  try { return await message({ node: cfg.hbNode, jwk, process: cfg.beacon, action, data: JSON.stringify(data) }); }
+  finally { sample(probe.posts, Date.now() - t0); }
+};
 
 if (cmd === 'exit' || cmd === 'finalize-exit') {
   const action = cmd === 'exit' ? 'Exit' : 'Finalize-Exit';
@@ -76,27 +83,57 @@ const mark = (kind, round, now, slot) => { sent[kind] = { round, at: now, slot: 
 // Several rounds can be revealing at once, so reveals are tracked per round.
 const revealed = new Map();
 const dueReveal = (round, now) => !revealed.has(round) || settled(revealed.get(round), now, 3000);
+// Our own backoff after a fault, on top of the beacon's cooldown (rejoinAt):
+// rejoinBaseMs doubling per incident, up to rejoinCapMs.
+const backoff = { faults: null, n: 0, until: 0, readySince: 0 };
 for (;;) {
   try {
     // Before the state read, so the state is at least this far along.
+    const t0 = Date.now();
     atSlot = Number((await readState({ node: cfg.hbNode, process: cfg.beacon, path: 'now/at-slot' })).value) || 0;
     const i = await info();
+    sample(probe.reads, Date.now() - t0);
     const o = i.open ?? {};
     const mine = i.validators.find((v) => v.address === me);
     status = { address: me, round: i.round, open: o.round, phase: o.phase,
-      suspended: mine?.suspended ?? null, exiting: mine?.exiting ?? null };
+      suspended: mine?.suspended ?? null, exiting: mine?.exiting ?? null,
+      rejoinAt: Math.max(Number(mine?.rejoinAt ?? 0), backoff.until), reads: probe.reads.slice(-3), posts: probe.posts.slice(-3) };
     const committed = o.committed ?? {};
     const now = Date.now();
 
-    // Suspended: rejoin on our own (idle at once, slashed after the cooldown)
-    // while the bond still covers the next slash (SPEC.md §2.2). The cooldown
-    // is counted in finished rounds, so it is waived while too few validators
-    // are active to finish one: otherwise all-suspended waits forever.
-    const quorumLost = i.validators.filter((v) => !v.suspended && !v.exiting && !v.overdue).length < i.params.minCommits;
-    if (mine?.suspended && !mine.exiting && mine.bond >= i.params.slash
-      && (mine.idle || quorumLost || i.round >= mine.suspendedAt + i.params.rejoinAfter) && due('rejoin', i.round, now)) {
-      log(`${mine.idle ? 'idle' : 'suspended'} since round ${mine.suspendedAt}; rejoining with bond ${mine.bond}`);
-      mark('rejoin', i.round, now, await post('Rejoin', {}));
+    // How late our commit would land: how long after a round's first commit
+    // we first see it, plus a send. Sampled while others run rounds.
+    if (o.phase === 'commit' && o.firstCommitAt > 0 && !probe.seen.has(o.round)) {
+      probe.seen.add(o.round);
+      if (probe.seen.size > 50) probe.seen.delete(probe.seen.values().next().value);
+      sample(probe.reads, Math.max(0, now - o.firstCommitAt));
+    }
+
+    // Suspended: rejoin on our own while the bond still covers the next slash,
+    // but never straight back into the rounds we just failed. After a fault
+    // the beacon refuses Ready until `rejoinAt`, we back off on our own too,
+    // and we rejoin only once our round trip is well inside the commit window.
+    // No waiver when quorum is lost: rejoining at once on quorum loss turned
+    // slow commits into 108 slashes per validator (2026-11-06).
+    const p = i.params;
+    const base = Number(p.rejoinBaseMs ?? 60000), cap = Number(p.rejoinCapMs ?? 3600000);
+    // A fault while we were ready starts an incident; later faults of the same
+    // incident (rounds we already held) do not escalate it.
+    if (mine && backoff.faults !== null && mine.faults > backoff.faults && backoff.readySince) {
+      backoff.n = now - backoff.readySince < cap ? backoff.n + 1 : 1;
+      backoff.until = now + Math.min(cap, base * 2 ** (backoff.n - 1));
+      log(`fault ${mine.faults} (${mine.lastFault?.kind} round ${mine.lastFault?.round}); backing off ${backoff.until - now} ms`);
+    }
+    if (mine) backoff.faults = mine.faults;
+    if (mine?.ready && !backoff.readySince) backoff.readySince = now;
+    if (!mine?.ready) backoff.readySince = 0;
+    const max = (l) => (l.length ? Math.max(...l) : Infinity);
+    const roundTrip = max(probe.reads) + (probe.posts.length ? max(probe.posts) : max(probe.reads));
+    const healthy = probe.reads.length >= 20 && roundTrip < Number(p.commitWindowMs ?? 2000) / 2;
+    if (mine?.suspended && !mine.exiting && !mine.overdue && mine.bond >= p.slash
+      && now >= Number(mine.rejoinAt ?? 0) && now >= backoff.until && healthy && due('rejoin', i.round, now, 30000)) {
+      log(`suspended since round ${mine.suspendedAt ?? '?'}; round trip ${roundTrip} ms; rejoining with bond ${mine.bond}`);
+      mark('rejoin', i.round, now, await post('Ready', {}));
     }
 
     // Commit as soon as the cadence allows: every round with the heartbeat

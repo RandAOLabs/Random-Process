@@ -13,4 +13,8 @@ COPY provider ./provider
 COPY vendor ./vendor
 COPY --from=build /src/cracker /usr/local/bin/rng-cracker
 ENV RNG_CRACKER=/usr/local/bin/rng-cracker
+# Unprivileged runtime. /data is the conventional dataDir mount; a host bind
+# mount must be owned by uid 1000 (node), e.g. `chown -R 1000:1000 <dir>`.
+RUN mkdir -p /data && chown node:node /data
+USER node
 ENTRYPOINT ["node"]

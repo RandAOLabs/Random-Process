@@ -1,22 +1,79 @@
+# This file is included from nginx.conf's http{} block (sites-enabled/ or
+# conf.d/), so the limit_req_zone below is in http context as nginx requires.
+# Zone names are global: do not define rnglabs_api in another included file.
+# If the site sits behind a CDN/proxy, set real_ip_header/set_real_ip_from
+# first, or every client shares the proxy's address in this zone.
+limit_req_zone $binary_remote_addr zone=rnglabs_api:10m rate=10r/s;
+
 server {
     listen 80;
     listen [::]:80;
     server_name randao.net www.randao.net;
+    limit_req_status 429;
 
     location /.well-known/acme-challenge/ {
         root /var/www/certbot;
     }
 
     # Temporary native-device staging route. Remove after the production
-    # HyperBEAM node includes rng@1.0.
+    # HyperBEAM node includes rng@1.0. Only the calls lib/wallet.ts makes (and
+    # the ops health check in v2/deploy/README.md) reach the staging node;
+    # every other path or query string under /hb-stage/ is a 404 (wrong
+    # method: 403).
     location /hb-stage/ {
-        proxy_pass http://127.0.0.1:10002/;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
         proxy_read_timeout 300s;
+        client_max_body_size 1m;
+
+        location ~ "^/hb-stage/[A-Za-z0-9_-]{43}~process@1\.0/schedule$" {
+            limit_except POST { deny all; }
+            if ($args != "codec-device=ans104@1.0") { return 404; }
+            rewrite ^/hb-stage(/.*)$ $1 break;
+            proxy_pass http://127.0.0.1:10002;
+        }
+        location ~ "^/hb-stage/[A-Za-z0-9_-]{43}~process@1\.0/push&slot=[0-9]+$" {
+            limit_except GET { deny all; }
+            rewrite ^/hb-stage(/.*)$ $1? break;
+            proxy_pass http://127.0.0.1:10002;
+        }
+        location ~ "^/hb-stage/[A-Za-z0-9_-]{43}~process@1\.0/compute&slot=[0-9]+/results/output/data$" {
+            limit_except GET { deny all; }
+            rewrite ^/hb-stage(/.*)$ $1? break;
+            proxy_pass http://127.0.0.1:10002;
+        }
+        location = /hb-stage/~rng@1.0/generator {
+            limit_except GET { deny all; }
+            rewrite ^ /~rng@1.0/generator? break;
+            proxy_pass http://127.0.0.1:10002;
+        }
+
+        return 404;
+    }
+
+    location = /api/derive {
+        limit_req zone=rnglabs_api burst=20 nodelay;
+        proxy_pass http://127.0.0.1:4180;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 60s;
+    }
+
+    location = /mcp {
+        limit_req zone=rnglabs_api burst=20 nodelay;
+        proxy_pass http://127.0.0.1:4180;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 60s;
     }
 
     location / {

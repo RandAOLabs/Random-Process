@@ -34,8 +34,28 @@ jobs:
           node --check provider/ao.mjs
           node --check provider/bls.mjs
           node --check provider/daemon.mjs
-      - name: Test threshold BLS and DKG
-        run: node --test test/bls.test.mjs
+          node --check provider/hb.mjs
+          node --check provider/anyhonest.mjs
+          node --check provider/anyhonest-validator.mjs
+          node --check provider/anyhonest-cracker.mjs
+      # The Lua suites run inside the AOS wasm module, which lives in the private
+      # paralith-mono repo. PARALITH_MONO_TOKEN must be a read-only token for it.
+      - name: Fetch AOS wasm module
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: CipherPlayLabs/paralith-mono
+          token: ${{ secrets.PARALITH_MONO_TOKEN }}
+          path: paralith-mono
+          sparse-checkout: backend/native/module
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+      - name: Verify AOS wasm module
+        run: echo "164c0859e796d30f682944be8bdd544a1292e9140f6f2998ce5ef93e2184a8c8  ../paralith-mono/backend/native/module/AOS.wasm" | sha256sum -c -
+      - name: Test (Lua contracts, threshold BLS, DKG, deployment config)
+        env:
+          AOS_WASM: ${{ github.workspace }}/paralith-mono/backend/native/module/AOS.wasm
+          AO_LOADER: ${{ github.workspace }}/v2/node_modules/@permaweb/ao-loader/dist/index.cjs
+        run: npm test
 
   console:
     runs-on: ubuntu-latest

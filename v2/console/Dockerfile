@@ -1,11 +1,15 @@
 FROM node:22-bookworm-slim
 
 WORKDIR /app
+# Run as the image's unprivileged node user; it owns /app so the build output
+# and wrangler's .wrangler/state persistence stay writable.
+RUN chown node:node /app
+USER node
 
-COPY package.json package-lock.json ./
+COPY --chown=node:node package.json package-lock.json ./
 RUN npm ci --no-audit --no-fund
 
-COPY . .
+COPY --chown=node:node . .
 RUN npm run build \
   && sed -i 's/\r$//' docker-entrypoint.sh \
   && chmod +x docker-entrypoint.sh

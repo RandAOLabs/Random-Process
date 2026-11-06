@@ -288,10 +288,14 @@ if (cmd === 'configure-anyhonest') {
     self: state.anyHonest, token: state.token, unit: 1000000,
     T, h: puzzle.h, hProof: puzzle.hProof,
     // Validators run in-node (rng-validator@1.0) and push their slots: a
-    // commit lands within ~0.7 s. A missed commit is a full slash, so the
-    // window is 2 s, not 1. Reveals keep 30 s for a busy node; a round still
-    // uncracked 6 min (two crack times) after its deadline is abandoned.
-    commitWindowMs: 2000, revealWindowMs: 30000,
+    // commit lands within ~0.7 s on an idle node, but over 2 s on the loaded
+    // shared node (2026-11-06: two of three validators missed every commit).
+    // A missed commit is a full slash, and the window only costs time when a
+    // set member is missing (a round closes as soon as all have committed), so
+    // it is 5 s: ~7x the idle round trip, 2.5x what failed. Reveals keep 30 s
+    // for a busy node; a round still uncracked 6 min (two crack times) after
+    // its deadline is abandoned.
+    commitWindowMs: 5000, revealWindowMs: 30000,
     // The rhythm: rounds are due every 500 ms (2 rounds/s, what the Foundation
     // reserve is sized for) and the beacon speeds up after slow rounds and waits
     // after fast ones to hold that average: at most 3 rounds in flight, opens at
@@ -302,8 +306,10 @@ if (cmd === 'configure-anyhonest') {
     ...(state.retired?.at(-1)?.anyHonest ? { predecessor: state.retired.at(-1).anyHonest } : {}),
     heartbeat: 1, roundPrice: 3, requestPrice: 4,
     subscriptionPrice: 1, subscriptionRounds: 1000, crackBounty: 10,
-    // A slashed validator rejoins while its bond covers one more slash.
-    stake: 25000, slash: 1000, rejoinBond: 1000,
+    // A slashed validator rejoins while its bond covers one more slash, but
+    // not before its cooldown: 1 min after a fault, doubling per incident up
+    // to 1 h (one healthy hour starts it over).
+    stake: 25000, slash: 1000, rejoinBond: 1000, rejoinBaseMs: 60000, rejoinCapMs: 3600000,
   }) });
   console.log('configure', configured.output);
   for (const address of validators) {
