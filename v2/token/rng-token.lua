@@ -1,52 +1,41 @@
---- rng-token.lua - TEST-RNG for the HyperBEAM RNG testnet.
+--- rng-token.lua - RNG, the fixed-supply token that pays for beacon randomness.
 ---
---- Pays for beacon randomness: users fund a balance in the beacon process with
---- it, and validators and the protocol are paid in it. Test-only: anyone may
---- tap the faucet, and it is redeployed whenever a fresh token is needed.
+--- Users fund a balance in the beacon process with it, and validators and the
+--- protocol are paid in it. The whole supply (10^15 atoms = 1,000,000,000 RNG at
+--- 6 decimals) is minted ONCE, on the first slot, to `GenesisAllocations`, and
+--- the token is then sealed: there is no faucet, no mint and no admin power over
+--- balances. See v2/docs/PERMISSIONLESS.md (D5, D6, "Token").
 ---
---- Adapted from paralith-mono backend/native/quote.lua (same ledger, identity
---- and publishing rules); only the name, ticker and faucet sizes differ.
+--- Deploy prelude (prepended to this source):
+---   GenesisAllocations = { ["<43-char address>"] = <atoms>, ... }  -- sums to 10^15
+---   TokenTicker = "TEST-RNG"                                       -- optional (testnet)
+---
+--- The ledger, identity and publishing rules are adapted from paralith-mono
+--- backend/native/quote.lua; process transfers are a port of rune.lua's
+--- `sequenced-v1` streams, which `deploy-dao.mjs` and the Paralith vault require.
 
 local json = require(".json")
 
-Name = "RNG Labs Test Token"
-Ticker = "TEST-RNG"
+Name = TokenName or "RNG"
+Ticker = TokenTicker or "RNG"
 Denomination = 6
 Logo = Logo or ""
--- Public test liquidity: every signed Faucet request mints 100 TEST-RNG.
-FaucetAmount = FaucetAmount or 100000000 -- 100.000000 TEST-RNG
 
---- The most this faucet will ever mint to one address: 1,000 TEST-RNG.
-FaucetLifetimeCap = FaucetLifetimeCap or 1000000000 -- 1,000.000000 TEST-RNG
+--- The whole supply, ever. 10^15 < 2^53, so every balance stays exact.
+local GENESIS_SUPPLY = 1000000000000000
+local ATOMS_MAX = 9007199254740991 -- 2^53 - 1
 
 Balances = Balances or {}
 TotalSupply = TotalSupply or 0
 Minted = Minted or 0
+--- True once genesis has run (or a prior genesis is proven by published state).
+--- Nothing ever mints after this, and nothing ever clears it.
+Sealed = Sealed or false
 
---- Atoms the faucet has ever minted to an address, and how many times it has
---- paid out at all.
----
---- NEVER RESET EITHER OF THESE, for the same reason as `TransferSeq` below: a
---- counter that went backwards would hand every exhausted wallet its allowance again
---- and there would be no cap at all. `FaucetCalls` is also the cheap witness
---- that says whether this VM's copy of the ledger is behind the published one
---- -- see `restoreTokenState` -- so it must only ever go up.
-FaucetMinted = FaucetMinted or {}
-FaucetCalls = FaucetCalls or 0
-
---- Counts the transfers, so every notice this token emits carries an id.
----
---- A `Credit-Notice` is how a recipient PROCESS learns it was paid, and
---- delivery on this network is not exactly-once -- so a notice that arrives
---- twice credits twice unless there is something to recognise the second copy
---- by. `BurnSeq` already exists for exactly this reason on the deposit half of
---- the bridge; this is the same idea for an ordinary transfer, and it is what
---- lets an order-book venue key its deposits on the token's own word rather
---- than on a message id it has to hope is stable.
----
---- NEVER RESET IT. The recipient's replay guard is keyed on
---- `<this process>:<reference>`, so a counter that went backwards would make
---- old references creditable again.
+--- Counts the transfers, so every notice this token emits carries an id
+--- (`Reference = t<n>`). A recipient process keys its replay guard on
+--- `<this process>:<reference>`. NEVER RESET IT: a counter that went backwards
+--- would make old references creditable again.
 TransferSeq = TransferSeq or 0
 ChangedBalances = ChangedBalances or {}
 TokenAccountCount = TokenAccountCount or 0
@@ -62,22 +51,24 @@ local function int(v, default)
   return math.tointeger(n) or default
 end
 
+--- A positive whole number of atoms, below 2^53. Wire tags are strings, so a
+--- string must be plain decimal digits: `tonumber` would also take "0x10",
+--- "1e3" and " 5", and a float beyond 2^53 is no longer an exact count.
 local function quantity(v)
   if v == nil or v == "" then return nil, "Quantity is required" end
+  if type(v) == "string" and not v:match("^%d+$") then
+    return nil, "Quantity must be a whole atomic amount"
+  end
   local n = tonumber(v)
   if not n or n ~= math.floor(n) then return nil, "Quantity must be a whole atomic amount" end
   n = math.tointeger(n)
-  if not n or n <= 0 then return nil, "Quantity must be positive" end
+  if not n or n > ATOMS_MAX then return nil, "Quantity is out of range" end
+  if n <= 0 then return nil, "Quantity must be positive" end
   return n
 end
 
 local function asString(n) return string.format("%d", int(n, 0)) end
 local function balanceOf(address) return int(Balances[address], 0) end
-
-local function faucetRemaining(address)
-  local left = int(FaucetLifetimeCap, 0) - int(FaucetMinted[address], 0)
-  return left > 0 and left or 0
-end
 
 local function credit(address, amount)
   local previous = balanceOf(address)
@@ -95,17 +86,9 @@ end
 
 --- Identity comes from a signature commitment, and only that.
 ---
---- The algorithm is read from `type` OR `alg`, because a live node writes
---- `type` and no `alg` while the test harness writes `alg`; checking one
---- spelling makes the suite pass and the deployed process refuse every signed
---- action. An hmac commitment is not a signature -- it names whoever it claims
---- to -- so `SIGNATURE_ALGS` is the whole allow-list.
----
---- There is deliberately no fall back to a tag. This used to return
---- `msg.Address or msg.From` for a message with no commitments at all, which
---- meant an UNSIGNED request carrying `Address = <owner>` passed `isOwner` and
---- could `Admin.Mint` any quantity to any recipient, and one carrying
---- `Address = <victim>` could spend the victim's faucet allowance.
+--- The algorithm is read from `type` OR `alg` (a live node writes `type`, the
+--- harness `alg`). An hmac commitment is not a signature, so `SIGNATURE_ALGS`
+--- is the whole allow-list. Two different signers is no identity at all.
 local function provenSigner(msg)
   local c = msg.commitments or msg.Commitments
   if type(c) ~= "table" then return nil end
@@ -120,8 +103,7 @@ local function provenSigner(msg)
   return signer
 end
 
---- This process's own scheduler. See the identical helper in rune.lua for the
---- incident that made it necessary.
+--- This process's own scheduler. See the identical helper in rune.lua.
 local function schedulerAddress(base)
   if type(base) ~= "table" then return nil end
   local found = base["scheduler-location"] or base.SchedulerLocation
@@ -137,15 +119,7 @@ end
 
 --- A process can spend only its own account.
 ---
---- This used to prefer any real signature, on the assumption that a delivery
---- from another process is unsigned. On a live node it is not: the SCHEDULER
---- signs it. That assumption cost the Rune bridge a player's runes, and here it
---- would break an exchange's payout leg -- the book sends TEST-RNG out of its own
---- balance, the delivery arrives signed by the scheduler, and this would read
---- the scheduler as the payer and refuse. A swap would take the input and never
---- deliver the output.
----
---- So a signature from OUR OWN scheduler means "this is a delivery" and the
+--- A signature from OUR OWN scheduler means "this is a delivery" and the
 --- attested `from-process` is the actor. Any other signature is an ordinary
 --- wallet message and wins outright, which keeps a forged `from-process` tag
 --- inert.
@@ -160,13 +134,18 @@ local function actor(msg, base)
   return nil
 end
 
---- A wallet or process address: exactly 43 base64url characters.
----
---- Every holder becomes a `balance-<address>` key, which the node stores as a
---- path: a segment ending in `+link` is read as a link, a `/` nests, and an
---- empty segment is nothing, and any of them in a checkpoint leaves the process
---- unreadable on reload. Recipients are held to this shape at the door and
---- every key is checked again where it is written. Same shape as pusd.lua.
+--- The attested process behind a scheduler-signed delivery, or nil for a
+--- wallet message. Same rule as rune.lua's `processSource`.
+local function processSource(msg, base)
+  local source = msg["from-process"] or msg.FromProcess
+  if type(source) ~= "string" or #source ~= 43 then return nil end
+  local signed = provenSigner(msg)
+  return signed ~= nil and signed == schedulerAddress(base) and source or nil
+end
+
+--- A wallet or process address: exactly 43 base64url characters. Every holder
+--- becomes a `balance-<address>` key, so anything else would corrupt the
+--- checkpoint. Same shape as pusd.lua.
 local function isAoAddress(s)
   return type(s) == "string" and #s == 43 and s:match("^[%w_%-]+$") ~= nil
 end
@@ -185,11 +164,25 @@ end
 
 local function fail(base, message) return reply(base, { error = message }) end
 
+--- Every `X-` tag rides on the notices: it is how a payment carries its reason.
+--- Bounded, and a transfer over the bound is REFUSED rather than trimmed (a
+--- notice that lost an intent tag is a payment with the wrong reason). Same
+--- bounds as rune.lua.
+local FORWARD_TAG_LIMIT = 16
+local FORWARD_BYTE_LIMIT = 2048
+
 local function forwarded(msg)
-  local out = {}
+  local out, count, bytes = {}, 0, 0
   for k, v in pairs(msg) do
     local key = tostring(k)
-    if key:sub(1, 2):lower() == "x-" then out[key] = v end
+    if key:sub(1, 2):lower() == "x-" then
+      out[key] = v
+      count = count + 1
+      bytes = bytes + #key + #tostring(v)
+    end
+  end
+  if count > FORWARD_TAG_LIMIT or bytes > FORWARD_BYTE_LIMIT then
+    return nil, "A transfer carries at most 16 X- tags and 2048 bytes of them"
   end
   return out
 end
@@ -207,10 +200,6 @@ local function balancesView()
   return out
 end
 
--- Recover token globals when HyperBEAM retains the returned map but loses the
--- Luerl `priv` snapshot under concurrent slots. Balances are already published
--- in full; the supply invariant (sum of balances == TotalSupply) tells a warm
--- state from a missing/partial one without overwriting healthy globals.
 local function publishedObject(base, key)
   local raw = base and base[key]
   if type(raw) == "table" then return raw end
@@ -219,41 +208,157 @@ local function publishedObject(base, key)
   return ok and type(decoded) == "table" and decoded or nil
 end
 
---- Set when the published faucet ledger cannot be proven for this slot. The
---- cap is only a cap if the counter is intact, so the faucet refuses rather
---- than minting against a ledger it cannot read; everything else still works.
-local FaucetLedgerUnproven = false
+-- sequenced-v1: exactly-once process transfers ---------------------------------
+--
+-- Port of rune.lua (prepareProcessTransfer / commitProcessTransfer /
+-- restoreTransferStreams). Every transfer whose payer is an attested process
+-- must carry `X-Transfer-Sequence = <n>`. Per sender, `floor` is the highest n
+-- below which every sequence has been paid, and `above` the paid ones in
+-- (floor, floor + 256]. A paid sequence is a no-op forever; one beyond the
+-- window is refused without leaving a hole; a failed transfer spends nothing.
+-- Wallet transfers are unchanged.
+local TRANSFER_WINDOW = 256
+local TRANSFER_SEQUENCE_MAX = ATOMS_MAX
+TransferStreams = TransferStreams or {}
+--- Sum over senders of (floor + #above): it only ever goes up, and it is the
+--- witness that tells a VM whose copy is behind the published one.
+TransferStreamRevision = TransferStreamRevision or 0
 
---- Bring the faucet ledger up to the published one.
----
---- `faucetcalls` is a scalar, so the common case costs one integer compare and
---- the map is only decoded when this VM is actually behind -- a cold slot, or
---- one that lost its Luerl snapshot. The merge takes the SMALLER remaining
---- allowance per address (the larger minted total), so a stale copy can never
---- give a wallet its allowance back, and an address this VM knows about but the
---- publication does not keeps what it has.
-local function restoreFaucetLedger(base)
-  FaucetLedgerUnproven = false
-  local publishedCalls = int(base and base.faucetcalls, 0)
-  if publishedCalls <= int(FaucetCalls, 0) then return end
-  local published = publishedObject(base, "faucetallowance")
-  if not published then
-    FaucetLedgerUnproven = true
-    return
-  end
-  local cap = int(FaucetLifetimeCap, 0)
-  for address, left in pairs(published) do
-    if type(address) == "string" then
-      -- An unreadable entry reads as nothing left, which is the safe direction.
-      local spent = cap - int(left, 0)
-      if spent > cap then spent = cap end
-      if spent > int(FaucetMinted[address], 0) then FaucetMinted[address] = spent end
-    end
-  end
-  FaucetCalls = publishedCalls
+--- The last notices of recent sequenced transfers, so a sender that resends a
+--- sequence it already paid (dao.lua `Resend-Payout`) gets the ORIGINAL notices
+--- again -- its Debit-Notice is what clears its pending row. Bounded in total
+--- and per sender, evicting from the largest sender first, so one sender
+--- cannot push another's receipts out. Held in memory only: a receipt lost to a
+--- cold VM degrades to `ReceiptRetained = false`, never to a second payment.
+local RECEIPT_LIMIT = 1024
+local RECEIPT_PER_SENDER = 32
+TransferReceipts = TransferReceipts or {}
+TransferReceiptOrder = TransferReceiptOrder or {}
+
+local function receiptSender(key) return key:match("^@seq:(.-):%d+$") end
+
+local function evictReceipt(index)
+  local key = table.remove(TransferReceiptOrder, index)
+  if key then TransferReceipts[key] = nil end
 end
 
+local function rememberReceipt(from, key, to, amount, reference, tags)
+  TransferReceipts[key] = { to = to, amount = asString(amount), reference = reference, forwarded = tags }
+  TransferReceiptOrder[#TransferReceiptOrder + 1] = key
+  local counts, oldest = {}, {}
+  for i, k in ipairs(TransferReceiptOrder) do
+    local s = receiptSender(k) or ""
+    counts[s] = (counts[s] or 0) + 1
+    if not oldest[s] then oldest[s] = i end
+  end
+  if (counts[from] or 0) > RECEIPT_PER_SENDER then
+    evictReceipt(oldest[from])
+    return
+  end
+  if #TransferReceiptOrder > RECEIPT_LIMIT then
+    local most, mostCount = nil, -1
+    for s, n in pairs(counts) do
+      if n > mostCount or (n == mostCount and s < most) then most, mostCount = s, n end
+    end
+    evictReceipt(oldest[most])
+  end
+end
+
+local function prepareProcessTransfer(from, msg)
+  local raw = msg["X-Transfer-Sequence"] or msg["x-transfer-sequence"]
+  if raw == nil then return nil, "Process transfers require X-Transfer-Sequence" end
+  if type(raw) ~= "string" or not raw:match("^%d+$") then
+    return nil, "X-Transfer-Sequence must be a positive decimal integer"
+  end
+  local sequence = int(raw, 0)
+  if #raw > 16 or sequence < 1 or sequence > TRANSFER_SEQUENCE_MAX then
+    return nil, "X-Transfer-Sequence is out of range"
+  end
+  local stream = TransferStreams[from]
+  local floor = stream and int(stream.floor, 0) or 0
+  if sequence > floor + TRANSFER_WINDOW then
+    return nil, "Transfer sequence exceeds the 256-message window"
+  end
+  local key = "@seq:" .. from .. ":" .. asString(sequence)
+  local receipt = TransferReceipts[key]
+  local duplicate = sequence <= floor or (stream ~= nil and stream.above[asString(sequence)] == true)
+  if receipt and not duplicate then return nil, "Transfer stream does not match its retained receipt" end
+  return { sequence = sequence, key = key, receipt = receipt, duplicate = duplicate }
+end
+
+local function commitProcessTransfer(from, sequence)
+  local stream = TransferStreams[from]
+  if not stream then stream = { floor = 0, above = {} }; TransferStreams[from] = stream end
+  stream.above[asString(sequence)] = true
+  while stream.above[asString(stream.floor + 1)] do
+    stream.floor = stream.floor + 1
+    stream.above[asString(stream.floor)] = nil
+  end
+  TransferStreamRevision = int(TransferStreamRevision, 0) + 1
+end
+
+local function streamsView()
+  local senders = jsonObject({})
+  for source, s in pairs(TransferStreams) do
+    senders[source] = { floor = int(s.floor, 0), above = jsonObject(s.above) }
+  end
+  return { revision = int(TransferStreamRevision, 0), senders = senders }
+end
+
+--- Bring the streams up to the published checkpoint. A copy that is behind is
+--- replaced only by a checkpoint that proves itself (its revision equals the sum
+--- of its floors and window entries); a missing or inconsistent one refuses
+--- every action rather than forgetting which sequences were paid. The revision
+--- never goes down.
+local function restoreTransferStreams(base)
+  local expected = int(base and base.transferstreamrevision, 0)
+  if base and (base.transferstreams == nil or base.transferstreamrevision == nil)
+     and type(base.tokeninfo) == "string" then
+    local ok, info = pcall(json.decode, base.tokeninfo)
+    if ok and type(info) == "table" and info.ProcessTransferProtocol == "sequenced-v1" then
+      return nil, "Transfer stream checkpoint or revision is missing"
+    end
+  end
+  if base and base.transferstreams ~= nil and base.transferstreamrevision == nil then
+    return nil, "Transfer stream revision is missing"
+  end
+  if expected <= int(TransferStreamRevision, 0) then return true end
+  local saved = publishedObject(base, "transferstreams")
+  if not saved or int(saved.revision, -1) ~= expected or type(saved.senders) ~= "table" then
+    return nil, "Transfer stream checkpoint is missing or stale"
+  end
+  local restored, total = {}, 0
+  for source, held in pairs(saved.senders) do
+    local floor = type(held) == "table" and int(held.floor, -1) or -1
+    if type(source) ~= "string" or #source ~= 43 or floor < 0
+       or floor > TRANSFER_SEQUENCE_MAX or type(held.above) ~= "table" then
+      return nil, "Invalid transfer stream checkpoint"
+    end
+    local above, count = {}, 0
+    for key, seen in pairs(held.above) do
+      local sequence = int(key, -1)
+      if seen ~= true or sequence <= floor or sequence > floor + TRANSFER_WINDOW then
+        return nil, "Invalid transfer stream window"
+      end
+      above[asString(sequence)] = true
+      count = count + 1
+    end
+    if count > TRANSFER_WINDOW then return nil, "Transfer stream window is too large" end
+    restored[source] = { floor = floor, above = above }
+    total = total + floor + count
+  end
+  if total ~= expected then return nil, "Transfer stream checkpoint does not match its revision" end
+  TransferStreams, TransferStreamRevision = restored, expected
+  return true
+end
+
+-- Recover token globals when HyperBEAM retains the returned map but loses the
+-- Luerl `priv` snapshot under concurrent slots. Balances are already published
+-- in full; the supply invariant (sum of balances == TotalSupply) tells a warm
+-- state from a missing/partial one without overwriting healthy globals.
 local function restoreTokenState(base)
+  local streamsRestored, streamProblem = restoreTransferStreams(base)
+  if not streamsRestored then return nil, streamProblem end
   local publishedTotal = int(base and base.totalsupply, nil)
   if int(TokenAccountCount, 0) == 0 and next(Balances) ~= nil then
     for _ in pairs(Balances) do TokenAccountCount = TokenAccountCount + 1 end
@@ -318,7 +423,50 @@ local function restoreTokenState(base)
     end
   end
   TransferSeq = math.max(int(TransferSeq, 0), int(base and base.transferseq, 0))
-  restoreFaucetLedger(base)
+  return true
+end
+
+-- Genesis ------------------------------------------------------------------------
+
+--- Mint the whole supply to `GenesisAllocations`, once, then seal.
+---
+--- Runs after `restoreTokenState`, so a VM that lost its globals but whose
+--- process already published a supply sees that supply (or the published
+--- `Sealed`) and seals instead of minting a second time. An allocation that is
+--- not exactly 10^15 atoms to valid addresses mints nothing and leaves the
+--- process refusing every action: a wrong supply cannot be fixed later.
+local function genesis(base)
+  if Sealed then return true end
+  local info = publishedObject(base, "tokeninfo")
+  if int(Minted, 0) > 0 or int(TotalSupply, 0) > 0 or next(Balances) ~= nil
+     or int(base and base.totalsupply, 0) > 0
+     or (info and (info.Sealed == "true" or info.Sealed == true)) then
+    Sealed = true
+    return true
+  end
+  local alloc = GenesisAllocations
+  if type(alloc) ~= "table" or next(alloc) == nil then
+    return nil, "Genesis allocations are missing"
+  end
+  local rows, sum = {}, 0
+  for address, atoms in pairs(alloc) do
+    if not isAoAddress(address) then
+      return nil, "Genesis allocation to an invalid address"
+    end
+    local amount = quantity(type(atoms) == "number" and math.tointeger(atoms) or atoms)
+    if not amount then return nil, "Genesis allocation for " .. address .. " is not a positive atom count" end
+    sum = sum + amount
+    if sum > GENESIS_SUPPLY then break end
+    rows[#rows + 1] = { address, amount }
+  end
+  if sum ~= GENESIS_SUPPLY then
+    return nil, "Genesis allocations must sum to exactly " .. asString(GENESIS_SUPPLY) .. " atoms"
+  end
+  for _, row in ipairs(rows) do credit(row[1], row[2]) end
+  TotalSupply = GENESIS_SUPPLY
+  Minted = GENESIS_SUPPLY
+  Sealed = true
+  GenesisAllocations = nil
   return true
 end
 
@@ -326,27 +474,11 @@ local function infoView()
   return {
     Name = Name, Ticker = Ticker, Denomination = asString(Denomination), Logo = Logo,
     TotalSupply = asString(TotalSupply), Minted = asString(Minted),
-    FaucetAmount = asString(FaucetAmount), Owner = Owner or "",
-    FaucetLifetimeCap = asString(FaucetLifetimeCap),
+    Supply = asString(GENESIS_SUPPLY), Sealed = Sealed and "true" or "false",
+    ProcessTransferProtocol = "sequenced-v1",
+    ProcessTransferSequenceTag = "X-Transfer-Sequence",
+    ProcessTransferWindow = asString(TRANSFER_WINDOW),
   }
-end
-
---- Atoms each wallet that has used the faucet may still mint, published so a
---- client can read its allowance without spending a slot on a message.
----
---- One map rather than a `faucet-<address>` key per wallet: the information
---- floor here is one 43-byte address per wallet that has tapped the faucet and
---- both shapes pay it, but a map pays for one multipart part header instead of
---- N, can be trimmed by a future migration, and is checkpointed as a unit
---- alongside `balances`. Splitting it into its own keys would buy nothing --
---- every message already pays for the whole published map. A wallet that has
---- never used the faucet is absent, and absent means the full cap.
-local function faucetView()
-  local out = jsonObject({})
-  for address, minted in pairs(FaucetMinted) do
-    if int(minted, 0) > 0 then out[address] = asString(faucetRemaining(address)) end
-  end
-  return out
 end
 
 local H = {}
@@ -367,46 +499,21 @@ H["Total-Supply"] = function(base)
                        TotalSupply = asString(TotalSupply), Ticker = Ticker })
 end
 
-H["Faucet"] = function(base, msg)
-  local to = provenSigner(msg)
-  if not to then return fail(base, "A signed wallet is required") end
-  if FaucetLedgerUnproven then
-    return fail(base, "The faucet ledger could not be restored, so no allowance can be proven")
-  end
-  local left = faucetRemaining(to)
-  if left < int(FaucetAmount, 0) then
-    return fail(base, "Faucet lifetime cap reached: " .. asString(left) .. " of " ..
-                asString(FaucetLifetimeCap) .. " atoms remain and each call mints " ..
-                asString(FaucetAmount))
-  end
-  credit(to, FaucetAmount)
-  TotalSupply = TotalSupply + FaucetAmount
-  Minted = Minted + FaucetAmount
-  FaucetMinted[to] = int(FaucetMinted[to], 0) + int(FaucetAmount, 0)
-  FaucetCalls = int(FaucetCalls, 0) + 1
-  return reply(base, { Action = "Faucet-Success", Recipient = to,
-                       Quantity = asString(FaucetAmount), Balance = asString(balanceOf(to)),
-                       Remaining = asString(faucetRemaining(to)) })
-end
-
-H["Admin.Mint"] = function(base, msg)
-  if not isOwner(provenSigner(msg)) then return fail(base, "Not authorised") end
-  local to = msg.Recipient
-  if not isAoAddress(to) then return fail(base, "Recipient must be a 43-character address") end
-  local amount, why = quantity(msg.Quantity)
-  if not amount then return fail(base, why) end
-  credit(to, amount)
-  TotalSupply = TotalSupply + amount
-  Minted = Minted + amount
-  return reply(base, { Action = "Mint-Success", Recipient = to,
-                       Quantity = asString(amount), Balance = asString(balanceOf(to)),
-                       TotalSupply = asString(TotalSupply) })
-end
-
+--- Ask for a full balance checkpoint on the next publish. The deployer only,
+--- and it moves nothing.
 H["Admin.Checkpoint"] = function(base, msg)
   if not isOwner(provenSigner(msg)) then return fail(base, "Not authorised") end
   ForceTokenCheckpoint = true
   return reply(base, { checkpoint = true, revision = asString(TokenRevision) })
+end
+
+local function noticesFor(from, to, amount, reference, tags)
+  local debit = { target = from, Action = "Debit-Notice", Recipient = to,
+                  Quantity = amount, Reference = reference }
+  local notice = { target = to, Action = "Credit-Notice", Sender = from,
+                   Quantity = amount, Reference = reference }
+  for k, v in pairs(tags or {}) do debit[k] = v; notice[k] = v end
+  return { ["debit-notice"] = debit, ["credit-notice"] = notice }
 end
 
 H["Transfer"] = function(base, msg)
@@ -418,26 +525,47 @@ H["Transfer"] = function(base, msg)
   if to == from then return fail(base, "Cannot transfer to yourself") end
   local amount, why = quantity(msg.Quantity)
   if not amount then return fail(base, why) end
+
+  local flow
+  if processSource(msg, base) then
+    flow, why = prepareProcessTransfer(from, msg)
+    if not flow then return fail(base, why) end
+    if flow.duplicate then
+      local seen = flow.receipt
+      if not seen then
+        return reply(base, { Action = "Transfer-Success", From = from, Duplicate = "true",
+          ReceiptRetained = "false", TransferSequence = asString(flow.sequence) })
+      end
+      if seen.to ~= to or seen.amount ~= asString(amount) then
+        return fail(base, "X-Transfer-Sequence was already used for a different transfer")
+      end
+      -- Already paid: re-emit the original notices (original intent tags), move nothing.
+      local outbox = isCast(msg) and {} or noticesFor(from, seen.to, seen.amount, seen.reference, seen.forwarded)
+      return reply(base, { Action = "Transfer-Success", From = from, Recipient = to,
+        Quantity = seen.amount, Balance = asString(balanceOf(from)), Duplicate = "true",
+        ReceiptRetained = "true", Reference = seen.reference,
+        TransferSequence = asString(flow.sequence) }, outbox)
+    end
+  end
+
   if balanceOf(from) < amount then return fail(base, "Insufficient balance") end
+  local tags
+  tags, why = forwarded(msg)
+  if not tags then return fail(base, why) end
 
   credit(from, -amount)
   credit(to, amount)
   TransferSeq = TransferSeq + 1
   local reference = "t" .. asString(TransferSeq)
-  local outbox = {}
-  if not isCast(msg) then
-    local debit = { target = from, Action = "Debit-Notice", Recipient = to,
-                    Quantity = asString(amount), Reference = reference }
-    -- `Reference` is this token's own id for the transfer. A recipient process
-    -- keys its replay guard on it; see `TransferSeq`.
-    local notice = { target = to, Action = "Credit-Notice", Sender = from,
-                     Quantity = asString(amount), Reference = reference }
-    for k, v in pairs(forwarded(msg)) do debit[k] = v; notice[k] = v end
-    outbox["debit-notice"] = debit
-    outbox["credit-notice"] = notice
+  if flow then
+    commitProcessTransfer(from, flow.sequence)
+    rememberReceipt(from, flow.key, to, amount, reference, tags)
   end
+  local outbox = isCast(msg) and {} or noticesFor(from, to, asString(amount), reference, tags)
   return reply(base, { Action = "Transfer-Success", From = from, Recipient = to,
-                       Quantity = asString(amount), Balance = asString(balanceOf(from)) }, outbox)
+                       Quantity = asString(amount), Balance = asString(balanceOf(from)),
+                       Reference = reference,
+                       TransferSequence = flow and asString(flow.sequence) or nil }, outbox)
 end
 
 local ENVELOPE = {
@@ -468,11 +596,7 @@ local function resolveOwner(base)
   return Owner
 end
 
---- Find a handler by name, ignoring case.
----
---- See rune.lua for the incident this prevents: a caller that spells an action
---- differently from the table must not silently fail, because the other half of
---- a cross-process action has usually already happened by then. Exact wins.
+--- Find a handler by name, ignoring case. Exact wins.
 local ACTION_ALIASES = nil
 local function resolveHandler(action)
   if H[action] then return H[action] end
@@ -485,35 +609,43 @@ end
 
 function compute(base, req, opts)
   base = type(base) == "table" and base or {}
-  local restored, restoreProblem = restoreTokenState(base)
-  resolveOwner(base)
   ChangedBalances = {}
   ForceTokenCheckpoint = false
+  local restored, problem = restoreTokenState(base)
+  if restored then restored, problem = genesis(base) end
+  resolveOwner(base)
   local beforeTotal = int(TotalSupply, 0)
   local beforeTransferSeq = int(TransferSeq, 0)
-  local beforeFaucetCalls = int(FaucetCalls, 0)
+  local beforeStreamRevision = int(TransferStreamRevision, 0)
   local raw = (req and req.body) or {}
   local msg = caseInsensitive(raw.Tags or raw)
   local action = msg.Action or msg.action or "none"
   local handler = resolveHandler(action)
   local result
-  if restoreProblem then
-    result = fail(base, restoreProblem)
+  if problem then
+    result = fail(base, problem)
   elseif not handler then
     result = fail(base, "unknown action '" .. tostring(action) .. "'")
   else
     local ok, out = pcall(function() return handler(base, msg) end)
     result = ok and out or fail(base, tostring(out))
   end
+  if problem then
+    -- Publish nothing: a process that cannot prove its supply must not look healthy.
+    collectgarbage("collect")
+    return result
+  end
   local initial = result.tokeninfo == nil or result.ticker == nil
   local witnessMissing = Lua53bPatchMode and result.tokencommit == nil
+  local streamsMissing = result.transferstreamrevision == nil
   local balancesChanged = next(ChangedBalances) ~= nil
   if Lua53bPatchMode and balancesChanged then
     TokenRevision = int(TokenRevision, 0) + 1
   end
   local checkpoint = Lua53bPatchMode
     and (initial or witnessMissing or ForceTokenCheckpoint)
-  local supplyChanged = beforeTotal ~= int(TotalSupply, 0)
+  -- Genesis runs before the handler; it is the only thing that moves the supply.
+  local supplyChanged = beforeTotal ~= int(TotalSupply, 0) or result.totalsupply == nil
   local transferChanged = beforeTransferSeq ~= int(TransferSeq, 0)
   if not Lua53bPatchMode or initial then
     result.tokeninfo = encode(infoView())
@@ -529,12 +661,9 @@ function compute(base, req, opts)
   if not Lua53bPatchMode or initial or transferChanged then
     result.transferseq = asString(TransferSeq)
   end
-  -- Only a faucet payout moves either of these, so a token that is being
-  -- traded rather than tapped never rewrites the allowance map.
-  local faucetChanged = beforeFaucetCalls ~= int(FaucetCalls, 0)
-  if not Lua53bPatchMode or initial or faucetChanged then
-    result.faucetcalls = asString(FaucetCalls)
-    result.faucetallowance = encode(faucetView())
+  if initial or streamsMissing or beforeStreamRevision ~= int(TransferStreamRevision, 0) then
+    result.transferstreamrevision = asString(TransferStreamRevision)
+    result.transferstreams = encode(streamsView())
   end
   if Lua53bPatchMode
      and (initial or witnessMissing or balancesChanged or ForceTokenCheckpoint) then
@@ -543,8 +672,7 @@ function compute(base, req, opts)
       checkpointRevision = int(TokenCheckpointRevision, 0),
     })
   end
-  -- Every balance this message moved, on both devices. The 5.3a branch used to
-  -- publish only the signer, so a transfer's RECIPIENT kept a stale key forever.
+  -- Every balance this message moved (genesis included), on both devices.
   for address in pairs(ChangedBalances) do
     if isAoAddress(address) then result["balance-" .. address] = asString(balanceOf(address)) end
   end
@@ -554,16 +682,8 @@ function compute(base, req, opts)
       result["balance-" .. who] = asString(balanceOf(who))
     end
   end
-  -- Compact the heap before the node photographs it. See the long note at the
-  -- end of `compute` in game.lua: HyperBEAM snapshots this process by
-  -- term_to_binary-ing the WHOLE Luerl table store, Luerl never collects on its
-  -- own, and `collectgarbage("step")` is a no-op on this runtime -- so without
-  -- this line every transient table from every message since spawn is still in
-  -- the heap when the node writes the checkpoint.
-  --
-  -- A full `collect`, as a bare statement. NOT through `pcall`, and not from
-  -- inside a pcall frame: a collect renumbers the table store and Luerl's pcall
-  -- restores stale indices into it, which kills the VM.
+  -- Compact the heap before the node photographs it (see game.lua's compute):
+  -- a full `collect`, as a bare statement, never inside a pcall frame.
   collectgarbage("collect")
 
   return result

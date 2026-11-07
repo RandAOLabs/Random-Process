@@ -101,8 +101,10 @@ function crack(xHex, t, negate = false) {
 const T = 1024, T2 = 2048;
 const F = {
   owner: addr('owner'), sched: addr('scheduler'), stranger: addr('stranger'), token: addr('rng-token'),
-  game: addr('game'), beacon: addr('timelock-beacon'), unit: 1000000, T, T2, N: hex(N), g: hex(G),
+  game: addr('game'), beacon: addr('timelock-beacon'), dao: addr('rng-dao'), guardian: addr('guardian'),
+  successor: addr('successor'), predecessor: addr('predecessor'), unit: 1000000, T, T2, N: hex(N), g: hex(G),
   v: [addr('val-a'), addr('val-b'), addr('val-c')],
+  w: [addr('val-d'), addr('val-e'), addr('val-x'), addr('val-y')],
 };
 const H1 = crack(hex(G), T), H2 = crack(hex(G), T2);
 Object.assign(F, { h: H1.y, hProof: H1.proof, h2: H2.y, hProof2: H2.proof, badHProof: hex(big(H2.proof) + 1n) });
@@ -124,6 +126,8 @@ for (const n of ['r9a', 'r9b', 'r9c']) puzzle(n, F.h2);
 // The rejoin spiral (2026-11-06): void attempts c opens alone, then overlapping rounds c leaves mid-flight.
 for (const n of ['q1c', 'q2c', 'q3c', 'q4c', 'o1a', 'o1b', 'o1c', 'o2a', 'o2b', 'o2c', 'o3a', 'o3b',
   'o4a', 'o4b', 'o5a', 'o5b']) puzzle(n, F.h2);
+// v3: request-driven rounds served by c and d.
+for (const n of ['d1c', 'd1d', 'd2c', 'd2d']) puzzle(n, F.h2);
 answer('verify-reveal', { c: P.r1a.c, alpha: P.r1b.alpha, h: F.h }); // wrong secret
 // Round 2: c withholds, a stranger cracks it with N - y; round 3: a cracks c.
 F.crack2 = crack(P.r2c.c, T, big(P.r2c.y) === modPow(big(P.r2c.c), 1n << BigInt(T)));
@@ -139,7 +143,7 @@ F.value3 = value(3, ['r3a', 'r3b', 'r3c']);
 F.out1 = sha(`hyperbeam/rng/any-honest/v1/request|${F.value1}|${F.game}|req-1`);
 F.config = JSON.stringify({ self: F.beacon, token: F.token, unit: F.unit, T, h: F.h, hProof: F.hProof,
   commitWindowMs: 3000, revealWindowMs: 10000, abandonAfterMs: 60000, minCommits: 2, cadenceMs: 0, targetIntervalMs: 0, stake: 25000, slash: 1000,
-  rejoinBaseMs: 5000, rejoinCapMs: 20000,
+  rejoinBaseMs: 10000, rejoinCapMs: 40000, predecessor: addr('predecessor'),
   heartbeat: 1, roundPrice: 3, requestPrice: 4, subscriptionPrice: 1, subscriptionRounds: 1000, crackBounty: 10 });
 F.dev = dev;
 

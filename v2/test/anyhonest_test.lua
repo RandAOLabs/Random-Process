@@ -47,7 +47,7 @@ local function info() return json.decode(base.beaconinfo) end
 local function state() return json.decode(base.timelockstate) end
 local function params() return json.decode(base.beaconparams) end
 local function ready(v) return send(wallet(v, { Action = "Ready" })) end
-local function configure(d) return send(wallet(F.owner, { Action = "Configure", Data = type(d) == "string" and d or encode(d) })) end
+local function configure(d) return send(wallet(F.owner, { Action = "Gov.Configure", Data = type(d) == "string" and d or encode(d) })) end
 local function commit(v, r, name) return send(wallet(v, { Action = "Commit", Data = encode({ round = r, c = P[name].c }) })) end
 local function reveal(v, r, name, alpha) return send(wallet(v, { Action = "Reveal", Data = encode({ round = r, alpha = alpha or P[name].alpha }) })) end
 local function crack(v, r, target, y, proof)
@@ -59,7 +59,9 @@ local function tick(ms) return send(wallet(F.stranger, { Action = "Get-Info" }),
 function runTimelockTests()
   local U = F.unit
   local r, ob = configure(F.config)
-  r = send(wallet(F.stranger, { Action = "Configure", Data = F.config }))
+  local ack = ob["rng-successor-ack"]
+  check("genesis acks the predecessor", ack and ack.target == F.predecessor and ack.Action == "Successor-Ack")
+  r = send(wallet(F.stranger, { Action = "Gov.Configure", Data = F.config }))
   eq("configure owner-only", r.error, "Not authorised")
   eq("g is the device's generator", params().g, F.dev.generator.g)
   eq("N is the device's modulus", params().n, F.dev.generator.n)
@@ -68,7 +70,7 @@ function runTimelockTests()
 
   -- Configure: floors, h checked as a crack of g, token set once.
   TestHarness = false
-  eq("T below 2^20 refused", configure({ T = F.T, h = F.h, hProof = F.hProof }).error, "Bad-Parameter")
+  eq("T below 2^27 refused", configure({ T = F.T, h = F.h, hProof = F.hProof }).error, "Bad-Parameter")
   TestHarness = true
   eq("minCommits at least 2", configure({ minCommits = 1 }).error, "Bad-Parameter")
   eq("commit window at least 500", configure({ commitWindowMs = 400 }).error, "Bad-Parameter")
@@ -80,47 +82,43 @@ function runTimelockTests()
   eq("refused configure changes nothing", Timelock.params.T, F.T)
   eq("token set once", configure({ token = F.stranger }).error, "Token-Locked")
   eq("unit set once", configure({ unit = 1 }).error, "Token-Locked")
+  eq("self fixed after genesis", configure({ self = F.stranger }).error, "Token-Locked")
+  eq("predecessor fixed after genesis", configure({ predecessor = F.stranger }).error, "Token-Locked")
+  eq("predecessor published", info().predecessor, F.predecessor)
   check("same config again accepted", configure(F.config).ok == true)
 
   -- The target door: only messages signed for this beacon.
-  r = send(wallet(F.owner, { Action = "Configure", Data = encode(F.config), target = string.rep("o", 43) }))
+  r = send(wallet(F.owner, { Action = "Gov.Configure", Data = encode(F.config), target = string.rep("o", 43) }))
   eq("message for another process refused", r.error, "Refused: not signed for this process")
-  local loose = wallet(F.owner, { Action = "Configure", Data = encode(F.config) })
+  local loose = wallet(F.owner, { Action = "Gov.Configure", Data = encode(F.config) })
   loose.commitments.c.committed = { "data", "action" }
   r = send(loose)
   eq("signature not committing target refused", r.error, "Refused: the signature does not commit target")
-  r = send({ target = SELF, Action = "Configure", commitments = { c = { type = "hmac-sha256", committer = F.owner } } })
+  r = send({ target = SELF, Action = "Gov.Configure", commitments = { c = { type = "hmac-sha256", committer = F.owner } } })
   eq("unsigned refused", r.error, "Refused: not signed")
 
-  -- Successor: owner-only; published for validator devices to follow.
-  r = send(wallet(F.stranger, { Action = "Admin.Set-Successor", Data = encode({ successor = string.rep("s", 43) }) }))
-  eq("set successor owner-only", r.error, "Not authorised")
-  r = send(wallet(F.owner, { Action = "Admin.Set-Successor", Data = encode({ successor = "nope" }) }))
-  eq("bad successor refused", r.error, "Bad-Successor")
-  send(wallet(F.owner, { Action = "Admin.Set-Successor", Data = encode({ successor = string.rep("s", 43) }) }))
-  eq("successor published", info().successor, string.rep("s", 43))
-  send(wallet(F.owner, { Action = "Admin.Set-Successor", Data = encode({ successor = "" }) }))
-  eq("successor cleared", info().successor, "")
-  eq("predecessor refused unless an address", configure({ predecessor = "x" }).error, "Bad-Parameter")
-  configure({ predecessor = string.rep("p", 43) })
-  eq("predecessor published", info().predecessor, string.rep("p", 43))
-
-  r = send(wallet(F.stranger, { Action = "Admin.Add-Validator", Data = encode({ address = A }) }))
-  eq("add validator owner-only", r.error, "Not authorised")
+  -- The old owner levers are gone: validators join by bond, governance is Gov.*.
+  for _, action in ipairs({ "Admin.Add-Validator", "Admin.Reinstate", "Claim-Protocol", "Configure",
+                            "Admin.Set-Successor", "Admin.Move-Reserve", "Admin.Remove-Validator" }) do
+    eq(action .. " is gone", send(wallet(F.owner, { Action = action, Data = encode({ address = A }) })).error,
+      "unknown action '" .. action .. "'")
+  end
   r = request("early")
   eq("request needs minCommits active validators", r.error, "Too-Few-Validators")
-  -- Validators bond 25,000 RNG; an unbonded one is added suspended.
+  -- Joining is permissionless: a first bond below the stake goes back.
+  r, ob = send(delivery(F.token, { Action = "Credit-Notice", Sender = F.stranger, Quantity = tostring(24999 * U), ["X-Bond"] = "true", Reference = "t100" }))
+  check("bond below stake refunded, not registered", r.error == "Bond-Below-Stake" and ob["rng-refund"]
+    and ob["rng-refund"].Recipient == F.stranger and ob["rng-refund"].Quantity == string.format("%d", 24999 * U)
+    and Timelock.validators[F.stranger] == nil and Timelock.bonds[F.stranger] == nil, r.error)
+  eq("not a validator: ready refused", ready(F.stranger).error, "Not a validator")
+  -- Validators bond 25,000 RNG and are registered, not yet ready.
   for i, v in ipairs(F.v) do
     send(delivery(F.token, { Action = "Credit-Notice", Sender = F.owner, Quantity = tostring(25000 * U), ["X-For"] = v, ["X-Bond"] = "true", Reference = "t" .. i }))
-    send(wallet(F.owner, { Action = "Admin.Add-Validator", Data = encode({ address = v }) }))
   end
   eq("bond credited", Timelock.bonds[A], 25000)
+  check("bond registers the validator", Timelock.validators[A] and Timelock.validators[A].joinedAt > 0)
   check("bond is not a request balance", Timelock.balances[A] == nil)
   check("a new validator is not ready", Timelock.validators[A].ready == false and #Timelock.validators[A] == 0)
-  send(wallet(F.owner, { Action = "Admin.Add-Validator", Data = encode({ address = F.stranger }) }))
-  eq("ready needs the full stake", ready(F.stranger).error, "Stake-Too-Low")
-  send(wallet(F.owner, { Action = "Admin.Remove-Validator", Data = encode({ address = F.stranger }) }))
-  eq("not a validator: ready refused", ready(F.stranger).error, "Not a validator")
   for _, v in ipairs(F.v) do ready(v) end
   check("bonded validators say Ready", Timelock.validators[A].ready and Timelock.validators[B].ready and Timelock.validators[C].ready)
   eq("ready again is a no-op", ready(A).ready, true)
@@ -243,24 +241,26 @@ function runTimelockTests()
     and Timelock.validators[C].ready == false, r.error)
   local vc = info().validators[3]
   check("cooldown published in Info", vc.rejoinAt == Timelock.validators[C].rejoinAt and vc.suspendedAt == 2
-    and vc.strikes == 1 and vc.rejoinAt - vc.suspendedAtMs == 5000, encode(vc))
-  tick(5000)
+    and vc.strikes == 1 and vc.rejoinAt - vc.suspendedAtMs == 10000, encode(vc))
+  tick(10000)
   -- c pays for its mistakes out of what it earned before it gets work again.
   r = ready(C)
   check("ready refills the stake from earnings", r.ready == true and r.refilled == 25000 - 22980
     and Timelock.bonds[C] == 25000, r.error)
   eq("refill taken from earnings", Timelock.accruedAtoms[C], (5000 - 2020) * U)
 
-  -- Slashed and out, a validator cannot earn: it rejoins on its own bond while
-  -- that still covers rejoinBond (one slash), and only below that needs tokens.
+  -- Every rejoin needs the full stake: a slashed validator with nothing
+  -- earned tops its bond up (X-Bond) before Ready is accepted.
   local savedBond, savedEarned = Timelock.bonds[C], Timelock.accruedAtoms[C]
   Timelock.validators[C].ready, Timelock.accrued[C], Timelock.accruedAtoms[C] = false, 0, 0
-  Timelock.bonds[C] = 999
-  r = ready(C)
-  check("below rejoinBond with nothing earned: ready refused", r.error == "Stake-Too-Low" and Timelock.bonds[C] == 999, r.error)
   Timelock.bonds[C] = 24000
   r = ready(C)
-  check("a slashed validator rejoins on a bond that covers a slash", r.ready == true and r.refilled == 0 and Timelock.bonds[C] == 24000, r.error)
+  check("rejoin below the stake refused", r.error == "Stake-Too-Low" and Timelock.bonds[C] == 24000
+    and Timelock.validators[C].ready == false, r.error)
+  r = send(delivery(F.token, { Action = "Credit-Notice", Sender = C, Quantity = tostring(1000 * U), ["X-Bond"] = "true", Reference = "t101" }))
+  check("a registered validator tops up any amount", r.bond == 25000, r.error)
+  r = ready(C)
+  check("topped up to the stake: ready", r.ready == true and r.refilled == 0 and Timelock.bonds[C] == 25000, r.error)
   Timelock.bonds[C], Timelock.accruedAtoms[C] = savedBond, savedEarned
 
   -- Round 4: served by 3.
@@ -290,7 +290,7 @@ function runTimelockTests()
   check("missed commit in a round it was given: slashed",
     Timelock.bonds[C] == 24000 and Timelock.validators[C].lastFault.kind == "commit" and Timelock.validators[C].lastFault.round == 6)
   check("round 7 never given to c", Timelock.rounds["7"] and Timelock.rounds["7"].commits[C] == nil)
-  r = send(wallet(F.owner, { Action = "Admin.Remove-Validator", Data = encode({ address = C }) }))
+  r = send(wallet(F.owner, { Action = "Gov.Remove-Validator", Validator = C }))
   eq("removal refused while c has a commit in flight", r.error, "Validator-Busy")
   local treasuryBefore = Timelock.treasuryAtoms
   tick(3000)
@@ -336,7 +336,7 @@ function runTimelockTests()
     and not Timelock.validators[B].ready and not Timelock.validators[C].ready)
   Timelock.accruedAtoms[B], Timelock.accruedAtoms[C] = Timelock.accruedAtoms[B] + 1000 * U, Timelock.accruedAtoms[C] + 1000 * U
   eq("no Ready inside the cooldown", ready(B).error, "Cooling-Down")
-  tick(20000)
+  tick(40000)
   ready(B); ready(C)
   r = commit(A, 8, "r8a")
   eq("commitment from the void attempt refused", r.error, "Reused-Commitment")
@@ -381,10 +381,10 @@ function runTimelockTests()
   -- a signature; a string Tags doesn't crash; bare from-process is nobody.
   local process = base.process
   Owner, base.process = nil, {}
-  r = send({ Action = "Configure", Data = encode({ cadenceMs = 5 }) })
+  r = send({ Action = "Gov.Configure", Data = encode({ cadenceMs = 5 }) })
   eq("no owner: unsigned configure refused", r.error, "Not authorised")
   Owner, base.process = F.owner, process
-  r = send({ Tags = { Action = "Configure", Data = encode({ cadenceMs = 5 }),
+  r = send({ Tags = { Action = "Gov.Configure", Data = encode({ cadenceMs = 5 }),
     commitments = { o = { type = "rsa-pss-sha512", committer = F.owner } } } })
   check("commitments in Tags ignored", r.error == "Not authorised" and Timelock.params.cadenceMs == 0, r.error)
   r = send({ Action = "Get-Info", Tags = "x" })
@@ -401,9 +401,11 @@ function runTimelockTests()
   Timelock.foundationReserveAtoms = Timelock.foundationReserveAtoms + 1000 * U
   for _, v in ipairs({ A, B, C }) do Timelock.bonds[v] = 25000 end
   local function has(list, x) for _, y in ipairs(list or {}) do if y == x then return true end end return false end
-  tick(20000) -- ready for rejoinCapMs: strikes start over
+  tick(40000) -- ready for rejoinCapMs: strikes start over
   local s = math.tointeger(info().open.round)
   local fA, fB = Timelock.validators[A].faults, Timelock.validators[B].faults
+  -- Each rejoin needs the full stake back: a and b refill from earnings.
+  Timelock.accruedAtoms[A], Timelock.accruedAtoms[B] = 10000 * U, 10000 * U
   -- Two of three miss the commit (as on prod): void, quorum lost.
   for k, name in ipairs({ "q1c", "q2c", "q3c", "q4c" }) do
     -- Ready refills the stake from earnings, so losses count per incident.
@@ -412,7 +414,7 @@ function runTimelockTests()
     check("spiral " .. k .. ": c opens round " .. s .. " with all three", r.round == s and r.error == nil, r.error)
     tick(3000)
     eq("spiral " .. k .. ": void", info().open.phase, "collecting")
-    local want = math.min(5000 * 2 ^ (k - 1), 20000)
+    local want = math.min(10000 * 2 ^ (k - 1), 40000)
     for _, v in ipairs({ A, B }) do
       local x = Timelock.validators[v]
       check("spiral " .. k .. ": one slash per incident", x.faults == (v == A and fA or fB) + k
@@ -460,7 +462,9 @@ function runTimelockTests()
   tick(60000)
   check("held rounds abandoned", Timelock.opens[tostring(s)] == nil and Timelock.opens[tostring(s + 1)] == nil)
   eq("still nothing more slashed", Timelock.bonds[C], 22000)
-  check("c turns itself on again", ready(C).ready == true)
+  eq("rejoin needs the full stake back", ready(C).error, "Stake-Too-Low")
+  Timelock.accruedAtoms[C] = 3000 * U
+  check("c turns itself on again, refilled from earnings", ready(C).ready == true and Timelock.bonds[C] == 25000)
   for _, v in ipairs({ A, B, C }) do Timelock.bonds[v] = 25000 end
 
   -- Heartbeat on (the default), rounds run from the Foundation reserve. A
@@ -498,21 +502,9 @@ function runTimelockTests()
   r = send(delivery(F.game, { Action = "Subscribe", ["Subscription-Id"] = "late-feed", Rounds = "1" }))
   eq("subscription after reveal starts on the next open round", r.effectiveRound, open + 1)
 
-  r, ob = send(wallet(F.owner, { Action = "Admin.Remove-Validator", Data = encode({ address = B }) }))
-  check("removal refunds the bond", ob["rng-bond-refund"] and ob["rng-bond-refund"].Recipient == B and ob["rng-bond-refund"].Quantity == string.format("%d", 25000 * U))
-  -- Retiring: the unspent Foundation reserve goes to the successor, nowhere else.
-  r = send(wallet(F.owner, { Action = "Admin.Move-Reserve" }))
-  eq("reserve moves only to a successor", r.error, "No-Successor")
-  send(wallet(F.owner, { Action = "Admin.Set-Successor", Data = encode({ successor = string.rep("s", 43) }) }))
-  r = send(wallet(F.stranger, { Action = "Admin.Move-Reserve" }))
-  eq("move reserve owner-only", r.error, "Not authorised")
-  local reserve = Timelock.foundationReserveAtoms
-  r, ob = send(wallet(F.owner, { Action = "Admin.Move-Reserve" }))
-  local mv = ob["rng-reserve-move"]
-  check("reserve sent to the successor as its reserve", mv and mv.target == F.token and mv.Recipient == string.rep("s", 43)
-    and mv.Quantity == string.format("%d", reserve) and mv["X-Foundation"] == "true" and reserve > 0)
-  eq("reserve emptied", Timelock.foundationReserveAtoms, 0)
-  eq("nothing left to move", send(wallet(F.owner, { Action = "Admin.Move-Reserve" })).error, "Nothing-To-Move")
+  r, ob = send(wallet(F.owner, { Action = "Gov.Remove-Validator", Validator = B }))
+  check("removal refunds the full bond", ob["rng-bond-refund"] and ob["rng-bond-refund"].Recipient == B
+    and ob["rng-bond-refund"].Quantity == string.format("%d", 25000 * U) and Timelock.validators[B] == nil)
   -- The rhythm: round r is due every targetIntervalMs from the anchor. An early
   -- round waits for its slot; a late one opens as soon as cadenceMs allows.
   configure({ targetIntervalMs = 500, cadenceMs = 100, maxInFlight = 3, catchUpMs = 30000 })
@@ -528,6 +520,219 @@ function runTimelockTests()
   eq("no anchor yet: cadenceMs alone", info().nextRoundAt, anchor + 20100)
   eq("rhythm parameters checked", configure({ maxInFlight = 0 }).error, "Bad-Parameter")
   configure({ targetIntervalMs = 0, cadenceMs = 0 })
+
+  -- v3: permissionless join, the active set, reserve fallback, governance.
+  local D, E, X, Y = F.w[1], F.w[2], F.w[3], F.w[4]
+  tick(30000) -- past the rhythm test's lastOpenAt
+  local DAY = 86400000
+  local seqs = {}
+  local function seqOf(ob)
+    for _, m in pairs(ob or {}) do
+      if m.Action == "Transfer" then seqs[#seqs + 1] = tonumber(m["X-Transfer-Sequence"]) end
+    end
+  end
+  local refN = 200
+  local function bond(v, rngAmount)
+    refN = refN + 1
+    local res, out = send(delivery(F.token, { Action = "Credit-Notice", Sender = v, Quantity = tostring(rngAmount * U),
+      ["X-Bond"] = "true", Reference = "t" .. refN }))
+    seqOf(out)
+    return res, out
+  end
+  local function dao(fields) local res, out = send(delivery(F.dao, fields)); seqOf(out); return res, out end
+  local function apply(id, advance) local res, out = send(wallet(F.stranger, { Action = "Gov.Apply", ["Gov-Id"] = tostring(id) }), advance); seqOf(out); return res, out end
+  local function rank() local out = {} for _, v in ipairs(json.decode(base.beaconvalidators)) do out[v.address] = v end return out end
+
+  -- Join by bond; rank by capped bond, then seniority (D8).
+  bond(D, 100000); bond(E, 25000); bond(X, 25000)
+  r = bond(X, 975000)
+  eq("a registered validator tops up past the cap", Timelock.bonds[X], 1000000)
+  for _, v in ipairs({ D, E, X }) do ready(v) end
+  eq("ready needs the full stake: all four ready", info().health.eligible, 4)
+  configure({ maxActive = 2 })
+  local act = rank()
+  check("bond capped at 4 x stake: a bigger, newer bond cannot outrank an incumbent at the cap",
+    act[D].rank == 1 and act[X].rank == 2 and act[D].active and act[X].active, encode(act[D]))
+  check("equal capped bond: the earlier joiner ranks first", act[C].rank == 3 and act[E].rank == 4
+    and not act[C].active and not act[E].active)
+  eq("maxActive bounds the active set", info().health.active, 2)
+  Timelock.bonds[X] = 25000
+  tick()
+  act = rank()
+  check("ranking follows the bond: c (older) ahead of x at equal bond", act[C].rank == 2 and act[C].active and not act[X].active)
+  configure({ maxActive = 2, maxValidators = 4 })
+  r, ob = bond(Y, 25000)
+  check("registry full: a new bond is refunded", r.error == "Registry-Full" and ob["rng-refund"]
+    and ob["rng-refund"].Quantity == string.format("%d", 25000 * U) and Timelock.validators[Y] == nil, r.error)
+  configure({ maxValidators = 256 })
+  r = bond(Y, 25000)
+  check("room again: y registered", Timelock.validators[Y] ~= nil and r.bond == 25000, r.error)
+  eq("registry published whole in beaconvalidators", #json.decode(base.beaconvalidators), 5)
+  check("beaconinfo lists earnedAtoms per validator", info().validators[1].earnedAtoms ~= nil)
+
+  -- An empty reserve: heartbeat rounds stop, request rounds go on.
+  Timelock.foundationReserveAtoms = 0
+  tick()
+  local rd = math.tointeger(info().open.round)
+  eq("reserve empty: request-driven", info().mode, "request-driven")
+  eq("reserve empty: health degraded", info().health.status, "degraded")
+  check("beaconinfo.at is the slot's time", info().at == clock)
+  eq("reserve empty, nothing pending: no round", commit(D, rd, "d1d").error, "Nothing-Pending")
+  -- A request on a round nobody opens is refunded after abandonAfterMs.
+  local bal0 = Timelock.balances[F.game]
+  r = request("stuck-1")
+  eq("stuck request bound", r.round, rd)
+  tick(30000)
+  eq("not refunded before abandonAfterMs", Timelock.balances[F.game], bal0 - 4)
+  r, ob = tick(30000)
+  check("stuck collecting round refunded and the process told", Timelock.balances[F.game] == bal0
+    and Timelock.pending[tostring(rd)] == nil and ob["rng-abandoned-" .. rd .. "-1"]
+    and json.decode(ob["rng-abandoned-" .. rd .. "-1"].Data).requestId == "stuck-1")
+  eq("the round keeps its number", math.tointeger(info().open.round), rd)
+  -- Pay and request in one message (a wallet: its value is in the round record).
+  r, ob = send(delivery(F.token, { Action = "Credit-Notice", Sender = F.stranger, Quantity = tostring(4 * U),
+    ["X-Request-Id"] = "pay-1", Reference = "t300" }))
+  check("pay-and-request: credited and bound in one slot", r.credited == 4 and r.round == rd and r.requestId == "pay-1"
+    and r.balance == 0 and Timelock.pending[tostring(rd)][1].requester == F.stranger, encode(r))
+  r = request("rd-1")
+  r = commit(D, rd, "d1d")
+  check("reserve empty with a request: the round opens unsponsored", r.error == nil and Timelock.opens[tostring(rd)].sponsorAtoms == nil, r.error)
+  commit(C, rd, "d1c")
+  reveal(D, rd, "d1d")
+  r, ob = reveal(C, rd, "d1c")
+  local rec = json.decode(base["beaconround-" .. (rd % 8)])
+  local pushed = ob["rng-result-1"] and json.decode(ob["rng-result-1"].Data).results[1].value
+  check("round record lists its requests with their values", rec.round == rd and #rec.requests == 2 and rec.served == 2
+    and rec.requests[1].requester == F.stranger and rec.requests[1].requestId == "pay-1" and #rec.requests[1].value == 64
+    and rec.requests[2].value == pushed, encode(rec.requests))
+  -- Every eligible validator paused: halted.
+  for _, v in ipairs({ C, D, E, X, Y }) do send(wallet(v, { Action = "Pause" })) end
+  eq("no eligible validators: halted", info().health.status, "halted")
+  for _, v in ipairs({ C, D, E, X, Y }) do ready(v) end
+  Timelock.foundationReserveAtoms = 1000 * U
+  tick()
+  eq("validators back, reserve funded: ok", info().health.status, "ok")
+  eq("health since the last change", info().health.since, clock)
+
+  -- Handover: the DAO governs, the deployer is out for good.
+  r = send(wallet(F.stranger, { Action = "Gov.Handover", Governor = F.dao }))
+  eq("handover is the deployer's", r.error, "Not authorised")
+  eq("handover needs a governor", send(wallet(F.owner, { Action = "Gov.Handover", Governor = "x" })).error, "Bad-Governor")
+  r = send(wallet(F.owner, { Action = "Gov.Handover", Governor = F.dao, Guardian = F.guardian }))
+  check("handover sets governor and guardian", r.governor == F.dao and info().governor == F.dao
+    and info().guardianUntil == clock + 90 * DAY, r.error)
+  eq("deployer locked out after handover", configure({ cadenceMs = 9 }).error, "Not authorised")
+  eq("handover only once", send(wallet(F.owner, { Action = "Gov.Handover", Governor = F.stranger })).error, "Not authorised")
+  r = dao({ Action = "Gov.Configure", ["Abandon-After-Ms"] = "70000", commit_window_ms = "4000", catchupms = "1000" })
+  check("DAO-attested Configure accepted, tag names normalized", r.ok == true and Timelock.params.abandonAfterMs == 70000
+    and Timelock.params.commitWindowMs == 4000 and Timelock.params.catchUpMs == 1000, r.error)
+  r = dao({ Action = "Gov.Configure", Data = encode({ cadenceMs = 7 }) })
+  check("the DAO's Data is not read", r.ok == true and Timelock.params.cadenceMs == 0, r.error)
+  eq("the DAO's wallet-signed message is not the DAO",
+    send(wallet(F.dao, { Action = "Gov.Configure", ["Abandon-After-Ms"] = "90000" })).error, "Not authorised")
+  TestHarness = false
+  local forged = wallet(F.stranger, { Action = "Gov.Configure", ["Abandon-After-Ms"] = "90000" })
+  forged["from-process"] = F.dao
+  eq("forged from-process (not our scheduler) refused", send(forged).error, "Not authorised")
+  local mixed = delivery(F.dao, { Action = "Gov.Configure", ["Abandon-After-Ms"] = "90000" })
+  mixed.commitments.x = { type = "rsa-pss-sha256", committer = F.stranger, committed = { "target", "data", "action" } }
+  eq("dual signers refused", send(mixed).error, "Not authorised")
+  eq("the scheduler without from-process is nobody", send(wallet(F.sched, { Action = "Withdraw" })).error, "Unsigned")
+  eq("T below 2^27 refused on a node", dao({ Action = "Gov.Configure", T = "134217727" }).error, "Bad-Parameter")
+  TestHarness = true
+  eq("refused messages changed nothing", Timelock.params.abandonAfterMs, 70000)
+  dao({ Action = "Gov.Configure", ["Abandon-After-Ms"] = "60000", ["Commit-Window-Ms"] = "3000", ["Catch-Up-Ms"] = "30000" })
+  for i, bad in ipairs({
+    { ["Reveal-Window-Ms"] = "9999" }, { ["Reveal-Window-Ms"] = "600001", ["Abandon-After-Ms"] = "700000", ["Rejoin-Base-Ms"] = "700000", ["Rejoin-Cap-Ms"] = "700000" },
+    { ["Commit-Window-Ms"] = "499" }, { ["Commit-Window-Ms"] = "10001" }, { ["Abandon-After-Ms"] = "9999" },
+    { Slash = "0" }, { Slash = "25001" }, { Stake = "10000001" },
+    { ["Rejoin-Base-Ms"] = "9999" }, { ["Rejoin-Cap-Ms"] = "2592000001" }, { ["Rejoin-Cap-Ms"] = "9999" },
+    { ["Min-Commits"] = "1" }, { ["Min-Commits"] = "3", ["Max-Active"] = "2" }, { ["Max-Active"] = "129" },
+    { ["Max-Validators"] = "1025" }, { ["Max-Active"] = "64", ["Max-Validators"] = "63" },
+    { Heartbeat = "2" }, { ["Round-Price"] = "0" }, { ["Request-Price"] = "0" }, { ["Subscription-Price"] = "0" },
+    { ["Crack-Bounty"] = "0" }, { T = "4294967297" }, { ["Request-Price"] = "1.5" }, { ["Fair-Window-Ms"] = "0" } }) do
+    bad.Action = "Gov.Configure"
+    eq("bound " .. i .. " rejected", dao(bad).error, "Bad-Parameter")
+  end
+  eq("token fixed after genesis", dao({ Action = "Gov.Configure", Token = F.stranger }).error, "Token-Locked")
+  eq("predecessor fixed after genesis", dao({ Action = "Gov.Configure", Predecessor = F.stranger }).error, "Token-Locked")
+  check("bounds rejected whole", Timelock.params.revealWindowMs == 10000 and Timelock.params.slash == 1000)
+
+  -- The guardian may pause, never resume, and only for 90 days.
+  r = send(wallet(F.guardian, { Action = "Gov.Pause" }))
+  check("guardian pauses: heartbeat off", r.paused == true and Timelock.params.heartbeat == 0 and info().mode == "paused", r.error)
+  eq("paused: no new requests", request("paused-1").error, "Paused")
+  local sb = int(Timelock.balances[F.stranger], 0)
+  r = send(delivery(F.token, { Action = "Credit-Notice", Sender = F.stranger, Quantity = tostring(4 * U),
+    ["X-Request-Id"] = "pay-2", Reference = "t301" }))
+  check("pay-and-request refused: the credit stays", r.error == "Paused" and Timelock.balances[F.stranger] == sb + 4, r.error)
+  eq("the guardian cannot resume", send(wallet(F.guardian, { Action = "Gov.Resume" })).error, "Not authorised")
+  eq("a stranger cannot pause", send(wallet(F.stranger, { Action = "Gov.Pause" })).error, "Not authorised")
+  r = dao({ Action = "Gov.Resume" })
+  check("the DAO resumes, heartbeat restored", r.paused == false and Timelock.params.heartbeat == 1 and not Timelock.paused, r.error)
+
+  -- Timelocked actions: queued, applied by anyone once due, never before.
+  eq("successor set only by governance", send(wallet(F.stranger, { Action = "Gov.Set-Successor", Successor = F.successor })).error, "Not authorised")
+  eq("bad successor refused", dao({ Action = "Gov.Set-Successor", Successor = "nope" }).error, "Bad-Successor")
+  local qs = dao({ Action = "Gov.Set-Successor", Successor = F.successor }).queued
+  local qm = dao({ Action = "Gov.Move-Reserve" }).queued
+  local qc = dao({ Action = "Gov.Move-Reserve" }).queued
+  check("queued for 7 days", qs and qs.at == clock - 200 + 7 * DAY and qm.kind == "Move-Reserve")
+  eq("queue published", #info().govQueue, 3)
+  eq("cancel is governance only", send(wallet(F.stranger, { Action = "Gov.Cancel", ["Gov-Id"] = tostring(qc.id) })).error, "Not authorised")
+  dao({ Action = "Gov.Cancel", ["Gov-Id"] = tostring(qc.id) })
+  eq("timelock: no apply before at", apply(qs.id, qs.at - clock - 1).error, "Too-Early")
+  eq("timelock: still no successor", info().successor, "")
+  eq("cancelled action cannot apply", apply(qc.id, 7 * DAY).error, "Unknown-Gov-Id")
+  r = apply(qm.id)
+  eq("move reserve needs a successor", r.error, "No-Successor")
+  -- The successor's genesis ack arrives before it is queued here: refused, resent later.
+  eq("ack from an unknown process refused", send(delivery(F.stranger, { Action = "Successor-Ack" })).error, "Not-A-Successor")
+  eq("ack must be attested", send(wallet(F.successor, { Action = "Successor-Ack" })).error, "Process-Required")
+  r = apply(qs.id)
+  check("set successor applied", r.successor == F.successor and info().successor == F.successor and info().successorAck == false, r.error)
+  eq("move reserve needs the successor's ack", apply(qm.id).error, "Successor-Not-Acked")
+  r = send(delivery(F.successor, { Action = "Successor-Ack" }))
+  check("successor ack recorded", r.acked == F.successor and info().successorAck == true, r.error)
+  local reserve = Timelock.foundationReserveAtoms
+  r, ob = apply(qm.id)
+  local mv = ob["rng-reserve-move"]
+  check("reserve sent to the successor as its reserve", mv and mv.target == F.token and mv.Recipient == F.successor
+    and mv.Quantity == string.format("%d", reserve) and mv["X-Foundation"] == "true" and reserve > 0)
+  eq("reserve emptied", Timelock.foundationReserveAtoms, 0)
+  eq("applied once", apply(qm.id).error, "Unknown-Gov-Id")
+  r, ob = send(wallet(F.stranger, { Action = "Resend-Successor-Ack" }))
+  check("anyone resends our ack to the predecessor", ob["rng-successor-ack"] and ob["rng-successor-ack"].target == F.predecessor)
+
+  -- Treasury: at most a tenth per action, after 48 h.
+  local t0 = Timelock.treasuryAtoms
+  eq("treasury spend over 10 % refused", dao({ Action = "Gov.Treasury-Spend", Recipient = F.stranger,
+    Quantity = string.format("%d", t0 // 10 + 1) }).error, "Over-Treasury-Cap")
+  local qt = dao({ Action = "Gov.Treasury-Spend", Recipient = F.stranger, Quantity = string.format("%d", t0 // 10) }).queued
+  check("treasury spend queued 48 h", qt and qt.at == clock + 2 * DAY)
+  eq("no spend before 48 h", apply(qt.id, 2 * DAY - 1000).error, "Too-Early")
+  r, ob = apply(qt.id, 1000)
+  check("treasury spend paid", ob["rng-treasury-spend"] and ob["rng-treasury-spend"].Recipient == F.stranger
+    and Timelock.treasuryAtoms == t0 - t0 // 10, r.error)
+  r = dao({ Action = "Gov.Fund-Reserve", Quantity = string.format("%d", 100 * U) })
+  check("treasury funds the reserve", Timelock.foundationReserveAtoms == 100 * U and Timelock.treasuryAtoms == t0 - t0 // 10 - 100 * U, r.error)
+  eq("cannot fund past the treasury", dao({ Action = "Gov.Fund-Reserve", Quantity = string.format("%d", t0 * 10) }).error, "Insufficient-Treasury")
+
+  -- Removal by the DAO always refunds the whole bond.
+  r, ob = dao({ Action = "Gov.Remove-Validator", Validator = E })
+  check("DAO removal refunds the full bond", ob["rng-bond-refund"] and ob["rng-bond-refund"].Recipient == E
+    and ob["rng-bond-refund"].Quantity == string.format("%d", 25000 * U) and Timelock.validators[E] == nil, r.error)
+
+  -- Guardian expiry, then cleared.
+  tick(90 * DAY)
+  eq("guardian expired: pause refused", send(wallet(F.guardian, { Action = "Gov.Pause" })).error, "Not authorised")
+  dao({ Action = "Gov.Clear-Guardian" })
+  eq("guardian cleared", info().guardian, "")
+
+  -- Every Transfer carries a strictly increasing X-Transfer-Sequence.
+  local increasing = #seqs >= 4
+  for k = 2, #seqs do if not (seqs[k] > seqs[k - 1]) then increasing = false end end
+  check("X-Transfer-Sequence strictly increasing", increasing and seqs[#seqs] == Timelock.transferSeq, table.concat(seqs, ","))
 
   check("mock knew every device call", #misses == 0, table.concat(misses, ", "))
 

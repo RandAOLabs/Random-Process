@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import { HealthBanner } from "../components/health-banner";
 
 export const metadata: Metadata = {
   title: "RNG Labs — The randomness library for blockchains",
@@ -18,7 +19,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body>{children}<HealthBanner /></body>
     </html>
   );
 }
