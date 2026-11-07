@@ -64,7 +64,6 @@ local TIMELOCKED_PARAMS = { stake = true, slash = true, commitWindowMs = true, r
 -- abandoned (requests refunded) even while the Treasury could pay a bounty:
 -- nothing stays stuck, and the withholder was slashed at the deadline.
 local ABANDON_CAP_MS = 7 * DAY_MS
-local GUARDIAN_MS = 90 * DAY_MS -- the guardian may pause (and cancel queued actions) this long after Gov.Handover
 local IDLE_EVICT_MS = 7 * DAY_MS -- a registered validator that never sent Ready may be evicted after this
 local IDLE_FLOOR_MS = 3600000    -- ... and only after this, by a new bond into a full registry
 local MAX_SUBSCRIPTIONS = 16     -- live subscriptions per subscriber
@@ -109,7 +108,7 @@ local function freshState()
     creditFloor = 0,       -- every reference seq at or below this counts as credited
     -- Governance. Before Gov.Handover the deployer wallet (Owner) governs;
     -- after it only `governor`, the DAO process, as attested by our scheduler.
-    governor = "", guardian = "", guardianUntil = 0,
+    governor = "",
     -- queue: "id" -> { id, kind, at, queuedAt, ... }; window: the treasury outflow cap's
     -- { start, base, used } (atoms); executed: "governor|X-Dao-Proposal" -> true.
     gov = { queue = {}, nextId = 1, executed = {} },
@@ -1397,11 +1396,6 @@ local function reserveSpend(atoms, now)
   return w
 end
 
-local function isGuardian(from, now)
-  local guardian = Timelock.guardian or ""
-  return guardian ~= "" and from == guardian and now < int(Timelock.guardianUntil, 0)
-end
-
 --- Checked whole before any of it applies. A new T comes with h = g^(2^T)
 --- and hProof, checked as a crack of g. The first Configure that names the
 --- token is genesis: token, unit, self and predecessor are fixed from then on.
@@ -1478,16 +1472,14 @@ end
 H["Gov.Handover"] = function(base, msg, from, now)
   if not isDeployer(msg) then return fail(base, "Not authorised") end
   local arg = govArgs(msg)
-  local governor, guardian = arg("governor"), arg("guardian") or ""
+  local governor = arg("governor")
   if not isAoAddress(governor) or governor == Owner or governor == Timelock.self or governor == Timelock.token then
     return fail(base, "Bad-Governor")
   end
-  if guardian ~= "" and not isAoAddress(guardian) then return fail(base, "Bad-Guardian") end
   pruneExpired(now)
   if next(Timelock.gov.queue) ~= nil then return fail(base, "Queue-Not-Empty") end
-  Timelock.governor, Timelock.guardian = governor, guardian
-  Timelock.guardianUntil = guardian ~= "" and now + GUARDIAN_MS or 0
-  return reply(base, { governor = governor, guardian = guardian, guardianUntil = Timelock.guardianUntil })
+  Timelock.governor = governor
+  return reply(base, { governor = governor })
 end
 
 --- The beacon that replaces this one ("" clears it). Validator devices move
@@ -1558,10 +1550,10 @@ H["Gov.Remove-Validator"] = function(base, msg, from)
     { ["rng-bond-refund"] = transferOut(a, bond, "RNG validator bond") })
 end
 
---- The brake: no heartbeat, no new requests or subscriptions. The guardian
---- may pull it until guardianUntil; only governance releases it.
-H["Gov.Pause"] = function(base, msg, from, now)
-  if not isGuardian(from, now) and not govOnly(msg, from) then return fail(base, "Not authorised") end
+--- The brake: no heartbeat, no new requests or subscriptions. Governance
+--- only, like every other Gov.* action: there is no guardian.
+H["Gov.Pause"] = function(base, msg, from)
+  if not govOnly(msg, from) then return fail(base, "Not authorised") end
   if not Timelock.paused then
     Timelock.paused, Timelock.pausedHeartbeat = true, int(Timelock.params.heartbeat, 1)
     Timelock.params.heartbeat = 0
@@ -1577,20 +1569,14 @@ H["Gov.Resume"] = function(base, msg, from)
   return reply(base, { paused = false, heartbeat = Timelock.params.heartbeat })
 end
 
-H["Gov.Clear-Guardian"] = function(base, msg, from)
+--- Governance only: drop a queued action. Every delay is longer than the
+--- DAO's voting period, so a cancelling proposal can pass before it lands.
+H["Gov.Cancel"] = function(base, msg, from)
   if not govOnly(msg, from) then return fail(base, "Not authorised") end
-  Timelock.guardian, Timelock.guardianUntil = "", 0
-  return reply(base, { guardian = "" })
-end
-
---- Governance, or the guardian until guardianUntil: drop a queued action.
-H["Gov.Cancel"] = function(base, msg, from, now)
-  local byGuardian = isGuardian(from, now)
-  if not byGuardian and not govOnly(msg, from) then return fail(base, "Not authorised") end
   local e = Timelock.gov.queue[tostring(int(govArgs(msg)("govId"), -1))]
   if not e then return fail(base, "Unknown-Gov-Id") end
   drop(e)
-  return reply(base, { cancelled = e.id, by = byGuardian and "guardian" or "governance" })
+  return reply(base, { cancelled = e.id })
 end
 
 --- Anyone: runs a queued action once its delay has passed. One that can never
@@ -1826,8 +1812,7 @@ local function info(now, healthNow)
     successor = Timelock.successor or "", predecessor = Timelock.predecessor or "",
     successorAck = (Timelock.successor or "") ~= ""
       and int(Timelock.successorAcks[Timelock.successor], -1) >= int(Timelock.successorSince, 0),
-    governor = Timelock.governor or "", guardian = Timelock.guardian or "",
-    guardianUntil = int(Timelock.guardianUntil, 0), paused = Timelock.paused == true,
+    governor = Timelock.governor or "", paused = Timelock.paused == true,
     govQueue = govQueue, transferSeq = int(Timelock.transferSeq, 0),
     -- The treasury outflow cap: queued spends and reserve funding since `start`
     -- (`used`) stay within a tenth of the treasury then (`base`), in atoms.

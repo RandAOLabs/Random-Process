@@ -1,6 +1,0 @@
-{
-  "title": "End the guardian early",
-  "body": "Gov.Clear-Guardian removes the guardian pause power before guardianUntil.",
-  "execProcess": "$BEACON",
-  "execTags": { "Action": "Gov.Clear-Guardian" }
-}

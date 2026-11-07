@@ -16,8 +16,16 @@
 //   bond-for <rng> <address...|validators.json>  Transfer X-Bond X-For each validator
 //   gov <Gov.Action> [Tag=Value ...]        any deployer-path Gov.* (Pause, Resume, Apply, Set-Successor, ...)
 //   resend-ack                              Resend-Successor-Ack to the predecessor
-//   handover <guardian|--no-guardian> --confirm   Gov.Handover to the recorded DAO (one way; refused unless
-//                                           the beacon's queue is empty and the DAO is a live stake-dao/1)
+//   handover --confirm                      Gov.Handover to the recorded DAO (one way; refused unless the
+//                                           beacon's queue is empty and the DAO is a live stake-dao/1).
+//                                           There is no guardian: after it only DAO proposals act.
+// Fast tier (on-demand 2-of-3 threshold BLS, beacon/beacon.lua; not a heartbeat):
+//   spawn-fast                              the fast-tier process (lua@5.3a)
+//   genesis-configure-fast [committee.json] deployer Gov.Configure: v3 token, the existing committee
+//                                           (deploy/committee.json), fees; locks token/unit/self
+//   fund-fast <rng> [for]                   a fast-tier balance (X-For)
+//   gov-fast <Gov.Action> [Tag=Value ...]   any deployer-path Gov.* on the fast tier
+//   handover-fast --confirm                 Gov.Handover of the fast tier to the recorded DAO (one way)
 //   dao-stake <rng> | dao-propose <template.json> [KEY=VALUE ...] | dao-vote <id> <Yes|No|NoWithVeto|Abstain>
 //   status | verify                         read and check token, DAO, beacon, fair (verify exits 1 on a failure)
 //   test-subscription                       authenticated-push acceptance test against the v3 beacon
@@ -29,15 +37,15 @@
 //   legacy-bond [units] [address ...]       old TEST-RNG X-Bond on the v2 beacon
 //   legacy-set-successor <old> <new>        Admin.Set-Successor (v2 wallet path)
 //   legacy-move-reserve <old>               Admin.Move-Reserve; refused across tokens
-//   legacy-request [id] | legacy-verify [round] | legacy-beacon-info   threshold BLS beacon
+//   legacy-request [id] | legacy-verify [round] | legacy-beacon-info   the OLD threshold process (state.beacon
+//                                           in native-testnet.json, on the old TEST-RNG); retired at launch
 //
 // --dry-run (or RNG_DRY_RUN=1) prints every spawn and message as one JSON line
 // and sends nothing; it never writes state. RNG_DEPLOYER stands in for the
 // wallet's address, RNG_SCHEDULER for the node's.
 //
 // Env: HB_NODE, HB_WALLET (deployer), RNG_STATE, RNG_LEGACY_STATE, RNG_SCHEDULER
-//      (pin; must equal the node's), PARALITH_MONO (for spawn-dao), RNG_GUARDIAN (plan; required,
-//      never defaulted to the deployer).
+//      (pin; must equal the node's), PARALITH_MONO (for spawn-dao).
 import fs from 'node:fs';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
@@ -196,14 +204,19 @@ const GOV_TAGS = {
   'Gov.Configure': null, // checked against CONFIGURE_TAGS
   'Gov.Set-Successor': ['Successor'], 'Gov.Move-Reserve': ['Successor'], 'Gov.Treasury-Spend': ['Recipient', 'Quantity'],
   'Gov.Fund-Reserve': ['Quantity'], 'Gov.Remove-Validator': ['Validator'], 'Gov.Pause': [], 'Gov.Resume': [],
-  'Gov.Clear-Guardian': [], 'Gov.Cancel': ['Gov-Id'], 'Gov.Apply': ['Gov-Id'],
+  'Gov.Cancel': ['Gov-Id'], 'Gov.Apply': ['Gov-Id'],
+};
+// The fast tier's Gov.* (beacon/beacon.lua): fees at once, committee timelocked.
+const FAST_GOV_TAGS = {
+  'Gov.Configure': ['Signer-Fee', 'Protocol-Fee', 'Committee', 'Share-Public-Keys', 'Group-Key', 'Threshold', 'Verification'],
+  'Gov.Claim-Protocol': ['Recipient'], 'Gov.Pause': [], 'Gov.Resume': [], 'Gov.Cancel': ['Gov-Id'], 'Gov.Apply': ['Gov-Id'],
 };
 const CONFIGURE_TAGS = ['T', 'H', 'H-Proof', 'Commit-Window-Ms', 'Reveal-Window-Ms', 'Abandon-After-Ms', 'Min-Commits',
   'Max-Active', 'Max-Validators', 'Cadence-Ms', 'Target-Interval-Ms', 'Max-In-Flight', 'Catch-Up-Ms', 'Stake', 'Slash',
   'Rejoin-Base-Ms', 'Rejoin-Cap-Ms', 'Heartbeat', 'Round-Price', 'Request-Price', 'Subscription-Price',
   'Subscription-Rounds', 'Crack-Bounty', 'Fair-Window-Ms'].map(word);
 
-/** Fill a proposal template's $BEACON/$DAO/$TOKEN/$FAIR/$KEY placeholders. */
+/** Fill a proposal template's $BEACON/$FAST/$DAO/$TOKEN/$FAIR/$KEY placeholders. */
 export function fillTemplate(template, vars) {
   const sub = (v) => String(v).replace(/\$([A-Z_]+)/g, (m, k) => (vars[k] !== undefined ? String(vars[k]) : m));
   return {
@@ -213,8 +226,9 @@ export function fillTemplate(template, vars) {
   };
 }
 
-/** Errors a (filled) proposal would hit at the DAO's Propose, or at the beacon. */
-export function proposalErrors(p, { token } = {}) {
+/** Errors a (filled) proposal would hit at the DAO's Propose, or at the beacon
+ * (or the fast tier, when `fast` names it and the proposal targets it). */
+export function proposalErrors(p, { token, fast } = {}) {
   const errs = [];
   if (typeof p.title !== 'string' || !p.title || p.title.length > 120) errs.push('title must be 1-120 characters');
   if (typeof p.body !== 'string' || p.body.length > 4000) errs.push('body must be at most 4000 characters');
@@ -235,9 +249,11 @@ export function proposalErrors(p, { token } = {}) {
     if (typeof v !== 'string' || !v || v.length > 512 || /[\x00-\x1f\x7f]/.test(v)) errs.push(`tag ${name}: non-empty string <= 512, no control characters`);
   }
   const action = tags.Action;
-  if (!(action in GOV_TAGS)) errs.push(`Action ${action} is not a beacon Gov.* action the DAO may send`);
+  const toFast = Boolean(fast) && p.execProcess === fast;
+  const table = toFast ? FAST_GOV_TAGS : GOV_TAGS;
+  if (!(action in table)) errs.push(`Action ${action} is not a ${toFast ? 'fast-tier' : 'beacon'} Gov.* action the DAO may send`);
   else {
-    const allowed = new Set(['action', ...(GOV_TAGS[action] || CONFIGURE_TAGS).map(word)]);
+    const allowed = new Set(['action', ...(table[action] || CONFIGURE_TAGS).map(word)]);
     for (const name of names) if (!allowed.has(word(name))) errs.push(`${action} does not read tag ${name}`);
     if (action === 'Gov.Configure' && names.length > 15) errs.push('Gov.Configure takes at most 14 parameters');
   }
@@ -273,17 +289,36 @@ export function handoverErrors({ state, beaconinfo, daoinfo, me }) {
   return errs;
 }
 
-/** Why a transfer to the beacon would strand (null: go): before genesis the
- * beacon refuses every Credit-Notice. */
-export function fundError({ state, beaconinfo }) {
+/** Why a transfer to the beacon (or the fast tier: role 'fast') would strand
+ * (null: go): before genesis it refuses every Credit-Notice. */
+export function fundError({ state, beaconinfo, role = 'beacon' }) {
   if (!beaconinfo || !state.token || beaconinfo.token !== state.token) {
-    return `beacon ${state.beacon} has not run genesis-configure (beaconinfo.token unset): a transfer now would strand`;
+    const step = role === 'fast' ? 'genesis-configure-fast' : 'genesis-configure';
+    return `${role} ${state[role]} has not run ${step} (beaconinfo.token unset): a transfer now would strand`;
   }
   return null;
 }
 
+/** Data of the deployer's genesis Gov.Configure for the fast tier: the
+ * existing DKG committee (deploy/committee.json), the v3 token, fees. */
+export function fastGenesisConfig({ fast, token, committee, signerFee = 1, protocolFee = 1 }) {
+  if (!isPid(fast) || !isPid(token)) throw new Error('fast genesis needs the fast-tier and token ids');
+  const { t, groupKey, members, sharePublicKeys } = committee || {};
+  const hex96 = (k) => typeof k === 'string' && /^[0-9a-fA-F]{96}$/.test(k);
+  if (!Array.isArray(members) || !members.length || !members.every(isPid) || new Set(members).size !== members.length) {
+    throw new Error('committee.members must be distinct addresses');
+  }
+  if (!Number.isSafeInteger(t) || t < 2 || t > members.length) throw new Error('committee.t must be in [2, members]');
+  if (!hex96(groupKey)) throw new Error('committee.groupKey must be 96 hex characters');
+  if (!Array.isArray(sharePublicKeys) || sharePublicKeys.length !== members.length || !sharePublicKeys.every(hex96)) {
+    throw new Error('committee.sharePublicKeys must give one 96-hex key per member');
+  }
+  return { self: fast, token, unit: UNIT, committee: members, sharePublicKeys, groupKey, threshold: t,
+    verification: 'attestations', signerFee, protocolFee };
+}
+
 /** Live checks over the published keys; each { check, ok, detail }. */
-export function checkV3({ state, tokeninfo, daoinfo, beaconinfo, fairinfo }) {
+export function checkV3({ state, tokeninfo, daoinfo, beaconinfo, fairinfo, fastinfo }) {
   const out = [];
   const c = (check, ok, detail = '') => out.push({ check, ok: !!ok, detail });
   if (state.token) {
@@ -303,11 +338,19 @@ export function checkV3({ state, tokeninfo, daoinfo, beaconinfo, fairinfo }) {
     c('beacon reserve funded', BigInt(beaconinfo?.foundationReserveAtoms || 0) > 0n, beaconinfo?.foundationReserveAtoms);
     if (state.governor) c('beacon governed by the DAO', beaconinfo?.governor === state.dao, beaconinfo?.governor);
   }
+  if (state.fast) {
+    c('fast token', fastinfo?.token === state.token, fastinfo?.token);
+    c('fast self', fastinfo?.self === state.fast, fastinfo?.self);
+    c('fast on demand', fastinfo?.tier === 'fast' && fastinfo?.nextRoundAt === 0, fastinfo?.mode);
+    c('fast committee', Array.isArray(fastinfo?.committee) && fastinfo.committee.length >= fastinfo.threshold
+      && fastinfo.threshold >= 2, `${fastinfo?.threshold}/${fastinfo?.committee?.length}`);
+    if (state.fastGovernor) c('fast governed by the DAO', fastinfo?.governor === state.dao, fastinfo?.governor);
+  }
   if (state.fair) {
     c('fair bound to beacon', fairinfo?.beacon === state.beacon, fairinfo?.beacon);
     c('fair paid in RNG', fairinfo?.token === state.token && Number(fairinfo?.requestPriceAtoms) > 0, fairinfo?.token);
   }
-  try { sameScheduler(state, ['token', 'dao', 'beacon', 'fair'].filter((r) => state[r])); c('one scheduler', true, state.scheduler); }
+  try { sameScheduler(state, ['token', 'dao', 'beacon', 'fair', 'fast'].filter((r) => state[r])); c('one scheduler', true, state.scheduler); }
   catch (e) { c('one scheduler', false, e.message); }
   return out;
 }
@@ -352,6 +395,8 @@ const fairSource = () => [
   'fair = (function()', read('lib/fair.lua'), 'end)()',
   read('fair/fair.lua'),
 ].join('\n');
+// The fast tier: on-demand threshold BLS (lua@5.3a, whole state per message).
+const fastSource = () => [...json(), 'rng = (function()', read('lib/rng.lua'), 'end)()', read('beacon/beacon.lua')].join('\n');
 const subscriptionConsumerSource = (beacon, id) => [...json(), read('test/subscription-consumer.lua')]
   .join('\n').replaceAll('__BEACON__', beacon).replaceAll('__SUBSCRIPTION_ID__', id);
 
@@ -440,12 +485,12 @@ async function main(argv) {
     return send(state.token, 'Transfer', { tags: { Recipient: recipient, Quantity: atomsOf(rng), ...extraTags } });
   };
   // Every fund-* is refused until the beacon has its token (genesis-configure).
-  const fundBeacon = async (rng, tags) => {
+  const fundBeacon = async (rng, tags, role = 'beacon') => {
     if (!DRY) {
-      const err = fundError({ state, beaconinfo: await key(state.beacon, 'beaconinfo') });
+      const err = fundError({ state, beaconinfo: await key(state[role], 'beaconinfo'), role });
       if (err) throw new Error(err);
     }
-    return transfer(state.beacon, rng, tags);
+    return transfer(state[role], rng, tags);
   };
   const readJson = (file) => JSON.parse(fs.readFileSync(path.resolve(file), 'utf8'));
   const loadParams = (file) => readJson(file || path.join(HERE, 'v3-params.json'));
@@ -579,33 +624,62 @@ async function main(argv) {
     },
     'resend-ack': () => send(state.beacon, 'Resend-Successor-Ack'),
 
-    async handover(guardian) {
+    // One way, and there is no guardian: after it the DAO acts only through
+    // proposals, and every timelock (10 d) outlasts its 7-day vote.
+    async handover() {
       if (!flag('--confirm') && !DRY) throw new Error('Gov.Handover is one way: add --confirm');
       sameScheduler(state, ['token', 'dao', 'beacon']);
-      const tags = { Governor: state.dao };
-      if (!flag('--no-guardian')) {
-        // Never defaulted (to the deployer or anyone): name it, or --no-guardian.
-        if (!isPid(guardian)) throw new Error('handover <guardian> (or --no-guardian): the guardian is never defaulted');
-        tags.Guardian = guardian;
-      }
       if (!DRY) {
         const [beaconinfo, daoinfo] = await Promise.all([key(state.beacon, 'beaconinfo'), key(state.dao, 'daoinfo')]);
         const errs = handoverErrors({ state, beaconinfo, daoinfo, me });
         if (errs.length) throw new Error(`handover refused: ${errs.join('; ')}`);
       }
-      const r = await send(state.beacon, 'Gov.Handover', { tags });
+      const r = await send(state.beacon, 'Gov.Handover', { tags: { Governor: state.dao } });
       state.governor = state.dao;
-      state.guardian = tags.Guardian || '';
+      save();
+      return r;
+    },
+
+    // Fast tier: on-demand threshold BLS, paid per request; no heartbeat.
+    async 'spawn-fast'() {
+      if (state.fast && !flag('--replace')) throw new Error(`fast tier already deployed (${state.fast})`);
+      const pid = await spawn('fast', { name: 'RNG-Fast-Threshold', lua: fastSource() });
+      await send(pid, 'Get-Info');
+      return pid;
+    },
+    async 'genesis-configure-fast'(file) {
+      sameScheduler(state, ['token', 'fast']);
+      const committee = readJson(file || path.join(HERE, 'committee.json'));
+      const data = fastGenesisConfig({ fast: state.fast, token: state.token, committee });
+      return send(state.fast, 'Gov.Configure', { data: JSON.stringify(data) });
+    },
+    'fund-fast': async (rng, forWho) => fundBeacon(rng, { 'X-For': forWho || me }, 'fast'),
+    async 'gov-fast'(action, ...kv) {
+      if (!/^Gov\.[A-Za-z-]+$/.test(action || '')) throw new Error('gov-fast <Gov.Action> [Tag=Value ...]');
+      if (action === 'Gov.Handover') throw new Error('use `handover-fast`');
+      const tags = Object.fromEntries(kv.map((a) => a.split(/=(.*)/s).slice(0, 2)));
+      return send(state.fast, action, { tags });
+    },
+    async 'handover-fast'() {
+      if (!flag('--confirm') && !DRY) throw new Error('Gov.Handover is one way: add --confirm');
+      sameScheduler(state, ['token', 'dao', 'fast']);
+      if (!DRY) {
+        const [fastinfo, daoinfo] = await Promise.all([key(state.fast, 'beaconinfo'), key(state.dao, 'daoinfo')]);
+        const errs = handoverErrors({ state: { ...state, beacon: state.fast }, beaconinfo: fastinfo, daoinfo, me });
+        if (errs.length) throw new Error(`fast handover refused: ${errs.join('; ')}`);
+      }
+      const r = await send(state.fast, 'Gov.Handover', { tags: { Governor: state.dao } });
+      state.fastGovernor = state.dao;
       save();
       return r;
     },
 
     'dao-stake': (rng) => transfer(state.dao, rng),
     async 'dao-propose'(file, ...kv) {
-      const vars = { BEACON: state.beacon, DAO: state.dao, TOKEN: state.token, FAIR: state.fair,
+      const vars = { BEACON: state.beacon, FAST: state.fast, DAO: state.dao, TOKEN: state.token, FAIR: state.fair,
         ...Object.fromEntries(kv.map((a) => a.split(/=(.*)/s).slice(0, 2))) };
       const p = fillTemplate(readJson(file), vars);
-      const errs = proposalErrors(p, { token: state.token });
+      const errs = proposalErrors(p, { token: state.token, fast: state.fast });
       if (errs.length) throw new Error(`proposal refused: ${errs.join('; ')}`);
       return send(state.dao, 'Propose', { tags: { Title: p.title, Body: p.body,
         'Exec-Process': p.execProcess, 'Exec-Tags': JSON.stringify(p.execTags) } });
@@ -616,13 +690,14 @@ async function main(argv) {
     },
 
     async status() {
-      const [tokeninfo, daoinfo, beaconinfo, fairinfo] = await Promise.all([
-        key(state.token, 'tokeninfo'), key(state.dao, 'daoinfo'), key(state.beacon, 'beaconinfo'), key(state.fair, 'fairinfo')]);
-      const checks = checkV3({ state, tokeninfo, daoinfo, beaconinfo, fairinfo });
-      console.log(JSON.stringify({ token: state.token, dao: state.dao, beacon: state.beacon, fair: state.fair,
+      const [tokeninfo, daoinfo, beaconinfo, fairinfo, fastinfo] = await Promise.all([
+        key(state.token, 'tokeninfo'), key(state.dao, 'daoinfo'), key(state.beacon, 'beaconinfo'), key(state.fair, 'fairinfo'),
+        key(state.fast, 'beaconinfo')]);
+      const checks = checkV3({ state, tokeninfo, daoinfo, beaconinfo, fairinfo, fastinfo });
+      console.log(JSON.stringify({ token: state.token, dao: state.dao, beacon: state.beacon, fair: state.fair, fast: state.fast,
         scheduler: state.scheduler, mode: beaconinfo?.mode, round: beaconinfo?.round, health: beaconinfo?.health,
-        registered: beaconinfo?.registered, governor: beaconinfo?.governor, guardian: beaconinfo?.guardian,
-        govQueue: beaconinfo?.govQueue, checks }, null, 1));
+        registered: beaconinfo?.registered, governor: beaconinfo?.governor, govQueue: beaconinfo?.govQueue,
+        fastRound: fastinfo?.round, fastGovernor: fastinfo?.governor, fastGovQueue: fastinfo?.govQueue, checks }, null, 1));
       return checks;
     },
     async verify() {
@@ -667,10 +742,15 @@ async function main(argv) {
       // 4 x stake, from day one: rank is capped bond, so a newcomer must bond
       // as much to outrank them (PERMISSIONLESS.md P2). One transfer does both.
       await v3['bond-for'](state.genesis.validatorRng, path.join(HERE, 'anyhonest-validators.json'));
+      // The fast tier on the existing committee; the three rng-provider
+      // daemons are repointed at it live (deploy/nodes.sh beacon <fast>).
+      await v3['spawn-fast']();
+      await v3['genesis-configure-fast']();
       // The old beacon's Admin.Set-Successor (legacy-set-successor) goes here, live.
-      await v3.handover(process.env.RNG_GUARDIAN);
+      await v3.handover();
+      await v3['handover-fast']();
       await v3['dao-propose'](path.join(V2, 'governance', 'proposals', '001-handover-proof.json'));
-      log({ op: 'check', sameScheduler: sameScheduler(state, ['token', 'dao', 'beacon', 'fair']), scheduler: state.scheduler });
+      log({ op: 'check', sameScheduler: sameScheduler(state, ['token', 'dao', 'beacon', 'fair', 'fast']), scheduler: state.scheduler });
     },
   };
 

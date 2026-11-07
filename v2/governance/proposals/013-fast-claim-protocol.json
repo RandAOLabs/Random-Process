@@ -1,0 +1,9 @@
+{
+  "title": "Spend the fast-tier protocol fees",
+  "body": "Queues Gov.Claim-Protocol for 10 days: at Gov.Apply every protocol fee accrued by then goes to the recipient. Never to the DAO, the fast-tier process or the token. Signer fees are never governance's to move.",
+  "execProcess": "$FAST",
+  "execTags": {
+    "Action": "Gov.Claim-Protocol",
+    "Recipient": "$RECIPIENT"
+  }
+}

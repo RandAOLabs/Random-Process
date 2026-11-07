@@ -3,7 +3,7 @@
 //   node provider/daemon.mjs init <config>   create this node's provider wallet and DKG transport key;
 //                                            print the wallet address and transport public key
 //   node provider/daemon.mjs dkg-unsafe-http <config>  development-only ceremony over unauthenticated HTTP
-//   node provider/daemon.mjs run  <config>   post partials and attest rounds through the beacon
+//   node provider/daemon.mjs run  <config>   post partials and attest fast-tier rounds that have requests
 //
 // Config (JSON): { index, n, t, beacon, listen, dataDir, wallet, hbNode,
 //                  peers: [{ index, url, dkgPub }] }   (peers excludes self)
@@ -205,7 +205,9 @@ if (cmd === 'run') {
       attested = Math.max(attested, info.round);
       const r = info.nextRound;
       const message = `hyperbeam/rng/v1|${cfg.beacon}|${r}`;
-      if (info.roundPendingCount > 0 && Date.now() >= info.nextRoundAt) {
+      // On demand: sign only a round that paid requests wait for. There is no
+      // heartbeat and no cadence to wait out.
+      if (info.roundPendingCount > 0) {
         const mine = bls.partialSign(share, message);
         if (partialFor < r && (partialAttempt.round !== r || Date.now() - partialAttempt.at >= 10_000)) {
           await ao.postPartial(r, mine);

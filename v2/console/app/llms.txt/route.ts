@@ -6,7 +6,7 @@ export async function GET() {
   const cfg = extendedNetworkConfig();
   const text = `# RNG Labs / HyperBEAM RNG
 
-HyperBEAM RNG v1 provides replay-stable local randomness, threshold-BLS beacon
+HyperBEAM RNG v1 provides replay-stable local randomness, on-demand threshold-BLS (fast)
 rounds, native BLS verification, and deterministic byte derivation for AO.
 
 Canonical domain: hyperbeam/rng/v1
@@ -19,7 +19,7 @@ Network: ${cfg.label}
 ## Product surfaces
 
 - Local: live; deterministic and predictable to the sender.
-- Threshold: live; paid request-bound 2-of-3 BLS randomness.
+- Fast: live; paid, on-demand 2-of-3 threshold BLS (not a heartbeat: a round opens only for paid requests). Safe unless 2 of 3 operators collude.
 - Beacon: live; Foundation-funded Any-Honest rounds advance continuously.
 - Any-Honest: live; time-lock commits, reveals, and cracks are verified by
   ~rng@1.0 on the native testnet.
@@ -35,7 +35,7 @@ binding, balances, and fees.
 - Reading rounds: free.
 - Verifying a signature: free at the protocol layer.
 - Deriving bytes: free at the protocol layer.
-- Requesting a new threshold result: 3 TEST-RNG on the current testnet.
+- Requesting a new fast result: 3 RNG on the current testnet.
 - Requesting a one-shot Any-Honest result: 4 TEST-RNG.
 - Secure process subscription: 1 TEST-RNG for 1,000 authenticated pushes.
 

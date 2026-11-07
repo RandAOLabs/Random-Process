@@ -7,6 +7,12 @@ Design, threat model and economics: [`docs/PERMISSIONLESS.md`](./docs/PERMISSION
 
 ## Purpose
 
+Any-honest is the strongest of three tiers: **local** (free, predictable to
+the sender), **fast** (`beacon/beacon.lua`: on-demand 2-of-3 threshold BLS,
+about one message phase, safe unless 2 of 3 operators collude; rounds only for
+paid requests, no heartbeat) and **any-honest** (this document: safe if any one
+validator is honest, slower). See `docs/PERMISSIONLESS.md`, "Randomness tiers".
+
 The Any-Honest beacon publishes one shared round every 500 ms while validators
 keep up. Every validator commits a fresh time-lock puzzle before reveals begin.
 Once commits close, one honest hidden contribution is sufficient to keep the
@@ -245,13 +251,14 @@ message, sent by the DAO process) can act:
 | `Gov.Set-Successor`, `Gov.Move-Reserve` | 10 days | name a successor (the newest supersedes); move the reserve to the successor it names |
 | `Gov.Treasury-Spend`, `Gov.Fund-Reserve` | 10 days | together at most 10% of the Treasury per 30 days; never to the DAO, the beacon or the token |
 | `Gov.Remove-Validator` | none | remove a validator, bond refunded in full |
-| `Gov.Pause` / `Gov.Resume`, `Gov.Clear-Guardian`, `Gov.Cancel` | none | the brake; end the guardian; drop a queued action |
+| `Gov.Pause` / `Gov.Resume`, `Gov.Cancel` | none | the brake; drop a queued action |
 
 Every delay is longer than the DAO's 7-day vote, so a cancelling proposal can
 pass first. Anyone runs `Gov.Apply` once a queued action is due; 14 days after
-that it expires. `Gov.Handover` is refused while anything is queued. A guardian
-wallet may `Gov.Pause` and `Gov.Cancel` for 90 days after handover; it cannot
-resume or move funds. Governance can never take a bond or a user balance: a
+that it expires. `Gov.Handover` is refused while anything is queued. There is
+no guardian: after handover the DAO acts only through proposals, the brake
+included, and because every timelock outlasts the vote the DAO can always
+cancel a queued action before it lands. Governance can never take a bond or a user balance: a
 fault costs at most a tenth of the stake, and changes to what a bond is exposed
 to land 10 days after the vote, time enough to exit. Proposal templates are in
 `governance/proposals/`.

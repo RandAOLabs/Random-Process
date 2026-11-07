@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 import {
   loadAllocations, genesisPrelude, badParams, genesisConfig, daoRules, sameScheduler,
   fillTemplate, proposalErrors, checkV3, SUPPLY_ATOMS, handoverErrors, fundError, BEACON_GOV_DELAY_MS,
+  fastGenesisConfig,
 } from '../deploy/deploy.mjs';
 
 const V2 = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -156,11 +157,16 @@ test('proposal templates are valid against the DAO caps, reserved names and beac
   const dir = path.join(V2, 'governance/proposals');
   const files = fs.readdirSync(dir).filter((f) => f.endsWith('.json'));
   assert.ok(files.length >= 8);
-  const vars = { BEACON: pid('beacon'), DAO: pid('dao'), TOKEN: pid('token'), SUCCESSOR: pid('next'),
-    RECIPIENT: pid('who'), VALIDATOR: pid('val'), QUANTITY: '1000000', GOV_ID: '1' };
+  const committee = readJson('deploy/committee.json');
+  const vars = { BEACON: pid('beacon'), FAST: pid('fast'), DAO: pid('dao'), TOKEN: pid('token'), SUCCESSOR: pid('next'),
+    RECIPIENT: pid('who'), VALIDATOR: pid('val'), QUANTITY: '1000000', GOV_ID: '1',
+    COMMITTEE: JSON.stringify(committee.members.slice(0, 2)), SHARE_KEYS: JSON.stringify(committee.sharePublicKeys.slice(0, 2)),
+    GROUP_KEY: committee.groupKey };
+  assert.ok(!files.some((f) => /guardian/i.test(f)), 'no guardian template');
   for (const f of files) {
     const p = fillTemplate(JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8')), vars);
-    assert.deepEqual(proposalErrors(p, { token: vars.TOKEN }), [], f);
+    assert.deepEqual(proposalErrors(p, { token: vars.TOKEN, fast: vars.FAST }), [], f);
+    assert.doesNotMatch(JSON.stringify(p), /guardian/i, `${f} mentions a guardian`);
     assert.doesNotMatch(JSON.stringify(p), /\$[A-Z]/, `${f} has an unfilled placeholder`);
   }
   const ok = { title: 't', body: '', execProcess: pid('beacon'), execTags: { Action: 'Gov.Pause' } };
@@ -175,6 +181,14 @@ test('proposal templates are valid against the DAO caps, reserved names and beac
   assert.match(bad({ Action: 'Admin.Add-Validator' }).join(), /not a beacon Gov/);
   assert.match(bad({ Action: 'Gov.Handover', Governor: pid('x') }).join(), /not a beacon Gov/);
   assert.match(bad({ Action: 'Gov.Pause' }, { execProcess: pid('token') }).join(), /staked token/);
+  assert.match(bad({ Action: 'Gov.Clear-Guardian' }).join(), /not a beacon Gov/);
+  // The fast tier has its own Gov.* table.
+  const fast = (execTags) => proposalErrors({ ...ok, execProcess: pid('fast'), execTags }, { token: pid('token'), fast: pid('fast') });
+  assert.deepEqual(fast({ Action: 'Gov.Configure', 'Signer-Fee': '2' }), []);
+  assert.deepEqual(fast({ Action: 'Gov.Claim-Protocol', Recipient: pid('who') }), []);
+  assert.match(fast({ Action: 'Gov.Configure', 'Reveal-Window-Ms': '1' }).join(), /does not read/);
+  assert.match(fast({ Action: 'Gov.Treasury-Spend', Recipient: pid('who'), Quantity: '1' }).join(), /not a fast-tier Gov/);
+  assert.match(bad({ Action: 'Gov.Claim-Protocol', Recipient: pid('who') }).join(), /not a beacon Gov/);
   const many = Object.fromEntries(Array.from({ length: 16 }, (_, i) => [`T${i}`, '1']));
   assert.match(bad({ Action: 'Gov.Configure', ...many }).join(), /more than 16/);
 });
@@ -203,15 +217,16 @@ test('dry-run plan prints the whole v3 sequence and sends nothing', () => {
   const out = execFileSync(process.execPath, [path.join(V2, 'deploy/deploy.mjs'), 'plan', '--dry-run'], {
     // An unreachable node: a dry run must not touch the network.
     env: { ...process.env, HB_NODE: 'http://127.0.0.1:9', HB_WALLET: '', RNG_DEPLOYER: DEPLOYER,
-      RNG_SCHEDULER: pid('sched'), RNG_GUARDIAN: pid('guardian'), RNG_STATE: path.join(V2, 'deploy/does-not-exist.json') },
+      RNG_SCHEDULER: pid('sched'), RNG_STATE: path.join(V2, 'deploy/does-not-exist.json') },
     encoding: 'utf8',
   });
   const lines = out.trim().split('\n').map((l) => JSON.parse(l));
   assert.ok(lines.every((l) => l.dryRun === true));
   const spawns = lines.filter((l) => l.op === 'spawn');
-  assert.deepEqual(spawns.map((l) => l.role), ['token', 'dao', 'beacon', 'fair']);
+  assert.deepEqual(spawns.map((l) => l.role), ['token', 'dao', 'beacon', 'fair', 'fast']);
   assert.ok(spawns.every((l) => l.scheduler === pid('sched')), 'one scheduler');
-  const [token, dao, beacon, fair] = spawns.map((l) => l.pid);
+  const [token, dao, beacon, fair, fast] = spawns.map((l) => l.pid);
+  assert.equal(spawns[4].executionDevice, 'lua@5.3a');
   assert.match(spawns[0].prelude, new RegExp(`\\["${DEPLOYER}"\\] = 1000000000000000,`));
   assert.equal(spawns[1].definition['dao-token'], token);
   assert.equal(spawns[2].executionDevice, 'lua-patch@1.0');
@@ -241,8 +256,20 @@ test('dry-run plan prints the whole v3 sequence and sends nothing', () => {
   assert.equal(sends[at('Fair.Configure')].data.token, token);
   assert.equal(sends[at('Fair.Configure')].data.requestPrice, readJson('deploy/v3-params.json').requestPrice);
   const handover = sends[at('Gov.Handover')];
-  assert.deepEqual(handover.tags, { Governor: dao, Guardian: pid('guardian') });
+  assert.deepEqual(handover.tags, { Governor: dao }, 'no guardian');
+  assert.equal(handover.target, beacon);
   assert.ok(at('Gov.Configure') < at('Gov.Handover'));
+  // The fast tier: genesis on the existing committee and the v3 token, then handed to the DAO.
+  const fastCfg = sends.find((l) => l.target === fast && l.action === 'Gov.Configure');
+  const committee = readJson('deploy/committee.json');
+  assert.deepEqual([fastCfg.data.self, fastCfg.data.token, fastCfg.data.threshold, fastCfg.data.groupKey],
+    [fast, token, committee.t, committee.groupKey]);
+  assert.deepEqual(fastCfg.data.committee, committee.members);
+  assert.deepEqual(fastCfg.data.sharePublicKeys, committee.sharePublicKeys);
+  assert.ok(!('cadenceMs' in fastCfg.data), 'no cadence: on demand');
+  const fastHandover = sends.find((l) => l.target === fast && l.action === 'Gov.Handover');
+  assert.deepEqual(fastHandover.tags, { Governor: dao });
+  assert.ok(sends.indexOf(fastCfg) < sends.indexOf(fastHandover));
   const propose = sends[at('Propose')];
   assert.ok(at('Gov.Handover') < at('Propose'), 'the proof proposal follows the handover');
   assert.equal(propose.target, dao);
@@ -264,11 +291,49 @@ test('legacy commands target the live v2 beacon from the read-only inventory', (
   assert.equal(fs.readFileSync(path.join(V2, 'deploy/native-testnet.json'), 'utf8'), before);
 });
 
-test('plan refuses to default the guardian to the deployer', () => {
-  assert.throws(() => execFileSync(process.execPath, [path.join(V2, 'deploy/deploy.mjs'), 'plan', '--dry-run'], {
-    env: { ...process.env, HB_NODE: 'http://127.0.0.1:9', HB_WALLET: '', RNG_DEPLOYER: DEPLOYER, RNG_GUARDIAN: '',
-      RNG_SCHEDULER: pid('sched'), RNG_STATE: path.join(V2, 'deploy/does-not-exist.json') },
-    encoding: 'utf8', stdio: 'pipe' }), /guardian is never defaulted/);
+test('no guardian anywhere: beacon, deploy script, templates', () => {
+  for (const f of ['beacon/anyhonest.lua', 'beacon/beacon.lua', 'deploy/deploy.mjs']) {
+    const src = fs.readFileSync(path.join(V2, f), 'utf8');
+    assert.doesNotMatch(src, /guardianUntil|isGuardian|Clear-Guardian|RNG_GUARDIAN|--no-guardian|GUARDIAN_MS/, f);
+  }
+});
+
+test('fast genesis takes the existing committee and refuses a bad one', () => {
+  const committee = readJson('deploy/committee.json');
+  const d = fastGenesisConfig({ fast: pid('fast'), token: pid('token'), committee });
+  assert.deepEqual([d.unit, d.verification, d.signerFee, d.protocolFee], [1_000_000, 'attestations', 1, 1]);
+  const bad = (patch) => () => fastGenesisConfig({ fast: pid('fast'), token: pid('token'), committee: { ...committee, ...patch } });
+  assert.throws(bad({ t: 1 }), /t must be/);
+  assert.throws(bad({ t: 4 }), /t must be/);
+  assert.throws(bad({ members: [committee.members[0], committee.members[0], committee.members[1]] }), /distinct/);
+  assert.throws(bad({ sharePublicKeys: committee.sharePublicKeys.slice(0, 2) }), /one 96-hex key per member/);
+  assert.throws(bad({ groupKey: 'ab' }), /groupKey/);
+  assert.throws(() => fastGenesisConfig({ fast: 'x', token: pid('token'), committee }), /ids/);
+});
+
+test('fund-fast and gov-fast dry-run against the fast tier', () => {
+  const tmp = path.join(V2, 'deploy', `.fast-test-${process.pid}.json`);
+  const S = pid('sched');
+  fs.writeFileSync(tmp, JSON.stringify({ scheduler: S, token: pid('token'), dao: pid('dao'), fast: pid('fast'),
+    processes: { [pid('token')]: { scheduler: S }, [pid('dao')]: { scheduler: S }, [pid('fast')]: { scheduler: S } } }));
+  try {
+    const run = (...args) => execFileSync(process.execPath, [path.join(V2, 'deploy/deploy.mjs'), ...args, '--dry-run'], {
+      env: { ...process.env, HB_NODE: 'http://127.0.0.1:9', HB_WALLET: '', RNG_DEPLOYER: DEPLOYER, RNG_SCHEDULER: S,
+        RNG_STATE: tmp }, encoding: 'utf8' }).trim().split('\n').map((l) => JSON.parse(l));
+    const [fund] = run('fund-fast', '9');
+    assert.deepEqual([fund.target, fund.action, fund.tags.Recipient, fund.tags.Quantity, fund.tags['X-For']],
+      [pid('token'), 'Transfer', pid('fast'), '9000000', DEPLOYER]);
+    const [gov] = run('gov-fast', 'Gov.Configure', 'Signer-Fee=2');
+    assert.deepEqual([gov.target, gov.action, gov.tags], [pid('fast'), 'Gov.Configure', { 'Signer-Fee': '2' }]);
+    const [h] = run('handover-fast');
+    assert.deepEqual([h.target, h.action, h.tags], [pid('fast'), 'Gov.Handover', { Governor: pid('dao') }]);
+  } finally { fs.rmSync(tmp, { force: true }); }
+});
+
+test('fund-fast refuses a fast tier that has not run genesis-configure-fast', () => {
+  const s = { token: pid('t'), fast: pid('f') };
+  assert.equal(fundError({ state: s, beaconinfo: { token: pid('t') }, role: 'fast' }), null);
+  assert.match(fundError({ state: s, beaconinfo: { token: '' }, role: 'fast' }), /genesis-configure-fast/);
 });
 
 test('handover is refused onto a wallet, a foreign DAO or over a queued action', () => {
@@ -304,6 +369,11 @@ test('every beacon governance delay outlasts the DAO vote', () => {
     assert.ok(ms > vote, `${kind} delay ${ms} must exceed the voting period ${vote}`);
     assert.ok(ms >= BEACON_GOV_DELAY_MS, kind);
   }
+  const fast = fs.readFileSync(path.join(V2, 'beacon/beacon.lua'), 'utf8');
+  const fastBlock = /local GOV_DELAY_MS = \{([\s\S]*?)\}/.exec(fast)[1];
+  const fastDelays = [...fastBlock.matchAll(/\["([A-Za-z-]+)"\] = (\d+) \* DAY_MS/g)].map((m) => [m[1], Number(m[2]) * 86400000]);
+  assert.deepEqual(fastDelays.map(([k]) => k).sort(), ['Claim-Protocol', 'Configure']);
+  for (const [kind, ms] of fastDelays) assert.ok(ms > vote, `fast ${kind} delay must exceed the voting period`);
   const move = readJson('governance/proposals/004-move-reserve.json');
   assert.equal(move.execTags.Successor, '$SUCCESSOR', 'Move-Reserve names its successor');
 });

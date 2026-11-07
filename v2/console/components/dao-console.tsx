@@ -14,7 +14,7 @@ type DaoStatus = { configured: boolean; status?: string; process?: string; beaco
 // beaconinfo via /api/anyhonest. The v3 governance fields are absent on a v2 beacon.
 type Beacon = { configured: boolean; process?: string; round?: number; unit?: number;
   foundationReserveAtoms?: string; treasuryAtoms?: string; mode?: string; paused?: boolean;
-  governor?: string; guardian?: string; guardianUntil?: number; successor?: string; successorAck?: boolean;
+  governor?: string; successor?: string; successorAck?: boolean;
   govQueue?: GovQueueEntry[]; features?: string[] };
 
 const h1: CSSProperties = { fontFamily: "var(--display)", fontSize: 30, lineHeight: 1.2, letterSpacing: "-.01em", textTransform: "none" };
@@ -97,7 +97,7 @@ export function DaoConsole() {
         <section className="py-10">
           <h1 style={h1}>RNG DAO</h1>
           <div className="mt-4 max-w-[760px] space-y-3 text-[15px] leading-relaxed text-[var(--gray)]">
-            <p className="m-0">RNG holders govern the beacon through a YapDAO <code>stake-dao/1</code> process. Stake RNG to vote. A passed proposal sends one message, usually a <code>Gov.*</code> action to the beacon. Actions that move money wait out a timelock in the beacon first.</p>
+            <p className="m-0">RNG holders govern the beacon through a YapDAO <code>stake-dao/1</code> process. Stake RNG to vote. A passed proposal sends one message, usually a <code>Gov.*</code> action to the beacon. Actions that move money wait out a 10-day timelock in the beacon first, longer than the 7-day vote, so a cancelling proposal can always pass before they land. There is no guardian: pausing is a proposal too.</p>
             <p className="m-0">This page is read-only. Staking, proposing and voting happen on YapDAO.</p>
             {dao.process && <p className="m-0"><a className="button invert" href={yapUrl(dao.process)} target="_blank" rel="noreferrer">Vote on yapdao.com</a></p>}
           </div>
@@ -108,7 +108,6 @@ export function DaoConsole() {
           {beacon.configured && !v3 && <p className="m-0">This beacon predates DAO governance. The fields below fill in once beacon v3 is live.</p>}
           <dl className="m-0 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
             <Stat label="Governor" value={v3 ? (beacon.governor ? short(beacon.governor) : "Deployer, until handover") : "—"} />
-            <Stat label="Guardian" value={beacon.guardian && (beacon.guardianUntil ?? 0) > now ? `${short(beacon.guardian)} until ${when(beacon.guardianUntil)}` : "None"} />
             <Stat label="Mode" value={beacon.paused ? "Paused" : beacon.mode ?? "—"} />
             <Stat label="Reserve" value={`${tokens(beacon.foundationReserveAtoms, unitDigits)} RNG`} />
             <Stat label="Treasury" value={`${tokens(beacon.treasuryAtoms, unitDigits)} RNG`} />

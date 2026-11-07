@@ -9,7 +9,7 @@ export type BeaconInfo = {
   committee: Member[];
   groupKey: string;
   pendingCount: number;
-  price: { beacon: number };
+  price: { beacon: number; fast?: number }; // `beacon` is the fast tier's internal id
   protocolAccrued: number;
   round: number;
   threshold: number;
@@ -215,7 +215,7 @@ export async function getNetworkStatus(requestedRound?: number) {
     threshold: info.threshold,
     committeeSize: info.committee.length,
     committee: info.committee,
-    price: info.price.beacon,
+    price: info.price.fast ?? info.price.beacon,
     unit: info.unit,
     pending: info.pendingCount,
     verificationMode: info.verification,
@@ -245,7 +245,7 @@ export async function getAccountStatus(address: string) {
     address,
     tokenBalance: Number(balances[address] ?? 0) / info.unit,
     beaconBalance: Number(beacon.balances[address] ?? 0),
-    price: info.price.beacon,
+    price: info.price.fast ?? info.price.beacon,
     unit: info.unit,
   };
 }

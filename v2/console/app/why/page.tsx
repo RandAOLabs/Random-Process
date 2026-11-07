@@ -8,7 +8,7 @@ const failures = [
 
 const surfaces = [
   ["LOCAL", "Replay-safe; sender-predictable."],
-  ["THRESHOLD", "Fast, request-bound 2-of-3 BLS."],
+  ["FAST", "On-demand 2-of-3 threshold BLS; safe unless 2 of 3 operators collude."],
   ["BEACON", "Shared public rounds; free to read."],
   ["ANY-HONEST", "Live time-lock fairness with native proofs."],
   ["PROOF", "Independent retained-round checks."],

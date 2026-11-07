@@ -21,6 +21,7 @@ const addr = (s) => s.padEnd(43, '_');
 const F = {
   owner: addr('owner'), sched: addr('scheduler'), stranger: addr('stranger'),
   token: addr('rng-token'), game: addr('game'), beacon: addr('beacon'),
+  dao: addr('rng-dao'), wallet: addr('player-wallet'),
   members: [addr('node-1'), addr('node-2'), addr('node-3')],
   unit: 1000000, req1: 'r-one', req2: 'r-two', req3: 'r-three', req4: 'r-four',
 };
@@ -43,7 +44,9 @@ F.value1 = sha(`hyperbeam/rng/v1/round|${roundMessage(1)}|${F.sig1}`);
 F.value3 = sha(`hyperbeam/rng/v1/round|${roundMessage(3)}|${F.sig3}`);
 F.out1 = sha(`hyperbeam/rng/v1/request|${F.value1}|${F.req1}`);
 F.out2 = sha(`hyperbeam/rng/v1/request|${F.value1}|${F.req2}`);
-F.config = JSON.stringify({ self: F.beacon, token: F.token, threshold: 2, cadenceMs: 5000,
+F.outPay = sha(`hyperbeam/rng/v1/request|${F.value3}|pay-1`);
+F.groupKey2 = bls.dealerKeygen(2, 2).groupKey;
+F.config = JSON.stringify({ self: F.beacon, token: F.token, threshold: 2,
   groupKey: shares[0].groupKey, committee: F.members, sharePublicKeys: F.sharePublicKeys, unit: F.unit });
 
 const luaString = (s) => `"${String(s).replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;

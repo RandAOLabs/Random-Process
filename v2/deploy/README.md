@@ -1,7 +1,7 @@
 # Native testnet operations
 
 `native-testnet.json` is the canonical public process inventory of what is
-live: token, threshold beacon, Any-Honest beacon (v2, `MZMoXv-2`), committees,
+live: token, the old threshold process (fast tier, v2), Any-Honest beacon (v2, `MZMoXv-2`), committees,
 validators and DAO. `deploy.mjs` never writes it. v3 deploys record into
 `v3-testnet.json` (`RNG_STATE`) until the cutover below merges them in.
 
@@ -134,10 +134,11 @@ node deploy/deploy.mjs plan --dry-run      # review every message first
    console env (`console/deploy/native-testnet.env`) together, so
    `test/deployment-config.test.mjs` stays green. Point each cracker's
    `config.json` `beacon` at v3 and restart it.
-9. **Handover to the DAO.** `handover <guardian wallet> --confirm`
-   (`Gov.Handover`, one way; the guardian may pause and cancel queued actions
-   for 90 days). Name the guardian explicitly (an ops wallet, not the
-   deployer; `plan` needs `RNG_GUARDIAN`). It refuses unless the beacon's
+9. **Handover to the DAO.** `handover --confirm` (`Gov.Handover`, one way)
+   and `handover-fast --confirm` for the fast tier. There is no guardian:
+   after this the DAO acts only through proposals, and every timelock
+   (10 days) outlasts its 7-day vote, so it can cancel a queued action before
+   it lands. Each refuses unless that process's
    `govQueue` is empty (`gov Gov.Cancel Gov-Id=<id>` first) and the DAO
    publishes a `stake-dao/1` `daoinfo` on our token, no admin, voting period
    under the beacon's 10-day delays. Prove it:
@@ -145,6 +146,27 @@ node deploy/deploy.mjs plan --dry-run      # review every message first
    `dao-vote <id> Yes`. After the 7-day vote the DAO executes it; check the
    proposal is `executed` and `Reveal-Window-Ms` is still 30000 with no
    `Not authorised` refusal. Then `verify` (includes "governed by the DAO").
+
+**Fast tier (step 8b, before handover).** On-demand 2-of-3 threshold BLS on
+the existing committee; no heartbeat, rounds open only for paid requests.
+
+```bash
+node deploy/deploy.mjs spawn-fast
+node deploy/deploy.mjs genesis-configure-fast deploy/committee.json   # v3 token, same DKG keys
+node deploy/deploy.mjs fund-fast 30                                   # a test balance; then request
+SSH_KEY=<committee key> deploy/nodes.sh install <app.tgz>           # daemon without the cadence gate
+SSH_KEY=<committee key> deploy/nodes.sh beacon <fast pid>            # repoint the 3 rng-provider daemons
+SSH_KEY=<committee key> deploy/nodes.sh start && deploy/nodes.sh status
+```
+
+Then set `RNG_BEACON_ID` in `console/deploy/native-testnet.env` and `beacon`
+in `native-testnet.json` to the fast pid together. Retire the old threshold
+process `iRWVCsShDNboHKSgXHe0_ZVZ89RhBdoRA0hU1wt468c`: it is unused and runs on
+the dead token `qFXxcv...`, so move it to `retired` in `native-testnet.json`
+(nothing to migrate; its balances are in the old TEST-RNG). The new process
+publishes `nextRoundAt: 0`, so a daemon still on the old build keeps working;
+the install only drops the dead cadence check. A committee change later is a
+new DKG ceremony plus `012-fast-committee.json` (10-day timelock).
 
 **Verify after every step:** `node deploy/deploy.mjs status` (or `verify`,
 which exits 1 on any failed check: sealed token, DAO on RNG with no admin,
@@ -157,6 +179,7 @@ bound, one scheduler). Validators: `anyhonest-validator.mjs status`.
   (`legacy-set-successor MZMoXv-2... ""`), re-point console and crackers to
   MZMoXv-2, which keeps running until retired. Do not retire it before the
   soak ends.
-- After step 9: the guardian pauses (`HB_WALLET=<guardian.json> ... gov Gov.Pause`).
-  The fix is a new beacon voted in with `003-set-successor.json` (10 days).
+- After step 9: the DAO pauses by proposal (`dao-propose
+  governance/proposals/009-pause.json`, 7-day vote; the fast tier takes the
+  same proposal with `execProcess` `$FAST`). The fix is a new beacon voted in with `003-set-successor.json` (10 days).
   Validators can `Pause`/`Exit` at any time; governance can never take a bond.

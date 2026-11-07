@@ -1,0 +1,10 @@
+{
+  "title": "Set fast-tier fees",
+  "body": "Gov.Configure on the fast tier (on-demand 2-of-3 threshold BLS). Price per request = Threshold x Signer-Fee + Protocol-Fee, in whole RNG (1 to 1,000,000 each). Applies at once to new requests; a request already made pays out what it was charged.",
+  "execProcess": "$FAST",
+  "execTags": {
+    "Action": "Gov.Configure",
+    "Signer-Fee": "1",
+    "Protocol-Fee": "1"
+  }
+}

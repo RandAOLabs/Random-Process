@@ -760,12 +760,14 @@ function runTimelockTests()
   local pre = send(wallet(F.owner, { Action = "Gov.Treasury-Spend", Recipient = F.owner, Quantity = "1" })).queued
   check("the deployer queues a spend", pre ~= nil and pre.kind == "Treasury-Spend")
   eq("handover refused while anything is queued",
-    send(wallet(F.owner, { Action = "Gov.Handover", Governor = F.dao, Guardian = F.guardian })).error, "Queue-Not-Empty")
+    send(wallet(F.owner, { Action = "Gov.Handover", Governor = F.dao })).error, "Queue-Not-Empty")
   send(wallet(F.owner, { Action = "Gov.Cancel", ["Gov-Id"] = tostring(pre.id) }))
   eq("cancel gives the window its share back", info().treasuryWindow.used, "0")
+  -- There is no guardian: a Guardian tag (the old handover argument) is ignored.
   r = send(wallet(F.owner, { Action = "Gov.Handover", Governor = F.dao, Guardian = F.guardian }))
-  check("handover sets governor and guardian", r.governor == F.dao and info().governor == F.dao
-    and info().guardianUntil == clock + 90 * DAY, r.error)
+  check("handover sets the governor, and no guardian", r.governor == F.dao and info().governor == F.dao
+    and r.guardian == nil and info().guardian == nil and info().guardianUntil == nil
+    and Timelock.guardian == nil, r.error)
   eq("deployer locked out after handover", configure({ cadenceMs = 9 }).error, "Not authorised")
   eq("handover only once", send(wallet(F.owner, { Action = "Gov.Handover", Governor = F.stranger })).error, "Not authorised")
   r = dao({ Action = "Gov.Configure", ["Abandon-After-Ms"] = "70000", commit_window_ms = "4000", catchupms = "1000" })
@@ -825,8 +827,10 @@ function runTimelockTests()
   check("bond-exposure changes queued, not applied", r.ok == true and Timelock.params.slash == 1000
     and Timelock.params.commitWindowMs == 3000 and qslash and qslash.params.slash == 2500, r.error)
   eq("a stranger cannot cancel", send(wallet(F.stranger, { Action = "Gov.Cancel", ["Gov-Id"] = tostring(qslash.id) })).error, "Not authorised")
-  r = send(wallet(F.guardian, { Action = "Gov.Cancel", ["Gov-Id"] = tostring(qslash.id) }))
-  check("the guardian cancels a queued action", r.cancelled == qslash.id and r.by == "guardian"
+  eq("the would-be guardian cannot cancel", send(wallet(F.guardian, { Action = "Gov.Cancel",
+    ["Gov-Id"] = tostring(qslash.id) })).error, "Not authorised")
+  r = dao({ Action = "Gov.Cancel", ["Gov-Id"] = tostring(qslash.id) })
+  check("the DAO cancels a queued action", r.cancelled == qslash.id
     and Timelock.gov.queue[tostring(qslash.id)] == nil, r.error)
   local qexp = dao({ Action = "Gov.Configure", ["Commit-Window-Ms"] = "3500" }).queued
   eq("timelocked configure: not before 10 days", apply(qcw.id, qcw.at - clock - 1).error, "Too-Early")
@@ -841,15 +845,16 @@ function runTimelockTests()
   dao({ Action = "Gov.Resume", ["X-Dao-Proposal"] = "42" })
   r = dao({ Action = "Gov.Pause", ["X-Dao-Proposal"] = "41" })
   check("the same proposal again is a no-op", r.duplicate == true and not Timelock.paused, encode(r))
-  -- The guardian may pause, never resume, and only for 90 days.
-  r = send(wallet(F.guardian, { Action = "Gov.Pause" }))
-  check("guardian pauses: heartbeat off", r.paused == true and Timelock.params.heartbeat == 0 and info().mode == "paused", r.error)
+  -- Only governance pauses: no guardian wallet can.
+  eq("the would-be guardian cannot pause", send(wallet(F.guardian, { Action = "Gov.Pause" })).error, "Not authorised")
+  r = dao({ Action = "Gov.Pause" })
+  check("the DAO pauses: heartbeat off", r.paused == true and Timelock.params.heartbeat == 0 and info().mode == "paused", r.error)
   eq("paused: no new requests", request("paused-1").error, "Paused")
   local sb = int(Timelock.balances[F.stranger], 0)
   r = send(delivery(F.token, { Action = "Credit-Notice", Sender = F.stranger, Quantity = tostring(4 * U),
     ["X-Request-Id"] = "pay-2", Reference = "t301" }))
   check("pay-and-request refused: the credit stays", r.error == "Paused" and Timelock.balances[F.stranger] == sb + 4, r.error)
-  eq("the guardian cannot resume", send(wallet(F.guardian, { Action = "Gov.Resume" })).error, "Not authorised")
+  eq("the would-be guardian cannot resume", send(wallet(F.guardian, { Action = "Gov.Resume" })).error, "Not authorised")
   eq("a stranger cannot pause", send(wallet(F.stranger, { Action = "Gov.Pause" })).error, "Not authorised")
   r = dao({ Action = "Gov.Resume" })
   check("the DAO resumes, heartbeat restored", r.paused == false and Timelock.params.heartbeat == 1 and not Timelock.paused, r.error)
@@ -957,11 +962,7 @@ function runTimelockTests()
   check("DAO removal refunds the full bond", ob["rng-bond-refund"] and ob["rng-bond-refund"].Recipient == E
     and ob["rng-bond-refund"].Quantity == string.format("%d", 25000 * U) and Timelock.validators[E] == nil, r.error)
 
-  -- Guardian expiry, then cleared.
-  tick(90 * DAY)
-  eq("guardian expired: pause refused", send(wallet(F.guardian, { Action = "Gov.Pause" })).error, "Not authorised")
-  dao({ Action = "Gov.Clear-Guardian" })
-  eq("guardian cleared", info().guardian, "")
+  eq("Gov.Clear-Guardian is gone", dao({ Action = "Gov.Clear-Guardian" }).error, "unknown action 'Gov.Clear-Guardian'")
 
   -- Every Transfer carries a strictly increasing X-Transfer-Sequence.
   local increasing = #seqs >= 4

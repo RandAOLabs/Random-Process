@@ -98,7 +98,7 @@ async function callTool(name: unknown, args: Record<string, unknown>) {
   if (name === "rng_request_plan") return textResult({
     productSurfaces: {
       local: { status: "live", contract: "deterministic and predictable to the sender" },
-      threshold: { status: "live", contract: "request-bound 2-of-3 BLS randomness" },
+      fast: { status: "live", contract: "on-demand 2-of-3 threshold BLS; rounds only for paid requests, no heartbeat; safe unless 2 of 3 operators collude" },
       beacon: { status: "live", contract: "Foundation-funded continuous Any-Honest public rounds" },
       anyHonest: { status: "live", contract: "time-lock commit/reveal verified by ~rng@1.0" },
       proofExplorer: { status: "live", contract: "independent retained-round verification" },
@@ -106,13 +106,13 @@ async function callTool(name: unknown, args: Record<string, unknown>) {
     device: "One ~rng@1.0 namespace for derivation, BLS verification, and the restored time-lock checks.",
     free: ["local deterministic streams", "round reads", "signature verification", "byte derivation"],
     paid: {
-      thresholdRequest: "3 TEST-RNG",
+      fastRequest: "3 RNG",
       anyHonestRequest: "4 TEST-RNG",
       secureSubscription: "1 TEST-RNG for 1,000 authenticated process pushes",
       buy: "No faucet: RNG is a fixed-supply token; buy it on the Paralith orderbook (RNG/GOLD, coming soon)",
     },
     deliveryTrust: "Public reads are free but trust the selected gateway view. A prepaid process subscription binds before reveal and receives the authenticated result from the beacon process.",
-    governance: "YapDAO (stake-dao/1) staked in RNG governs the beacon: passed proposals send Gov.* actions, applied after a 7-day (successor, reserve) or 48 h (treasury) timelock.",
+    governance: "YapDAO (stake-dao/1) staked in RNG governs the beacon: passed proposals send Gov.* actions, applied after a 10-day timelock that outlasts the 7-day vote, so a cancelling proposal can pass first. There is no guardian.",
     recommendedUX: "The AO application process should prepay requests or a subscription so end users never manage RNG credits.",
   });
   throw new Error(`unknown tool: ${String(name)}`);
