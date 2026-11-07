@@ -6,8 +6,10 @@
 // `authorize(session, player)` asks YOUR game to open the session for this
 // browser's key (the game charges the entry and sends
 // `fairOpenTags(session, player)` to the fair process); the commit is only
-// accepted after that. The fair process refuses Fair.Open (Game-Not-Allowed)
-// until its deployer has allowed the game (`deploy.mjs fair-allow <game>`).
+// accepted after that. Any game may play, paying for its own draws: the fair
+// process refuses Fair.Open (Game-Unfunded) while the game's prepaid balance
+// cannot cover one request (fund it with `fairFundTags` or
+// `deploy.mjs fund-game <rng> <game>`).
 // Typecheck: npx tsc --noEmit -p examples/fair-demo
 //
 // The browser commits H(secret) with a throwaway key kept in IndexedDB, waits
@@ -28,6 +30,7 @@ export function FairDemo({ fair, game, node, authorize }: { fair: string; game: 
   const [rows, setRows] = useState<Row[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [draws, setDraws] = useState<number | null>(null);
 
   useEffect(() => {
     const c = new FairClient({ fair, node });
@@ -42,6 +45,10 @@ export function FairDemo({ fair, game, node, authorize }: { fair: string; game: 
         const local = await c.pending();
         const now = Date.now();
         const sessions = await c.sessions(game);
+        // How many more draws the game's prepaid balance covers.
+        const [info, account] = await Promise.all([c.info(), c.account(game)]);
+        const price = Number(info.requestPriceAtoms ?? 0);
+        setDraws(price > 0 ? Math.floor(Number(account?.balance ?? 0) / price) : null);
         // Anyone may end a late session; this is how a lost secret shows up as a forfeit.
         for (const s of sessions) {
           if (nextStep(s, null, now) === "expire") await c.send(fairExpireTags(s.game, s.session, s.player)).catch(() => undefined);
@@ -84,6 +91,7 @@ export function FairDemo({ fair, game, node, authorize }: { fair: string; game: 
   return (
     <section className="space-y-3 text-[14px] text-[var(--gray)]">
       <p className="m-0">Player key: <code>{player || "creating…"}</code></p>
+      {draws !== null && <p className="m-0">Game balance: {draws} draws</p>}
       <button className="button invert" onClick={() => void play()} disabled={busy || !player}>{busy ? "Committing…" : "Play a fair round"}</button>
       {error && <p className="error" role="alert">{error}</p>}
       <ul className="m-0 list-none space-y-2 p-0">{rows.map((r) => (

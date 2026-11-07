@@ -26,11 +26,45 @@ local function delivery(pid, fields)
   body["from-process"] = pid
   return body
 end
+-- The ledger seen from outside: atoms credited in, atoms the process sent out
+-- (top-ups, refunds, withdrawals) and every X-Transfer-Sequence it used.
+local fundedIn, paidOut, seqs = 0, 0, {}
 local function send(body, advance)
   clock = clock + (advance or 100)
   base = compute(base, { body = body, timestamp = clock, process = SELF })
   local ok, d = pcall(json.decode, base.results.output.data or "")
+  for _, m in pairs(base.results.outbox or {}) do
+    if m.Action == "Transfer" then
+      paidOut = paidOut + math.tointeger(tonumber(m.Quantity))
+      seqs[#seqs + 1] = math.tointeger(tonumber(m["X-Transfer-Sequence"]))
+    end
+  end
   return ok and d or {}, base.results.outbox or {}
+end
+local ref = 0
+--- A token Credit-Notice paying `atoms` for `game` (X-Fair-Game).
+local function fund(game, atoms, o)
+  o = o or {}
+  ref = ref + 1
+  local f = { Action = "Credit-Notice", Sender = o.sender or F.payer, Quantity = tostring(atoms),
+    Reference = o.reference or ("t" .. ref) }
+  if game then f[o.tag or "X-Fair-Game"] = game end
+  local body = o.body or delivery(o.from or F.token, f)
+  if o.body then for k, v in pairs(f) do body[k] = v end end
+  local r, ob = send(body)
+  for _, k in ipairs({ "credited", "refunded" }) do
+    if type(r[k]) == "number" and r[k] > 0 then fundedIn = fundedIn + math.tointeger(r[k]) end
+  end
+  return r, ob
+end
+local function accounts() return json.decode(base.fairaccounts or "{}") end
+local function held()
+  local n = 0
+  for _, a in pairs(accounts()) do
+    check("no negative balance", a.balance >= 0 and a.reserved >= 0)
+    n = n + math.tointeger(a.balance) + math.tointeger(a.reserved)
+  end
+  return n
 end
 local function sessions(game) return (json.decode(base.fairsessions)[game or F.game]) or {} end
 local function batches() return json.decode(base.fairbatches) end
@@ -77,19 +111,51 @@ local function runFairTests()
                        fair.finalValue(V.vb, V.vb), fair.forfeitValue(V.vb) }) do seen[x] = true end
   eq("domains separated", count(seen), 4)
 
-  -- Attack (fair drain): every session is paid from this process's beacon
-  -- balance, so no game opens one until the deployer allows it.
-  eq("an unknown game cannot open sessions", open(F.p1, "unallowed").error, "Game-Not-Allowed")
-  eq("allowGames checked", configure({ allowGames = { "short" } }).error, "Bad-Parameter")
-  eq("openToAll checked", configure({ openToAll = "yes" }).error, "Bad-Parameter")
-  check("deployer allows games", configure({ allowGames = { F.game, F.stranger, F.other } }).allowedGames == 3)
-  check("and removes them", configure({ removeGames = { F.other } }).allowedGames == 2)
-  eq("allowlist published", json.decode(base.fairinfo).allowGames[F.game], true)
-  eq("a removed game is refused", open(F.p1, "removed", F.other).error, "Game-Not-Allowed")
-  check("openToAll lets any game in", configure({ openToAll = true }).openToAll == true
-    and open(F.p1, "anyone", F.other).opened == true)
-  configure({ openToAll = false })
-  eq("allowed games only again", open(F.p1, "anyone-2", F.other).error, "Game-Not-Allowed")
+  -- Open to any game, and each game pays for its own draws.
+  eq("no session before token and price are set", open(F.p1, "early0").error, "Not-Configured")
+  eq("token checked", configure({ token = "short" }).error, "Bad-Parameter")
+  eq("requestPrice checked", configure({ requestPrice = 0 }).error, "Bad-Parameter")
+  eq("requestPrice bounded", configure({ requestPrice = 1000001 }).error, "Bad-Parameter")
+  eq("no credit before the token is set", fund(F.game, 4000000).error, "Not-Token")
+  eq("price in atoms", configure({ token = F.token, requestPrice = 4 }).requestPriceAtoms, 4000000)
+  eq("token locked", configure({ token = F.other }).error, "Token-Locked")
+  eq("price published", json.decode(base.fairinfo).requestPriceAtoms, 4000000)
+  -- Attack (unfunded game): no balance, no session, and no registry entry.
+  local r0 = open(F.p1, "unfunded")
+  eq("an unfunded game is refused", r0.error, "Game-Unfunded")
+  eq("Game-Unfunded names the price", r0.price, 4000000)
+  eq("and takes no registry seat", Fair.state.gameCount, 0)
+  -- Attack (forged Credit-Notice): only the configured token, attested.
+  eq("wallet Credit-Notice refused", fund(F.game, 4000000, { body = wallet(F.stranger, {}) }).error, "Not-Token")
+  eq("wallet-forged from-process refused", fund(F.game, 4000000,
+    { body = wallet(F.stranger, { ["from-process"] = F.token }) }).error, "Not-Token")
+  eq("another process refused", fund(F.game, 4000000, { from = F.other }).error, "Not-Token")
+  eq("scheduler without from-process refused", fund(F.game, 4000000, { body = wallet(F.sched, {}) }).error, "Not-Token")
+  eq("missing reference refused", fund(F.game, 4000000, { reference = "x1" }).error, "Missing-Reference")
+  eq("forgeries credit nothing", accounts()[F.game], nil)
+  -- Funding: X-Fair-Game, X-For, else Sender; each token reference once.
+  r = fund(F.game, 1000000000, { reference = "t100" })
+  eq("game funded", r.balance, 1000000000)
+  eq("a replayed reference is a duplicate", fund(F.game, 1000000000, { reference = "t100" }).duplicate, true)
+  eq("and credits nothing", accounts()[F.game].balance, 1000000000)
+  eq("X-For funds too", fund(F.stranger, 100000000, { tag = "X-For" }).game, F.stranger)
+  eq("Sender funds itself", fund(nil, 4000000, { sender = F.game2 }).game, F.game2)
+  r, ob = fund(F.other, 3999999)
+  check("below one request a new account is not opened: refunded", r.refunded == 3999999
+    and ob["fair-refund"] and ob["fair-refund"].Recipient == F.payer and ob["fair-refund"].target == F.token)
+  eq("refund carries the first transfer sequence", ob["fair-refund"] and ob["fair-refund"]["X-Transfer-Sequence"], "1")
+  eq("a known game takes any amount", fund(F.game2, 1).balance, 4000001)
+  eq("held = funded - paid out", held(), fundedIn - paidOut)
+  -- Its own Transfers' Debit-Notices are accepted quietly; nobody else's.
+  check("debit notice from the token", send(delivery(F.token, { Action = "Debit-Notice" })).ok == true)
+  eq("debit notice from another process", send(delivery(F.other, { Action = "Debit-Notice" })).error, "Not-Token")
+  -- A handler that fails rolls back: no sequence number taken, nothing half-applied.
+  local seqBefore, origCredit = Fair.state.transferSeq, fair.credit
+  fair.credit = function(st) st.transferSeq = st.transferSeq + 99; st.accounts[F.game].balance = 0; error("boom") end
+  check("failing handler reports", tostring(fund(F.game, 4000000).error):match("boom") ~= nil)
+  fair.credit = origCredit
+  eq("rollback: sequence unchanged", Fair.state.transferSeq, seqBefore)
+  eq("rollback: balance unchanged", Fair.state.accounts[F.game].balance, 1000000000)
   -- Configure: deployer only, bounded, beacon fixed once set.
   eq("configure deployer-only", configure({ beacon = F.beacon }, F.stranger).error, "Not authorised")
   eq("window below 10 s refused", configure({ fairWindowMs = 9999 }).error, "Bad-Parameter")
@@ -191,8 +257,17 @@ local function runFairTests()
   eq("result for another id ignored", result("fair-9", F.round1).error, "Stale-Result")
   eq("nothing bound yet", sessionOf("sess-1", F.p1).status, "committed")
 
+  local reservedBefore = accounts()[F.game].reserved
   r, ob = result("fair-1", F.round1)
   eq("batch 1 bound", r.bound, 1)
+  -- The games in the batch pay its request: two sessions, half each.
+  eq("batch charged one request", r.charged, 4000000)
+  local top = ob["fair-topup"]
+  check("top-up to the beacon through the token", top and top.target == F.token and top.Recipient == F.beacon
+    and top.Action == "Transfer" and top.Quantity == "4000000")
+  eq("each session paid its share", sessionOf("sess-1", F.p1).charged, 2000000)
+  eq("both reserves left the reserved pool", reservedBefore - accounts()[F.game].reserved, 8000000)
+  eq("held = funded - paid out after a bind", held(), fundedIn - paidOut)
   local s1 = sessionOf("sess-1", F.p1)
   eq("beacon value is the per-request value", s1.beaconValue, F.vb1)
   eq("session value", s1.v, F.v1)
@@ -296,9 +371,41 @@ local function runFairTests()
   -- Restore: a fresh VM rebuilds from fairstate.
   local before = base.fairsessions
   local gamesBefore = Fair.state.gameCount
+  local accountsBefore, seqBefore2 = base.fairaccounts, Fair.state.transferSeq
   Fair = { rev = 0, owner = "", state = fair.new() }
   send(wallet(F.stranger, { Action = "Get-Info" }))
-  check("restored allowlist", Fair.state.allow and Fair.state.allow[F.game] == true and Fair.state.openToAll == false)
+  check("restored metered, token and price", Fair.state.metered == true and Fair.state.token == F.token
+    and Fair.state.price == 4000000)
+  eq("restored balances", base.fairaccounts, accountsBefore)
+  eq("restored transfer sequence", Fair.state.transferSeq, seqBefore2)
+  check("restored reference guard", fund(F.game, 1000000000, { reference = "t100" }).duplicate == true)
+  check("restored integers", math.type(Fair.state.accounts[F.game].balance) == "integer")
+
+  -- Withdraw: the game's free balance only, once per nonce, own sequence stream.
+  local free = math.tointeger(accounts()[F.game].balance)
+  eq("unsigned withdraw refused", send({ target = SELF, Action = "Fair.Withdraw", Nonce = "1" }).error, "Unsigned")
+  eq("withdraw needs a nonce", send(delivery(F.game, { Action = "Fair.Withdraw" })).error, "Bad-Nonce")
+  eq("more than the free balance refused", send(delivery(F.game, { Action = "Fair.Withdraw", Nonce = "1",
+    Quantity = tostring(free + 1) })).error, "Insufficient-Balance")
+  local seqNow = Fair.state.transferSeq
+  r, ob = send(delivery(F.game, { Action = "Fair.Withdraw", Nonce = "1", Quantity = "1000" }))
+  local w = ob["fair-withdraw"]
+  check("withdrawal pays the game through the token", r.withdrawn == 1000 and w and w.target == F.token
+    and w.Recipient == F.game and w.Quantity == "1000")
+  eq("withdrawal takes the next sequence", w and w["X-Transfer-Sequence"], string.format("%d", seqNow + 1))
+  r, ob = send(delivery(F.game, { Action = "Fair.Withdraw", Nonce = "1", Quantity = "1000" }))
+  check("replayed withdraw pays nothing", r.error == "Bad-Nonce" and ob["fair-withdraw"] == nil)
+  eq("an older nonce too", send(delivery(F.game, { Action = "Fair.Withdraw", Nonce = "0" })).error, "Bad-Nonce")
+  eq("a stranger withdraws only its own", send(delivery(F.stranger, { Action = "Fair.Withdraw", Nonce = "1",
+    Quantity = tostring(free) })).error, "Insufficient-Balance")
+  r = send(delivery(F.game, { Action = "Fair.Withdraw", Nonce = "7" }))
+  eq("withdraw all that is free", r.balance, 0)
+  check("reserved stays", r.reserved > 0)
+  eq("then an open is unfunded", open(F.p1, "after-withdraw").error, "Game-Unfunded")
+  local strictly = true
+  for i = 2, #seqs do if seqs[i] ~= seqs[i - 1] + 1 then strictly = false end end
+  check("transfer sequences are 1, 2, 3, ... with no gap", strictly and seqs[1] == 1, table.concat(seqs, ","))
+  eq("held = funded - paid out at the end", held(), fundedIn - paidOut)
   check("restored game registry", gamesBefore > 0 and Fair.state.gameCount == gamesBefore
     and Fair.state.games[F.game] ~= nil, Fair.state.gameCount)
   eq("restored beacon", Fair.state.beacon, F.beacon)
@@ -363,10 +470,80 @@ local function runFairTests()
   eq("throwaway games fill the registry", select(2, fair.open(st, { game = F.game, session = "s", player = F.p1, now = 2000 })), "Fair-Full")
   check("their lapsed allowances free it", fair.open(st, { game = F.game, session = "s", player = F.p1, now = 1000 + 600001 }) ~= nil
     and st.gameCount == 3 and st.games[F.game] ~= nil)
-  -- Embedded mode (no `allow`): any game; with `allow`, only those in it.
-  st = fair.new({ beacon = F.beacon, allow = { [F.game] = true } })
-  eq("library allowlist", select(2, fair.open(st, { game = F.other, session = "s", player = F.p1, now = 1000 })), "Game-Not-Allowed")
-  check("library allowlist admits its games", fair.open(st, { game = F.game, session = "s", player = F.p1, now = 1000 }) ~= nil)
+  -- Metered library: rounding, drain attempts, expiry refund, eviction.
+  local tref = 0
+  local function credit(s, game, atoms)
+    tref = tref + 1
+    return fair.credit(s, { from = F.token, fromProcess = true, sender = F.payer, quantity = tostring(atoms),
+      reference = "t" .. tref, forGame = game })
+  end
+  local function oc(s, game, name, now, noCommit)
+    local d1, e1 = fair.open(s, { game = game, session = name, player = F.p1, now = now })
+    if not d1 or noCommit then return d1, e1 end
+    return fair.commit(s, { game = game, session = name, player = F.p1, commit = F.c1, commitTime = tostring(now), now = now })
+  end
+  local function total(s)
+    local n = 0
+    for _, a in pairs(s.accounts) do
+      check("library: never negative", a.balance >= 0 and a.reserved >= 0, a.balance)
+      n = n + a.balance + a.reserved
+    end
+    return n
+  end
+  local A, B = string.rep("a", 43), string.rep("b", 43)
+  st = fair.new({ metered = true, token = F.token, price = 10, unit = 4 })
+  credit(st, A, 30); credit(st, B, 30)
+  oc(st, A, "s1", 1000); oc(st, A, "s2", 1000); oc(st, B, "s1", 1000)
+  eq("reserved at open", st.accounts[A].reserved, 20)
+  st.beacon = F.beacon
+  local q = fair.pump(st, 2000)
+  eq("three sessions, one request", q and q["Request-Id"], "fair-1")
+  d, o = fair.onResult(st, { now = 3000, data = { results = { { requestId = "fair-1", value = F.vb1 } } } })
+  eq("price split exactly", d.charged, 10)
+  -- Keys sort A|s1, A|s2, B|s1: 10 = 4 + 3 + 3, the remainder to the first.
+  eq("first key pays the remainder atom", st.sessions[A .. "|s1|" .. F.p1].charged, 4)
+  eq("A paid 7, rest of its reserve freed", st.accounts[A].balance, 23)
+  eq("B paid 3", st.accounts[B].balance, 27)
+  eq("nothing left reserved", st.accounts[A].reserved + st.accounts[B].reserved, 0)
+  eq("top-up in whole units (unit 4)", o["fair-topup"] and o["fair-topup"].Quantity, "8")
+  eq("the rest waits as surplus", st.surplus, 2)
+  eq("library: held + sent + surplus = funded", total(st) + 8 + st.surplus, 60)
+  -- A refused request charges nobody and keeps the reserve for the retry.
+  oc(st, B, "s2", 4000)
+  q = fair.pump(st, 9000)
+  local before = st.accounts[B].balance
+  fair.onError(st, { requestId = q["Request-Id"], error = "Round-Abandoned", now = 9100 })
+  check("abandoned: no charge, reserve kept", st.accounts[B].balance == before and st.accounts[B].reserved == 10)
+  -- Price raised while a session waits: its share is capped at its reserve.
+  st.price = 40
+  q = fair.pump(st, 20000)
+  d = fair.onResult(st, { now = 20100, data = { results = { { requestId = q["Request-Id"], value = F.vb2 } } } })
+  eq("share capped at the reserve", d.charged, 10)
+  check("B never negative", st.accounts[B].balance >= 0 and st.accounts[B].reserved == 0)
+  -- Attack (drain): a game with one request's worth opens one session, no more.
+  st = fair.new({ metered = true, token = F.token, price = 10, unit = 1, beacon = F.beacon })
+  credit(st, A, 10)
+  check("one funded session", oc(st, A, "d1", 1000, true) ~= nil)
+  eq("the second is unfunded", select(2, oc(st, A, "d2", 1000, true)), "Game-Unfunded")
+  eq("reserved is not withdrawable", select(2, fair.withdraw(st, { game = A, nonce = "1", now = 1000 })), "Insufficient-Balance")
+  eq("another game's balance is not yours", select(2, oc(st, B, "d1", 1000, true)), "Game-Unfunded")
+  eq("a commit for an unfunded game is not opened", select(2, fair.commit(st, { game = B, session = "d1", player = F.p1,
+    commit = F.c1, commitTime = "1000", now = 1000 })), "Not-Opened")
+  eq("dust credit for a new game refunded", credit(st, B, 9).refunded, 9)
+  -- Refund on expiry: an allowance that lapses unused gives its reserve back.
+  d = fair.withdraw(st, { game = A, nonce = "1", now = 1000 + 600001 })
+  eq("lapsed reserve back and withdrawable", d and d.withdrawn, 10)
+  eq("withdraw replay pays nothing", select(2, fair.withdraw(st, { game = A, nonce = "1", now = 1000 + 600002 })), "Bad-Nonce")
+  -- Eviction keeps the balance: the registry forgets A, its account stays.
+  st = fair.new({ metered = true, token = F.token, price = 10, unit = 1, beacon = F.beacon, maxGames = 1 })
+  credit(st, A, 25); credit(st, B, 10)
+  oc(st, A, "e1", 1000, true)
+  check("B evicts the idle A after its allowance lapsed", oc(st, B, "e1", 1000 + 600001, true) ~= nil and st.games[A] == nil)
+  eq("A's balance survives eviction (reserve released)", st.accounts[A].balance, 25)
+  check("and A opens again with it", oc(st, A, "e2", 1000 + 600001 * 2, true) ~= nil)
+  -- Embedded (unmetered) mode needs no token or balance.
+  st = fair.new({ beacon = F.beacon })
+  check("embedded: no funding needed", fair.open(st, { game = F.game, session = "s", player = F.p1, now = 1000 }) ~= nil)
 
   lines[#lines + 1] = passed .. " passed, " .. failed .. " failed"
   return table.concat(lines, "\n")

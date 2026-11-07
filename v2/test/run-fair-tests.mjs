@@ -28,6 +28,7 @@ const requestValue = (round, requester, requestId) => sha(`hyperbeam/rng/any-hon
 const F = {
   owner: addr('fair-owner'), sched: addr('scheduler'), stranger: addr('stranger'),
   beacon: addr('timelock-beacon'), other: addr('other-process'), game: addr('game'), game2: addr('game-two'),
+  token: addr('rng-token'), payer: addr('payer'),
   self: 'f'.repeat(43), p1: addr('player-1'), p2: addr('player-2'), p3: addr('player-3'),
   s1: sha('secret-1'), s2: sha('secret-2'), s3: sha('secret-3'), s4: sha('secret-4'),
   round1: sha('round value 1'), round2: sha('round value 2'), round3: sha('round value 3'),

@@ -6,20 +6,26 @@
 -- Messages (tags):
 --   Fair.Open { Session, Player }                        the game (wallet signer or attested process):
 --                                                         lets key Player commit to Session (10 min);
---                                                         only a game the deployer allowed (allowGames)
+--                                                         any game, paying: reserves one request price
+--                                                         from its balance, else Game-Unfunded
 --   Fair.Commit { Game, Session, Commit, Commit-Time }   signed by the player key P, after Fair.Open
 --   Fair.Reveal { Game, Session, Secret [, Player] }      anyone (Player defaults to the signer)
 --   Fair.Expire { Game, Session, Player }                 anyone, after revealBy
 --   RNG-Result / RNG-Error                                the configured beacon only (attested)
---   Fair.Configure { Data = { beacon, fairWindowMs, keep, maxOpen,
---                    minIntervalMs, maxGames, maxPerGame,
---                    allowGames = [game...], removeGames = [game...], openToAll } }  the deployer
---     Every session is paid from this process's beacon balance, so no game may
---     open sessions until the deployer allows it (or sets openToAll = true).
+--   Credit-Notice { Sender, Quantity, Reference,         the configured token only (attested): funds
+--                   X-Fair-Game | X-For }                 that game's balance (default: Sender)
+--   Fair.Withdraw { Nonce [, Quantity] }                  the game: its free balance back (atoms);
+--                                                         Nonce strictly increasing per game
+--   Fair.Configure { Data = { beacon, token, requestPrice, fairWindowMs, keep,
+--                    maxOpen, minIntervalMs, maxGames, maxPerGame } }  the deployer
+--     beacon and token are fixed once set; requestPrice is the beacon's (whole
+--     RNG) and must follow a governance change of it.
 --   Get-Info                                              anyone; also sends a due request
--- Sends: Request-Random -> beacon (paid from this process's beacon balance),
+-- Sends: Request-Random -> beacon (from this process's beacon balance, a float
+--        topped up from the games' payment after every bound batch),
+--        Transfer -> token (top-up, refund, withdrawal; X-Transfer-Sequence),
 --        Fair-Result -> Game.
--- Publishes: fairsessions, fairbatches, fairinfo, fairstate, fairrev.
+-- Publishes: fairsessions, fairbatches, fairaccounts, fairinfo, fairstate, fairrev.
 --
 -- Native ~lua@5.3a contract, the beacon's conventions. Bundled after
 -- vendor/json.lua, vendor/jsonenc.lua (encode, jsonObject), lib/rng.lua
@@ -28,7 +34,14 @@
 local json = require(".json")
 local SIGNATURE_ALGS = { ["rsa-pss-sha512"] = true, ["rsa-pss-sha256"] = true }
 
-Fair = Fair or { rev = 0, owner = "", state = fair.new({ allow = {} }) }
+Fair = Fair or { rev = 0, owner = "", state = fair.new({ metered = true }) }
+
+local function deepCopy(v)
+  if type(v) ~= "table" then return v end
+  local t = {}
+  for k, x in pairs(v) do t[k] = deepCopy(x) end
+  return t
+end
 
 local function deflate(v)
   if type(v) == "number" then return math.tointeger(v) or v end
@@ -41,7 +54,7 @@ local function restore(base)
   if tonumber(base.fairrev or "0") <= Fair.rev then return end
   local ok, saved = pcall(json.decode, base.fairstate or "")
   if ok and type(saved) == "table" then
-    local st = fair.new({ allow = {} })
+    local st = fair.new({ metered = true })
     for k, v in pairs(deflate(saved.state or {})) do st[k] = v end
     Fair = { rev = math.tointeger(saved.rev) or 0, owner = saved.owner or "", state = st }
   end
@@ -163,44 +176,41 @@ local function configure(msg, from)
     if type(d.beacon) ~= "string" or #d.beacon ~= 43 then return nil, "Bad-Parameter" end
     if st.beacon ~= "" and st.beacon ~= d.beacon then return nil, "Beacon-Locked" end
   end
+  if d.token ~= nil then
+    if type(d.token) ~= "string" or #d.token ~= 43 or not d.token:match("^[%w_%-]+$") then return nil, "Bad-Parameter" end
+    if st.token ~= "" and st.token ~= d.token then return nil, "Token-Locked" end
+  end
+  local rp = d.requestPrice ~= nil and bounded(d.requestPrice, B.requestPrice)
   local w = d.fairWindowMs ~= nil and bounded(d.fairWindowMs, B.windowMs)
   local k = d.keep ~= nil and bounded(d.keep, B.keep)
   local m = d.maxOpen ~= nil and bounded(d.maxOpen, B.maxOpen)
   local mi = d.minIntervalMs ~= nil and bounded(d.minIntervalMs, B.minIntervalMs)
   local mg = d.maxGames ~= nil and bounded(d.maxGames, B.maxGames)
   local mp = d.maxPerGame ~= nil and bounded(d.maxPerGame, B.maxPerGame)
-  if w == nil or k == nil or m == nil or mi == nil or mg == nil or mp == nil then return nil, "Bad-Parameter" end
-  local function games(list)
-    if list == nil then return {} end
-    if type(list) ~= "table" or #list > 1024 then return nil end
-    for _, g in ipairs(list) do if type(g) ~= "string" or #g ~= 43 or not g:match("^[%w_%-]+$") then return nil end end
-    return list
+  if w == nil or k == nil or m == nil or mi == nil or mg == nil or mp == nil or rp == nil then
+    return nil, "Bad-Parameter"
   end
-  local add, remove = games(d.allowGames), games(d.removeGames)
-  if not add or not remove or (d.openToAll ~= nil and type(d.openToAll) ~= "boolean") then return nil, "Bad-Parameter" end
   st.changes = (st.changes or 0) + 1
-  st.allow = st.allow or {}
-  for _, g in ipairs(add) do st.allow[g] = true end
-  for _, g in ipairs(remove) do st.allow[g] = nil end
-  if d.openToAll ~= nil then st.openToAll = d.openToAll end
   if d.beacon then st.beacon = d.beacon end
+  if d.token then st.token = d.token end
+  if rp then st.price = rp * st.unit end
   if w then st.windowMs = w end
   if k then st.keep = k end
   if m then st.maxOpen = m end
   if mi then st.minIntervalMs = mi end
   if mg then st.maxGames = mg end
   if mp then st.maxPerGame = mp end
-  local allowed = 0
-  for _ in pairs(st.allow) do allowed = allowed + 1 end
-  return { ok = true, beacon = st.beacon, fairWindowMs = st.windowMs, keep = st.keep, maxOpen = st.maxOpen,
-    minIntervalMs = st.minIntervalMs, maxGames = st.maxGames, maxPerGame = st.maxPerGame,
-    allowedGames = allowed, openToAll = st.openToAll }, {}
+  return { ok = true, beacon = st.beacon, token = st.token, requestPriceAtoms = st.price, fairWindowMs = st.windowMs,
+    keep = st.keep, maxOpen = st.maxOpen, minIntervalMs = st.minIntervalMs, maxGames = st.maxGames,
+    maxPerGame = st.maxPerGame }, {}
 end
 
 --- The game registry as JSON objects (empty `allow` maps stay objects).
 local function gamesState(games)
   local out = {}
-  for name, g in pairs(games or {}) do out[name] = { live = g.live, last = g.last, allow = jsonObject(g.allow) } end
+  for name, g in pairs(games or {}) do
+    out[name] = { live = g.live, last = g.last, allow = jsonObject(g.allow), held = jsonObject(g.held or {}) }
+  end
   return out
 end
 
@@ -220,6 +230,7 @@ function compute(base, req)
   if refused then
     result = reply(base, { error = refused })
   else
+    local saved = deepCopy(st)
     local ok, data, outbox, extra = pcall(function()
       local from, fromProcess = actor(raw, base)
       local a = action:lower()
@@ -233,6 +244,9 @@ function compute(base, req)
       return d, o, x
     end)
     if not ok then
+      -- A handler that failed sends nothing, so it takes no sequence number
+      -- and leaves no half-applied state (the beacon's rule).
+      Fair.state, st = saved, saved
       result = reply(base, { error = tostring(data) })
     elseif data == nil then
       local e = { error = outbox }
@@ -254,13 +268,16 @@ function compute(base, req)
     outstanding = st.outstanding, attempts = st.attempts, retryAt = st.retryAt,
     minIntervalMs = st.minIntervalMs, maxGames = st.maxGames, maxPerGame = st.maxPerGame,
     games = jsonObject(gamesState(st.games)), gameCount = st.gameCount, lastRequestAt = st.lastRequestAt,
-    allow = jsonObject(st.allow or {}), openToAll = st.openToAll, changes = st.changes } })
+    token = st.token, price = st.price, unit = st.unit, accounts = jsonObject(st.accounts),
+    credited = jsonObject(st.credited), creditFloor = st.creditFloor, transferSeq = st.transferSeq,
+    surplus = st.surplus, changes = st.changes } })
   result.fairsessions = encode(jsonObject(fair.sessionsView(st)))
   result.fairbatches = encode(fair.batchesView(st))
+  result.fairaccounts = encode(jsonObject(fair.accountsView(st)))
   result.fairinfo = encode({ beacon = st.beacon, fairWindowMs = st.windowMs, keep = st.keep, maxOpen = st.maxOpen,
     open = st.open, next = st.next, outstanding = st.outstanding, at = now, protocol = "rng/fair/v1",
     minIntervalMs = st.minIntervalMs, maxGames = st.maxGames, maxPerGame = st.maxPerGame, games = st.gameCount,
-    allowGames = jsonObject(st.allow or {}), openToAll = st.openToAll,
+    token = st.token, requestPriceAtoms = st.price, transferSeq = st.transferSeq,
     requestAfter = st.lastRequestAt and (st.lastRequestAt + st.minIntervalMs) or 0 })
   return result
 end

@@ -77,6 +77,19 @@ test('pay-and-request is one Transfer with X-Request-Id', async () => {
   assert.equal(await fair.findRequest(records, who, 'req-2'), null);
 });
 
+test('a game prepays fair play with one Transfer (X-Fair-Game) and withdraws by nonce', () => {
+  const fairPid = addr('fair'), game = addr('game');
+  assert.deepEqual(fair.fairFundTags(fairPid, game, 40_000_000n),
+    { Action: 'Transfer', Recipient: fairPid, Quantity: '40000000', 'X-Fair-Game': game });
+  assert.throws(() => fair.fairFundTags(fairPid, game, 0));
+  assert.throws(() => fair.fairFundTags('short', game, 1));
+  assert.deepEqual(fair.fairWithdrawTags(3), { Action: 'Fair.Withdraw', Nonce: '3' });
+  assert.deepEqual(fair.fairWithdrawTags(4, 1000n), { Action: 'Fair.Withdraw', Nonce: '4', Quantity: '1000' });
+  assert.throws(() => fair.fairWithdrawTags(0));
+  assert.ok(fair.FAIR_ERRORS['Game-Unfunded']);
+  assert.equal(fair.FAIR_ERRORS['Game-Not-Allowed'], undefined, 'no allowlist');
+});
+
 test('signDataItem matches the vendored ANS-104 layout and verifies', async () => {
   const { privateKey } = crypto.generateKeyPairSync('rsa', { modulusLength: 4096, publicExponent: 0x10001 });
   const jwk = { ...privateKey.export({ format: 'jwk' }), kty: 'RSA' };

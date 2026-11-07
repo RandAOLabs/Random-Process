@@ -47,7 +47,7 @@ The command list is the header of `deploy.mjs`. Config templates:
 
 | File | What |
 | --- | --- |
-| `v3-genesis.json` | genesis allocations (whole RNG or atoms, `$DEPLOYER` allowed); must sum to exactly 10^15 atoms |
+| `v3-genesis.json` | genesis allocations (whole RNG or atoms, `$DEPLOYER` allowed; must sum to exactly 10^15 atoms): all of it to RNG Labs, plus the `distribution` the runbook transfers on |
 | `v3-params.json` | genesis `Gov.Configure` parameters and `predecessor`; checked against the beacon's hard bounds before sending |
 | `anyhonest-h.json` | `h`, `hProof` for `T` |
 | `anyhonest-validators.json` | validator wallets for `bond-for` |
@@ -69,8 +69,9 @@ export HB_NODE=https://hyperbeam.tylerw.ai HB_WALLET=<deployer.json> \
 node deploy/deploy.mjs plan --dry-run      # review every message first
 ```
 
-1. **Token.** `spawn-token deploy/v3-genesis.json`. Check: `status` shows
-   sealed, supply 10^15, `sequenced-v1`.
+1. **Token.** `spawn-token deploy/v3-genesis.json`: the whole supply,
+   1,000,000,000 RNG, goes to RNG Labs (`$DEPLOYER` on testnet). Check:
+   `status` shows sealed, supply 10^15, `sequenced-v1`.
 2. **DAO.** `spawn-dao` (YapDAO `stake-dao/1` from paralith-mono, `Dao-Token` =
    RNG, rules from `daoRules()`, same scheduler). It refuses a token without
    `sequenced-v1` and checks `daoinfo` (configured, token, no admin).
@@ -78,20 +79,45 @@ node deploy/deploy.mjs plan --dry-run      # review every message first
    `genesis-configure deploy/v3-params.json`. This locks token, unit, self and
    `predecessor = MZMoXv-2` and sends `Successor-Ack` to it (the v2 beacon has
    no handler for it; that refusal is expected).
-4. **Fund.** `fund-reserve` (200 M) and `fund-treasury` (50 M) from the genesis
-   allocation. Every `fund-*` refuses until `beaconinfo.token` is set (step 3):
-   before genesis the beacon can only refund the Credit-Notice through its
-   sender, and past 16 senders or 256 notices each the atoms strand. Fair play:
-   `spawn-fair`, `configure-fair`, `fund-fair 10000`, then `fair-allow <game...>`
-   for each game that may open sessions (the fair process refuses every other
-   game with `Game-Not-Allowed`: sessions are paid from its beacon balance).
-5. **Validators bond and migrate.** `bond-for 100000 deploy/anyhonest-validators.json`
-   bonds the three node wallets at 4 x stake, the rank cap, from day one, so a
-   newcomer must bond as much to outrank them (a quarter of the seats go by
-   seniority whatever the bond); third parties run
-   `node provider/anyhonest-validator.mjs init`, get RNG (`grant`), then `bond`
-   and `run`. The in-node devices need the v3-aware `rng-validator@1.0` (WP5)
+4. **250 M under DAO control.** `fund-reserve` (200 M) and `fund-treasury`
+   (50 M) from Labs into the beacon. This is the DAO's share: the DAO process
+   itself must never receive RNG, because stake-dao/1 can never send an action
+   to the token it stakes (paralith-mono `dao.lua:193`), so RNG sent there is
+   unspendable. The DAO controls both through `Gov.*`: the reserve pays
+   heartbeat rounds (and moves only to a successor), the treasury is
+   spendable by proposal, at most 10 % per 30 days (5 M at launch), and can
+   top up the reserve (`Gov.Fund-Reserve`). Every `fund-*` refuses until
+   `beaconinfo.token` is set (step 3): before genesis the beacon can only
+   refund the Credit-Notice through its sender, and past 16 senders or 256
+   notices each the atoms strand.
+   **Fair play** (open to any game): `spawn-fair`, `configure-fair` (beacon,
+   token, `requestPrice` from `v3-params.json`), `fund-fair 40` (the fair
+   process's beacon float, 10 requests; it is topped up from the games after
+   every batch, never spent). Each game prepays its own draws:
+   `fund-game <rng> <game>` (or any Transfer to the fair process with
+   `X-Fair-Game = <game>`); an unfunded game gets `Game-Unfunded`, and a game
+   takes back its free balance with `Fair.Withdraw { Nonce }`. Re-run
+   `configure-fair` whenever governance changes the beacon's `requestPrice`.
+5. **Validators bond and migrate.** Each launch validator receives 100,000 RNG
+   and bonds all of it (4 x stake, the rank cap) in one transfer:
+   `bond-for 100000 deploy/anyhonest-validators.json`. At the cap from day
+   one, a newcomer must bond as much to outrank them (a quarter of the seats
+   go by seniority whatever the bond). A launch validator outside that file
+   gets `grant <address> 100000` and bonds at least 25,000 itself (100,000 to
+   match the operators). Third parties run
+   `node provider/anyhonest-validator.mjs init`, get RNG, then `bond` and
+   `run`. The in-node devices need the v3-aware `rng-validator@1.0` (WP5)
    build first. Soak 72 h on deployer ownership: `status`, `test-subscription`.
+   A later allocation for Paralith contracts' RNG is a plain `grant`, not
+   part of launch.
+
+   *Soak vs runway.* The 72 h soak is a pre-handover live test: the v3 beacon
+   runs real rounds with real validators while the deployer can still pause
+   or roll back, before anything is handed to the DAO. The runway is how long
+   the reserve keeps paying heartbeat rounds: 200 M RNG at 2 rounds/s x
+   1 RNG (172,800 RNG/day) is about 1,157 days (3.2 years), extendable by
+   `Gov.Fund-Reserve` from the treasury; after it the beacon falls back to
+   request-driven rounds. The soak spends about 0.5 M of it.
 6. **Successor on the old beacon (legacy Admin path).** With the v2 owner wallet:
    `RNG_LEGACY_STATE=deploy/native-testnet.json node deploy/deploy.mjs legacy-set-successor MZMoXv-2aLD1MaR5tHEpXNrZgc6DoUpdw2q4DvlfxC0 <v3 beacon>`.
    Devices pause there, finish their reveals and move to v3. Each validator

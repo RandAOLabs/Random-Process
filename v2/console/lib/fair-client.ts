@@ -54,6 +54,24 @@ export const fairExpireTags = (game: string, session: string, player: string) =>
   ({ Action: "Fair.Expire", Game: game, Session: session, Player: player });
 
 /**
+ * Prepay a game's fair-play draws: a token Transfer to the fair process (send
+ * it to the RNG token, signed by whoever pays). Any game may play; each
+ * Fair.Open reserves one beacon request price from this balance.
+ */
+export function fairFundTags(fair: string, game: string, quantityAtoms: bigint | number | string) {
+  if (!/^[A-Za-z0-9_-]{43}$/.test(fair) || !/^[A-Za-z0-9_-]{43}$/.test(game)) throw new Error("fair and game must be 43-character ids");
+  const q = String(quantityAtoms);
+  if (!/^[1-9][0-9]*$/.test(q)) throw new Error("quantity must be a positive whole number of atoms");
+  return { Action: "Transfer", Recipient: fair, Quantity: q, "X-Fair-Game": game };
+}
+
+/** Sent by the GAME to the fair process: its free balance back. `nonce` must exceed the last one used. */
+export function fairWithdrawTags(nonce: number, quantityAtoms?: bigint | number | string) {
+  if (!Number.isSafeInteger(nonce) || nonce < 1) throw new Error("nonce must be a positive integer");
+  return { Action: "Fair.Withdraw", Nonce: String(nonce), ...(quantityAtoms !== undefined ? { Quantity: String(quantityAtoms) } : {}) };
+}
+
+/**
  * Pay and request in one message: a token Transfer to the beacon. Its
  * Credit-Notice credits the sender and runs Request-Random in the same slot.
  * Send it to the beacon's token, signed by the requester.
@@ -136,7 +154,11 @@ export const FAIR_ERRORS: Record<string, string> = {
   "Not-Expired": "The reveal window is still open.",
   "Not-Opened": "The game has not opened this session for this player key (or the allowance lapsed).",
   "Game-Full": "The game holds too many open sessions; try again shortly.",
-  "Game-Not-Allowed": "This fair process has not allowed the game to open sessions (its deployer adds games with allowGames).",
+  "Game-Unfunded": "The game's fair-play balance cannot pay for another draw; the game funds it with a token Transfer (X-Fair-Game).",
+  "Not-Configured": "This fair process has no token or request price yet.",
+  "Insufficient-Balance": "The game's free fair-play balance is smaller than that.",
+  "Bad-Nonce": "That withdrawal nonce was already used.",
+  "Not-Token": "Only the configured RNG token can credit a balance.",
   "Bad-Player": "The player key is not a valid address.",
   "Not-Beacon": "Only the configured beacon can bind a value.",
   "Stale-Result": "That beacon result is not for the outstanding request.",
@@ -285,8 +307,10 @@ export class NotScheduledError extends Error {}
 
 export type FairInfo = { beacon: string; fairWindowMs: number; at: number; protocol: string;
   outstanding?: { batch: number; requestId: string; sentAt: number } | null; requestAfter?: number; minIntervalMs?: number;
-  /** The games allowed to open sessions (unless openToAll). */
-  allowGames?: Record<string, boolean>; openToAll?: boolean };
+  /** The RNG token games pay in, and what one beacon request costs (atoms). */
+  token?: string; requestPriceAtoms?: number };
+/** A game's fair-play balance, in atoms: `balance` is free, `reserved` backs its open sessions. */
+export type FairAccount = { balance: number; reserved: number; nonce: number };
 export type CommitOptions = { retries?: number; delayMs?: number; sleep?: (ms: number) => Promise<void> };
 
 /** One fair process, driven by this browser's throwaway key. */
@@ -340,6 +364,12 @@ export class FairClient {
   }
 
   info() { return this.read<FairInfo>("fairinfo"); }
+
+  /** The game's prepaid balance (null: never funded). */
+  async account(game: string) {
+    const all = await this.read<Record<string, FairAccount>>("fairaccounts");
+    return all?.[game] ?? null;
+  }
 
   async sessions(game: string) {
     const all = await this.read<Record<string, FairSession[]>>("fairsessions");

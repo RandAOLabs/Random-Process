@@ -36,13 +36,24 @@ test('deployment manifests retain state and load the pinned console environment'
   assert.match(hyperbeamCompose, /node-config\.json:\/app\/node-config\.json:ro/);
 });
 
-test('genesis template sums to exactly 10^15 atoms and splits as specified', () => {
-  const a = loadAllocations(readJson('deploy/v3-genesis.json'), { deployer: DEPLOYER });
+test('genesis: RNG Labs holds 100 % in one allocation; 250 M goes under DAO control by transfer', () => {
+  const spec = readJson('deploy/v3-genesis.json');
+  assert.equal(spec.allocations.length, 1, 'one allocation');
+  assert.equal(spec.allocations[0].role, 'labs');
+  const a = loadAllocations(spec, { deployer: DEPLOYER });
   assert.deepEqual(Object.keys(a.table), [DEPLOYER]);
   assert.equal(a.table[DEPLOYER], SUPPLY_ATOMS);
+  assert.equal(a.rows.length, 1);
   assert.equal(a.reserveRng, 200_000_000);
   assert.equal(a.treasuryRng, 50_000_000);
+  assert.equal(a.reserveRng + a.treasuryRng, 250_000_000, 'DAO control: reserve + treasury');
+  assert.equal(a.validatorRng, 100_000);
   assert.equal(a.ticker, 'TEST-RNG');
+  const vals = readJson('deploy/anyhonest-validators.json').length;
+  assert.ok(BigInt(a.reserveRng + a.treasuryRng + vals * a.validatorRng) * 1_000_000n <= SUPPLY_ATOMS);
+  assert.throws(() => loadAllocations({ ...spec, distribution: { reserveRng: 0.5 } }, { deployer: DEPLOYER }), /whole/);
+  assert.throws(() => loadAllocations({ ...spec, distribution: { reserveRng: 1_000_000_000, treasuryRng: 1 } },
+    { deployer: DEPLOYER }), /exceeds/);
 });
 
 test('genesis allocations refuse a wrong sum, a bad address or a fraction', () => {
@@ -177,7 +188,7 @@ test('checkV3 passes on a healthy deployment and flags each problem', () => {
     daoinfo: { Configured: true, Token: pid('t'), Admin: '' },
     beaconinfo: { token: pid('t'), self: pid('b'), predecessor: pid('old'), health: { status: 'ok' },
       foundationReserveAtoms: '200000000000000', governor: pid('d') },
-    fairinfo: { beacon: pid('b') },
+    fairinfo: { beacon: pid('b'), token: pid('t'), requestPriceAtoms: 4000000 },
   };
   assert.deepEqual(checkV3({ state: s, ...good }).filter((c) => !c.ok), []);
   const failing = (patch) => checkV3({ state: s, ...good, ...patch }).filter((c) => !c.ok).map((c) => c.check);
@@ -185,6 +196,7 @@ test('checkV3 passes on a healthy deployment and flags each problem', () => {
   assert.deepEqual(failing({ beaconinfo: { ...good.beaconinfo, governor: '' } }), ['beacon governed by the DAO']);
   assert.deepEqual(failing({ beaconinfo: { ...good.beaconinfo, foundationReserveAtoms: '0' } }), ['beacon reserve funded']);
   assert.deepEqual(failing({ daoinfo: { ...good.daoinfo, Token: pid('x') } }), ['dao configured on RNG']);
+  assert.deepEqual(failing({ fairinfo: { ...good.fairinfo, token: '' } }), ['fair paid in RNG']);
 });
 
 test('dry-run plan prints the whole v3 sequence and sends nothing', () => {
@@ -212,11 +224,22 @@ test('dry-run plan prints the whole v3 sequence and sends nothing', () => {
   assert.ok(transfers.every((l) => l.target === token));
   assert.deepEqual(transfers.find((l) => l.tags['X-Foundation']).tags.Quantity, '200000000000000');
   assert.deepEqual(transfers.find((l) => l.tags['X-Treasury']).tags.Quantity, '50000000000000');
-  assert.equal(transfers.find((l) => l.tags['X-For'] === fair).tags.Recipient, beacon);
+  const float = transfers.find((l) => l.tags['X-For'] === fair);
+  assert.equal(float.tags.Recipient, beacon);
+  assert.equal(float.tags.Quantity, '40000000', 'fair float: 10 requests');
+  // Fair play is open to any game: no allowlist step.
+  assert.ok(sends.every((l) => l.action !== 'Fair.Configure' || !('allowGames' in (l.data || {}))));
+  // The whole supply starts with Labs; reserve + treasury (250 M) are the DAO's, in the beacon.
+  const daoControl = transfers.filter((l) => l.tags['X-Foundation'] || l.tags['X-Treasury'])
+    .reduce((n, l) => n + BigInt(l.tags.Quantity), 0n);
+  assert.equal(daoControl, 250_000_000_000_000n);
+  assert.ok(transfers.every((l) => l.tags.Recipient !== dao), 'no RNG to the DAO process: it can never spend its staked token');
   const bonds = transfers.filter((l) => l.tags['X-Bond']);
   assert.deepEqual(bonds.map((l) => l.tags['X-For']), readJson('deploy/anyhonest-validators.json'));
   assert.ok(bonds.every((l) => l.tags.Quantity === '100000000000'), 'operators bond 4 x stake');
   assert.deepEqual(sends[at('Fair.Configure')].data.beacon, beacon);
+  assert.equal(sends[at('Fair.Configure')].data.token, token);
+  assert.equal(sends[at('Fair.Configure')].data.requestPrice, readJson('deploy/v3-params.json').requestPrice);
   const handover = sends[at('Gov.Handover')];
   assert.deepEqual(handover.tags, { Governor: dao, Guardian: pid('guardian') });
   assert.ok(at('Gov.Configure') < at('Gov.Handover'));

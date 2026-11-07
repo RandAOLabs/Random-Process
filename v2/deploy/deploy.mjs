@@ -8,7 +8,10 @@
 //   genesis-configure [params.json]         deployer Gov.Configure naming the token (locks token/unit/self/predecessor)
 //   fund-reserve <rng> | fund-treasury <rng>  deployer Transfer with X-Foundation / X-Treasury
 //   fund <rng> [for]                        a beacon balance (X-For)
-//   spawn-fair | configure-fair [windowMs] | fund-fair <rng> | fair-allow <game...>
+//   spawn-fair | configure-fair [windowMs]  fair play (token, beacon requestPrice from v3-params.json)
+//   fund-fair <rng>                         the fair process's beacon float (X-For = fair; not spent:
+//                                           every bound batch is topped up from the games' balances)
+//   fund-game <rng> <game>                  prepay a game's fair-play balance (X-Fair-Game); any game
 //   grant <address> <rng>                   plain RNG transfer from the deployer
 //   bond-for <rng> <address...|validators.json>  Transfer X-Bond X-For each validator
 //   gov <Gov.Action> [Tag=Value ...]        any deployer-path Gov.* (Pause, Resume, Apply, Set-Successor, ...)
@@ -58,8 +61,11 @@ const atomsOf = (rng) => {
 // Pure builders (tested in test/deployment-config.test.mjs)
 // ---------------------------------------------------------------------------
 
-/** Allocations file -> { table: { addr: atoms(BigInt) }, rows, ticker, reserveRng, treasuryRng }.
- * `$DEPLOYER` is the deployer's address; repeated addresses are summed. */
+/** Allocations file -> { table: { addr: atoms(BigInt) }, rows, ticker, reserveRng, treasuryRng, validatorRng }.
+ * `$DEPLOYER` is the deployer's address; repeated addresses are summed.
+ * `distribution` is what the runbook transfers on from the genesis holder
+ * (reserve and treasury go under DAO control in the beacon; validatorRng is
+ * each launch validator's grant, bonded whole). */
 export function loadAllocations(spec, { deployer } = {}) {
   if (!spec || !Array.isArray(spec.allocations) || !spec.allocations.length) throw new Error('allocations[] is required');
   const table = {};
@@ -84,7 +90,18 @@ export function loadAllocations(spec, { deployer } = {}) {
   }
   if (sum !== SUPPLY_ATOMS) throw new Error(`allocations sum to ${sum} atoms, not exactly ${SUPPLY_ATOMS}`);
   const rngOf = (role) => (byRole[role] ? Number(byRole[role] / BigInt(UNIT)) : 0);
-  return { table, rows, ticker: spec.ticker || 'RNG', reserveRng: rngOf('reserve'), treasuryRng: rngOf('treasury') };
+  const dist = spec.distribution || {};
+  const whole = (name) => {
+    const v = dist[name];
+    if (v === undefined) return 0;
+    if (!Number.isSafeInteger(v) || v < 0) throw new Error(`distribution.${name} must be a whole RNG amount`);
+    return v;
+  };
+  const reserveRng = rngOf('reserve') || whole('reserveRng');
+  const treasuryRng = rngOf('treasury') || whole('treasuryRng');
+  const validatorRng = whole('validatorRng');
+  if (BigInt(reserveRng + treasuryRng) * BigInt(UNIT) > SUPPLY_ATOMS) throw new Error('distribution exceeds the supply');
+  return { table, rows, ticker: spec.ticker || 'RNG', reserveRng, treasuryRng, validatorRng };
 }
 
 /** The Lua prelude rng-token.lua reads on its first slot. */
@@ -286,7 +303,10 @@ export function checkV3({ state, tokeninfo, daoinfo, beaconinfo, fairinfo }) {
     c('beacon reserve funded', BigInt(beaconinfo?.foundationReserveAtoms || 0) > 0n, beaconinfo?.foundationReserveAtoms);
     if (state.governor) c('beacon governed by the DAO', beaconinfo?.governor === state.dao, beaconinfo?.governor);
   }
-  if (state.fair) c('fair bound to beacon', fairinfo?.beacon === state.beacon, fairinfo?.beacon);
+  if (state.fair) {
+    c('fair bound to beacon', fairinfo?.beacon === state.beacon, fairinfo?.beacon);
+    c('fair paid in RNG', fairinfo?.token === state.token && Number(fairinfo?.requestPriceAtoms) > 0, fairinfo?.token);
+  }
   try { sameScheduler(state, ['token', 'dao', 'beacon', 'fair'].filter((r) => state[r])); c('one scheduler', true, state.scheduler); }
   catch (e) { c('one scheduler', false, e.message); }
   return out;
@@ -437,7 +457,8 @@ async function main(argv) {
       const prelude = genesisPrelude(alloc);
       state.deployer = me;
       state.tokenTicker = alloc.ticker;
-      state.genesis = { rows: alloc.rows, reserveRng: alloc.reserveRng, treasuryRng: alloc.treasuryRng };
+      state.genesis = { rows: alloc.rows, reserveRng: alloc.reserveRng, treasuryRng: alloc.treasuryRng,
+        validatorRng: alloc.validatorRng };
       const pid = await spawn('token', { name: alloc.ticker, lua: tokenSource(prelude), extra: { prelude } });
       await send(pid, 'Info');
       return alloc;
@@ -531,14 +552,23 @@ async function main(argv) {
     },
     async 'configure-fair'(windowMs) {
       sameScheduler(state, ['beacon', 'fair']);
-      const d = { beacon: state.beacon, fairWindowMs: Number(windowMs || 60000), keep: 64, maxOpen: 10000 };
+      // requestPrice must equal the beacon's: a governance change of it is
+      // followed by configure-fair again.
+      const d = { beacon: state.beacon, token: state.token, requestPrice: loadParams().requestPrice,
+        fairWindowMs: Number(windowMs || 60000), keep: 64, maxOpen: 10000 };
       return send(state.fair, 'Fair.Configure', { data: JSON.stringify(d) });
     },
+    // The float the fair process requests from; >= 2 requests, since the next
+    // batch may go out before the last top-up lands.
     'fund-fair': async (rng) => fundBeacon(rng, { 'X-For': state.fair }),
-    // The fair process opens sessions only for games the deployer allowed.
-    async 'fair-allow'(...games) {
-      if (!games.length || !games.every(isPid)) throw new Error('fair-allow <game...>');
-      return send(state.fair, 'Fair.Configure', { data: JSON.stringify({ allowGames: games }) });
+    // Any game may play: it prepays its own draws here (and Fair.Withdraws the rest).
+    async 'fund-game'(rng, game) {
+      if (!isPid(game) || !isPid(state.fair)) throw new Error('fund-game <rng> <game> (after spawn-fair)');
+      if (!DRY) {
+        const info = await key(state.fair, 'fairinfo');
+        if (info?.token !== state.token) throw new Error('configure-fair first: the fair process refuses credits until its token is set');
+      }
+      return transfer(state.fair, rng, { 'X-Fair-Game': game });
     },
 
     async gov(action, ...kv) {
@@ -632,10 +662,11 @@ async function main(argv) {
       await v3['fund-treasury']();
       await v3['spawn-fair']();
       await v3['configure-fair']();
-      await v3['fund-fair'](1000);
-      // Operator validators bond 4 x stake from day one: rank is capped bond,
-      // so a newcomer must bond as much to outrank them (PERMISSIONLESS.md P2).
-      await v3['bond-for'](100000, path.join(HERE, 'anyhonest-validators.json'));
+      await v3['fund-fair'](40); // a float of 10 requests at requestPrice 4
+      // Each launch validator gets validatorRng (100,000) and bonds all of it,
+      // 4 x stake, from day one: rank is capped bond, so a newcomer must bond
+      // as much to outrank them (PERMISSIONLESS.md P2). One transfer does both.
+      await v3['bond-for'](state.genesis.validatorRng, path.join(HERE, 'anyhonest-validators.json'));
       // The old beacon's Admin.Set-Successor (legacy-set-successor) goes here, live.
       await v3.handover(process.env.RNG_GUARDIAN);
       await v3['dao-propose'](path.join(V2, 'governance', 'proposals', '001-handover-proof.json'));
