@@ -12,6 +12,8 @@ constants.txt
 process.lua
 examples/
 !/v2/console/examples/
+/v2/console/examples/*
+!/v2/console/examples/fair-demo/
 hera.json
 demo.json
 process.lua
