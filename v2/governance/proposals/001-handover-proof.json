@@ -1,0 +1,6 @@
+{
+  "title": "Prove DAO control of the beacon",
+  "body": "Re-sets Reveal-Window-Ms to its current value (30000). Passing and executing it proves the beacon accepts the DAO as governor after Gov.Handover. No parameter changes.",
+  "execProcess": "$BEACON",
+  "execTags": { "Action": "Gov.Configure", "Reveal-Window-Ms": "30000" }
+}

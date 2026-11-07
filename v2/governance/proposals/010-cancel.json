@@ -1,0 +1,6 @@
+{
+  "title": "Cancel a queued governance action",
+  "body": "Gov.Cancel drops a queued Set-Successor, Move-Reserve or Treasury-Spend before it is applied.",
+  "execProcess": "$BEACON",
+  "execTags": { "Action": "Gov.Cancel", "Gov-Id": "$GOV_ID" }
+}

@@ -1,0 +1,6 @@
+{
+  "title": "Tune beacon parameters",
+  "body": "Gov.Configure applies at once, inside the hard bounds (docs/PERMISSIONLESS.md). Edit the tags; up to 14 parameters per proposal.",
+  "execProcess": "$BEACON",
+  "execTags": { "Action": "Gov.Configure", "Round-Price": "1", "Commit-Window-Ms": "5000" }
+}

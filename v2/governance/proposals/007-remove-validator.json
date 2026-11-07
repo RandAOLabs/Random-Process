@@ -1,0 +1,6 @@
+{
+  "title": "Remove a validator",
+  "body": "Gov.Remove-Validator. Refused while it has a commit in flight. Its full bond is refunded: governance never takes a bond.",
+  "execProcess": "$BEACON",
+  "execTags": { "Action": "Gov.Remove-Validator", "Validator": "$VALIDATOR" }
+}

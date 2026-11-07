@@ -1,0 +1,6 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": { "incremental": false, "plugins": [] },
+  "include": ["../../next-env.d.ts", "*.tsx", "../../lib/fair-client.ts"],
+  "exclude": []
+}

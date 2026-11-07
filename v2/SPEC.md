@@ -4,6 +4,11 @@ Status: testnet candidate. The canonical specification and reference
 implementation are maintained by RNG Labs, a product of CipherPlay Inc., in
 this repository. CipherPlay Inc. owns the project IP.
 
+Scope: this document is the threshold-BLS surface only (`beacon/beacon.lua`).
+It is unchanged by Any-Honest v3, which is in [`ANY_HONEST.md`](./ANY_HONEST.md).
+The live threshold beacon keeps the old TEST-RNG token; the fixed-supply v3 RNG
+token (no faucet, no mint) pays only the v3 Any-Honest beacon and fair play.
+
 ## Purpose
 
 HyperBEAM RNG provides deterministic, publicly verifiable randomness to AO processes.

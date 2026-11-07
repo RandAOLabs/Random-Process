@@ -1,0 +1,6 @@
+{
+  "title": "Refill the reserve from the treasury",
+  "body": "Gov.Fund-Reserve moves treasury atoms into the heartbeat reserve, immediately.",
+  "execProcess": "$BEACON",
+  "execTags": { "Action": "Gov.Fund-Reserve", "Quantity": "$QUANTITY" }
+}

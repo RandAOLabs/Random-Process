@@ -33,7 +33,7 @@ const tools = [
   },
   {
     name: "rng_governance_status",
-    description: "Read RNG governance parameters and proposals. Votes are advisory and administrators execute passed decisions manually.",
+    description: "Read RNG governance parameters and proposals. Governance is a YapDAO (stake-dao/1) staking RNG; a passed proposal executes its action on the beacon after the beacon timelock.",
     inputSchema: { type: "object", properties: {}, additionalProperties: false },
   },
   {
@@ -109,10 +109,10 @@ async function callTool(name: unknown, args: Record<string, unknown>) {
       thresholdRequest: "3 TEST-RNG",
       anyHonestRequest: "4 TEST-RNG",
       secureSubscription: "1 TEST-RNG for 1,000 authenticated process pushes",
-      faucet: "100 TEST-RNG per signed request, 1,000 lifetime cap per wallet",
+      buy: "No faucet: RNG is a fixed-supply token; buy it on the Paralith orderbook (RNG/GOLD, coming soon)",
     },
     deliveryTrust: "Public reads are free but trust the selected gateway view. A prepaid process subscription binds before reveal and receives the authenticated result from the beacon process.",
-    governance: "DAO votes are advisory. Administrators manually execute and record passed decisions; the DAO cannot upgrade code or move funds itself.",
+    governance: "YapDAO (stake-dao/1) staked in RNG governs the beacon: passed proposals send Gov.* actions, applied after a 7-day (successor, reserve) or 48 h (treasury) timelock.",
     recommendedUX: "The AO application process should prepay requests or a subscription so end users never manage RNG credits.",
   });
   throw new Error(`unknown tool: ${String(name)}`);

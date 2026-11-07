@@ -6,7 +6,7 @@ on:
       - 'v2/**'
       - '.github/workflows/hyperbeam-rng.yml'
   push:
-    branches: [v2]
+    branches: [v2, permissionless]
     paths:
       - 'v2/**'
       - '.github/workflows/hyperbeam-rng.yml'
@@ -51,7 +51,7 @@ jobs:
           persist-credentials: false
       - name: Verify AOS wasm module
         run: echo "164c0859e796d30f682944be8bdd544a1292e9140f6f2998ce5ef93e2184a8c8  ../paralith-mono/backend/native/module/AOS.wasm" | sha256sum -c -
-      - name: Test (Lua contracts, threshold BLS, DKG, deployment config)
+      - name: Test (Lua contracts incl. beacon v3, token, fair; BLS; JS validator; deploy dry-run)
         env:
           AOS_WASM: ${{ github.workspace }}/paralith-mono/backend/native/module/AOS.wasm
           AO_LOADER: ${{ github.workspace }}/v2/node_modules/@permaweb/ao-loader/dist/index.cjs

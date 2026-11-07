@@ -1,0 +1,6 @@
+{
+  "title": "Treasury spend",
+  "body": "Queues Gov.Treasury-Spend for 48 hours. At most 10% of the treasury per action. Quantity is in atoms (10^6 per RNG).",
+  "execProcess": "$BEACON",
+  "execTags": { "Action": "Gov.Treasury-Spend", "Recipient": "$RECIPIENT", "Quantity": "$QUANTITY" }
+}

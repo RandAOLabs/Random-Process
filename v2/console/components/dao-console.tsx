@@ -1,27 +1,51 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type CSSProperties, type ReactNode } from "react";
 import { useLivePoll } from "../hooks/use-live-poll";
 import { connectWallet, sendMessage } from "../lib/wallet";
+import {
+  describeAction, duration, percent, queueView, tally, tokens, yapUrl,
+  type DaoInfo, type DaoProposal, type DaoStake, type GovQueueEntry,
+} from "../app/api/dao/model";
 import { SiteFooter, SiteHeader } from "./site-header";
 
-type Proposal = { id?: number; title?: string; summary?: string; kind?: string; status?: string;
-  yes?: number; no?: number; abstain?: number; eligiblePower?: number; voters?: number };
-type DaoStatus = { configured: boolean; process?: string; token?: string; unit?: number;
-  totalStaked?: number; quorumBps?: number; votingPeriodMs?: number; minProposalStake?: number;
-  proposals: Proposal[]; error?: string };
-type AnyHonestStatus = { configured: boolean; round?: number; foundationReserveAtoms?: string;
-  treasuryAtoms?: string; unit?: number; activeSubscriptions?: number;
-  priceSchedule?: { round?: number; request?: number; subscription?: number; subscriptionRounds?: number; crackBounty?: number } };
+type DaoStatus = { configured: boolean; status?: string; process?: string; beacon?: string;
+  info?: DaoInfo; proposals: DaoProposal[]; error?: string };
+// beaconinfo via /api/anyhonest. The v3 governance fields are absent on a v2 beacon.
+type Beacon = { configured: boolean; process?: string; round?: number; unit?: number;
+  foundationReserveAtoms?: string; treasuryAtoms?: string; mode?: string; paused?: boolean;
+  governor?: string; guardian?: string; guardianUntil?: number; successor?: string; successorAck?: boolean;
+  govQueue?: GovQueueEntry[]; features?: string[] };
+
+const h1: CSSProperties = { fontFamily: "var(--display)", fontSize: 30, lineHeight: 1.2, letterSpacing: "-.01em", textTransform: "none" };
+const h2: CSSProperties = { fontFamily: "var(--display)", fontSize: 20, lineHeight: 1.3, letterSpacing: 0, textTransform: "none", marginBottom: 12 };
+const short = (a?: string) => a ? `${a.slice(0, 6)}…${a.slice(-4)}` : "—";
+const when = (ms?: number) => ms ? new Date(ms).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" }) : "—";
+
+function Section({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <section className="border-t border-[var(--line)] py-8">
+      <h2 style={h2}>{title}</h2>
+      <div className="space-y-3 text-[14px] leading-relaxed text-[var(--gray)]">{children}</div>
+    </section>
+  );
+}
+
+function Stat({ label, value }: { label: string; value: ReactNode }) {
+  return (
+    <div className="border border-[var(--line)] bg-[#0c0c0c] p-3">
+      <dt className="text-[11px] text-[var(--dim)]">{label}</dt>
+      <dd className="m-0 mt-1 break-all text-[15px] text-[var(--white)] tabular-nums">{value}</dd>
+    </div>
+  );
+}
 
 export function DaoConsole() {
   const [dao, setDao] = useState<DaoStatus>({ configured: false, proposals: [] });
-  const [beacon, setBeacon] = useState<AnyHonestStatus>({ configured: false });
+  const [beacon, setBeacon] = useState<Beacon>({ configured: false });
+  const [now, setNow] = useState(0);
   const [address, setAddress] = useState<string | null>(null);
-  const [selected, setSelected] = useState<number | null>(null);
-  const [stake, setStake] = useState("1000");
-  const [title, setTitle] = useState("");
-  const [summary, setSummary] = useState("");
+  const [stake, setStake] = useState<DaoStake | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -30,10 +54,11 @@ export function DaoConsole() {
       fetch("/api/dao", { cache: "no-store" }), fetch("/api/anyhonest", { cache: "no-store" }),
     ]);
     setDao(await daoResponse.json() as DaoStatus);
-    setBeacon(await beaconResponse.json() as AnyHonestStatus);
+    setBeacon(await beaconResponse.json() as Beacon);
+    setNow(Date.now());
   }
 
-  useLivePoll(refresh);
+  useLivePoll(refresh, 5_000);
 
   async function action(label: string, run: () => Promise<void>) {
     setBusy(label); setError(null);
@@ -42,38 +67,106 @@ export function DaoConsole() {
     finally { setBusy(null); }
   }
 
-  const connect = () => action("CONNECTING", async () => { setAddress(await connectWallet()); });
-  const fundStake = () => action("STAKING", async () => {
-    if (!address || !dao.configured || !dao.process || !dao.token) throw new Error("connect after the DAO is deployed");
-    const amount = Number(stake);
-    if (!Number.isSafeInteger(amount) || amount < 1) throw new Error("stake must be a positive whole RNG amount");
-    await sendMessage(dao.token, { Action: "Transfer", Recipient: dao.process,
-      Quantity: String(amount * (dao.unit ?? 1000000)), "X-For": address, "X-Governance": "true" });
+  const connect = () => action("Connecting", async () => {
+    const next = await connectWallet();
+    setAddress(next);
+    const response = await fetch(`/api/dao?address=${encodeURIComponent(next)}`, { cache: "no-store" });
+    const body = await response.json() as { stake?: DaoStake; error?: string };
+    if (!response.ok) throw new Error(body.error || "stake unavailable");
+    setStake(body.stake ?? null);
   });
-  const propose = () => action("PROPOSING", async () => {
-    if (!dao.configured || !dao.process || !title.trim()) throw new Error("DAO deployment and a title are required");
-    await sendMessage(dao.process, { Action: "Propose",
-      Data: JSON.stringify({ title: title.trim(), summary: summary.trim(), kind: "general" }) });
-    setTitle(""); setSummary("");
-  });
-  const vote = (choice: "yes" | "no" | "abstain") => action(`VOTING_${choice.toUpperCase()}`, async () => {
-    if (!dao.configured || !dao.process || !selected) throw new Error("select a proposal first");
-    await sendMessage(dao.process, { Action: "Vote", Data: JSON.stringify({ id: selected, choice }) });
+  // Gov.Apply is open to anyone once a queued action's timelock has passed.
+  const apply = (id: number) => action(`Applying #${id}`, async () => {
+    if (!beacon.process) throw new Error("the beacon is not configured");
+    if (!address) setAddress(await connectWallet());
+    const reply = (await sendMessage(beacon.process, { Action: "Gov.Apply", "Gov-Id": String(id) })).reply;
+    if (typeof reply?.error === "string") throw new Error(reply.error);
   });
 
-  const unit = BigInt(beacon.unit ?? 1000000);
-  const rng = (atoms?: string) => atoms ? (BigInt(atoms) / unit).toString() : "—";
-  const chosen = dao.proposals.find((proposal) => proposal.id === selected);
+  const info = dao.info;
+  const denom = info?.Denomination ?? 6;
+  const unitDigits = Math.round(Math.log10(beacon.unit ?? 1_000_000));
+  const v3 = beacon.features?.includes("gov") ?? false;
+  const queue = queueView(beacon.govQueue, now);
+  const beaconPid = dao.beacon || beacon.process || "";
 
   return (
-    <main className="shell compact-page dao-page">
+    <main className="shell">
       <SiteHeader active="dao" />
-      <section className="page-titlebar container"><div><p className="kicker">[ 04 // DAO ]</p><h1>Vote. Admins execute.</h1></div><p>Governance is advisory by design. Passed proposals never move funds or upgrade contracts automatically.</p></section>
-      <section className="dao-board container">
-        <div className="dao-column"><p className="board-label">PROTOCOL_FUNDS</p><dl className="dao-metrics"><div><dt>FOUNDATION_RESERVE</dt><dd>{rng(beacon.foundationReserveAtoms)} RNG</dd></div><div><dt>DAO_TREASURY</dt><dd>{rng(beacon.treasuryAtoms)} RNG</dd></div><div><dt>BEACON_ROUND</dt><dd>{beacon.round ?? "—"}</dd></div><div><dt>STAKED_VOTING_POWER</dt><dd>{dao.totalStaked ?? 0} RNG</dd></div></dl><p className="dao-rule">Foundation pays heartbeat rounds. Treasury receives subscriptions and pays 10 RNG crack bounties.</p></div>
-        <div className="dao-column"><p className="board-label">PROPOSALS</p><div className="proposal-list">{dao.proposals.length === 0 ? <p className="muted">{dao.configured ? "NO_PROPOSALS" : "DAO_PROCESS_NOT_DEPLOYED"}</p> : dao.proposals.slice(0, 4).map((proposal) => <button key={proposal.id} className={selected === proposal.id ? "proposal selected" : "proposal"} onClick={() => setSelected(proposal.id ?? null)}><span>#{proposal.id} · {proposal.status}</span><b>{proposal.title}</b><small>YES {proposal.yes ?? 0} / NO {proposal.no ?? 0} / ABSTAIN {proposal.abstain ?? 0}</small></button>)}</div>{chosen && <div className="vote-row"><button onClick={() => void vote("yes")}>YES</button><button onClick={() => void vote("no")}>NO</button><button onClick={() => void vote("abstain")}>ABSTAIN</button></div>}</div>
-        <div className="dao-column"><p className="board-label">PARTICIPATE</p><button className="button" onClick={connect} disabled={Boolean(busy)}>{address ? `${address.slice(0, 8)}...CONNECTED` : "CONNECT_WANDER"}</button><label className="field compact"><span>STAKE RNG</span><input value={stake} onChange={(event) => setStake(event.target.value)} /></label><button className="button" onClick={fundStake} disabled={!address || !dao.configured || Boolean(busy)}>STAKE_FOR_VOTING</button><label className="field compact"><span>PROPOSAL TITLE</span><input value={title} onChange={(event) => setTitle(event.target.value)} maxLength={120} /></label><label className="field compact"><span>SUMMARY</span><input value={summary} onChange={(event) => setSummary(event.target.value)} maxLength={4000} /></label><button className="button invert" onClick={propose} disabled={!address || !dao.configured || Boolean(busy)}>SUBMIT_PROPOSAL</button>{busy && <p className="notice">{busy}</p>}{error && <p className="error">{error}</p>}</div>
-      </section>
+      <div className="container pb-24">
+        <section className="py-10">
+          <h1 style={h1}>RNG DAO</h1>
+          <div className="mt-4 max-w-[760px] space-y-3 text-[15px] leading-relaxed text-[var(--gray)]">
+            <p className="m-0">RNG holders govern the beacon through a YapDAO <code>stake-dao/1</code> process. Stake RNG to vote. A passed proposal sends one message, usually a <code>Gov.*</code> action to the beacon. Actions that move money wait out a timelock in the beacon first.</p>
+            <p className="m-0">This page is read-only. Staking, proposing and voting happen on YapDAO.</p>
+            {dao.process && <p className="m-0"><a className="button invert" href={yapUrl(dao.process)} target="_blank" rel="noreferrer">Vote on yapdao.com</a></p>}
+          </div>
+        </section>
+
+        <Section title="Beacon governance">
+          {!beacon.configured && <p className="m-0">The beacon is not deployed on this network yet.</p>}
+          {beacon.configured && !v3 && <p className="m-0">This beacon predates DAO governance. The fields below fill in once beacon v3 is live.</p>}
+          <dl className="m-0 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
+            <Stat label="Governor" value={v3 ? (beacon.governor ? short(beacon.governor) : "Deployer, until handover") : "—"} />
+            <Stat label="Guardian" value={beacon.guardian && (beacon.guardianUntil ?? 0) > now ? `${short(beacon.guardian)} until ${when(beacon.guardianUntil)}` : "None"} />
+            <Stat label="Mode" value={beacon.paused ? "Paused" : beacon.mode ?? "—"} />
+            <Stat label="Reserve" value={`${tokens(beacon.foundationReserveAtoms, unitDigits)} RNG`} />
+            <Stat label="Treasury" value={`${tokens(beacon.treasuryAtoms, unitDigits)} RNG`} />
+            <Stat label="Successor" value={beacon.successor ? `${short(beacon.successor)}${beacon.successorAck ? " (acked)" : ""}` : "None"} />
+          </dl>
+        </Section>
+
+        <Section title="Timelocked actions">
+          <p className="m-0">Set-Successor and Move-Reserve wait 7 days, Treasury-Spend 48 hours. Anyone can apply an action once its time has come; the DAO can cancel it before then.</p>
+          {queue.length === 0 ? <p className="m-0">Nothing is queued.</p> : (
+            <table className="w-full border-collapse text-[13px]">
+              <thead><tr className="text-left text-[var(--dim)]"><th className="py-1 pr-3">#</th><th className="py-1 pr-3">Action</th><th className="py-1 pr-3">Details</th><th className="py-1 pr-3">Runs</th><th /></tr></thead>
+              <tbody>{queue.map((e) => (
+                <tr key={e.id} className="border-t border-[var(--line)]">
+                  <td className="py-2 pr-3">{e.id}</td>
+                  <td className="py-2 pr-3 text-[var(--white)]">{e.kind}</td>
+                  <td className="py-2 pr-3 break-all">{e.detail || "—"}</td>
+                  <td className="py-2 pr-3">{e.due ? "Now" : `in ${duration(e.remainingMs)} (${when(e.at)})`}</td>
+                  <td className="py-2">{e.due && <button className="button" onClick={() => void apply(e.id)} disabled={Boolean(busy)}>Apply</button>}</td>
+                </tr>))}</tbody>
+            </table>)}
+        </Section>
+
+        <Section title="The DAO">
+          {!dao.configured && <p className="m-0">{dao.status === "not-stake-dao" ? "The configured DAO process is not a stake-dao/1 DAO." : "The RNG DAO is not deployed on this network yet."}</p>}
+          {info && <>
+            <dl className="m-0 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
+              <Stat label="Staked" value={`${tokens(info.TotalStaked, denom)} ${info.Ticker}`} />
+              <Stat label="Stakers" value={info.Stakers} />
+              <Stat label="Open proposals" value={`${info.OpenProposals} / ${info.MaxActiveProposals}`} />
+              <Stat label="To propose" value={`${tokens(info.ProposalRequirement ?? info.ProposalThreshold, denom)} staked + ${tokens(info.ProposalDeposit, denom)} deposit`} />
+              <Stat label="Voting period" value={duration(info.VotingPeriod)} />
+              <Stat label="Unstake delay" value={duration(info.UnstakeDelay)} />
+            </dl>
+            <p className="m-0">Quorum {percent(info.QuorumBps)} of staked RNG. A proposal passes with more than {percent(info.PassBps)} yes, and is vetoed above {percent(info.VetoBps)} veto.</p>
+          </>}
+          {address && <p className="m-0">Your stake ({short(address)}): {tokens(stake?.active ?? "0", denom)} active, {tokens(stake?.cooling ?? "0", denom)} cooling{stake?.releaseAt ? `, withdrawable ${when(stake.releaseAt)}` : ""}.</p>}
+          {!address && dao.configured && <button className="button" onClick={() => void connect()} disabled={Boolean(busy)}>Show my stake</button>}
+        </Section>
+
+        <Section title="Proposals">
+          {dao.proposals.length === 0 && <p className="m-0">No proposals yet.</p>}
+          <div className="space-y-3">{dao.proposals.slice(0, 20).map((p) => {
+            const t = tally(p);
+            const act = describeAction(p.action, beaconPid);
+            return (
+              <article key={p.id} className="border border-[var(--line)] p-4">
+                <p className="m-0 text-[12px] text-[var(--dim)]">#{p.id} · {p.status}{p.status === "active" ? ` · ends ${when(p.endsAt)} · would be ${t.outcome}` : ""}</p>
+                <p className="m-0 mt-1 text-[15px] text-[var(--white)]">{p.title}</p>
+                <p className="m-0 mt-1 text-[12px]">Yes {tokens(p.yes, denom)} · No {tokens(p.no, denom)} · Veto {tokens(p.veto, denom)} · Abstain {tokens(p.abstain, denom)} · quorum {t.quorumMet ? "met" : `${tokens(p.quorum, denom)} needed`} · {p.voters} voters</p>
+                {act && <p className="m-0 mt-2 break-all text-[12px]"><code>{act.name}</code> {act.args} → {act.toBeacon ? "beacon" : short(p.action?.process)}{act.executed ? " · executed" : ""}</p>}
+                {dao.process && p.status === "active" && <p className="m-0 mt-2 text-[12px]"><a className="underline underline-offset-2" href={yapUrl(dao.process)} target="_blank" rel="noreferrer">Vote on YapDAO</a></p>}
+              </article>);
+          })}</div>
+        </Section>
+        {busy && <p className="notice" role="status">{busy}…</p>}
+        {error && <p className="error" role="alert">{error}</p>}
+      </div>
       <SiteFooter />
     </main>
   );

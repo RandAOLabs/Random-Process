@@ -19,7 +19,7 @@ export type BeaconInfo = {
 };
 type BeaconState = { self: string; rounds: Record<string, Round> };
 type AccountBeaconState = BeaconState & { balances: Record<string, number> };
-type TokenInfo = { Denomination: string; FaucetAmount: string; FaucetLifetimeCap: string; Ticker: string };
+type TokenInfo = { Denomination: string; Ticker: string };
 
 export function networkConfig() {
   const node = env.RNG_NODE_URL;
@@ -59,8 +59,11 @@ async function readAnyHonestStatus() {
   if (!cfg.anyHonest) return { configured: false, status: "not-deployed" };
   const base = `${cfg.node}/${cfg.anyHonest}~process@1.0/now`;
   type Output = { y: string; via: "reveal" | "crack"; alpha?: string; proof?: string };
+  // v3 round records list each paid request's value (`requests`); v2 has only a count.
+  type Request = { requester: string; requestId: string; value: string };
   type Record = { T: number; h: string; commits: { [address: string]: string };
-    outputs: { [address: string]: Output }; value: string; opened?: number; finalizedAt?: number };
+    outputs: { [address: string]: Output }; value: string; opened?: number; finalizedAt?: number;
+    requests?: Request[] | { [key: string]: never } };
   type Info = { round: number; unit: number; validators: Array<{ suspended?: boolean; exiting?: boolean }>;
     foundationReserveAtoms: string; treasuryAtoms: string; activeSubscriptions: number;
     priceSchedule: { round: number; request: number; subscription: number; subscriptionRounds: number; crackBounty: number } };
@@ -118,31 +121,37 @@ async function readAnyHonestStatus() {
       opened: r.opened, finalizedAt: r.finalizedAt }))
     : [...(recentKey ?? [])])
     .sort((a, b) => b.round - a.round);
+  // Wallet requesters read their value here: the beacon sends RNG-Result to processes only.
+  const requestRecords = slots.flatMap((r) => r && typeof r.round === "number" && Array.isArray(r.requests) && r.requests.length > 0
+    ? [{ round: r.round, value: r.value, requests: r.requests }] : []);
   return { configured: true, process: cfg.anyHonest, ...info, round: Math.max(info.round, round),
-    latest: record ? { ...record, round } : undefined, recent,
+    latest: record ? { ...record, round } : undefined, recent, requestRecords,
     proofValid, checkedAt: new Date().toISOString() };
 }
 
+// The RNG DAO is a YapDAO stake-dao/1 process (docs/PERMISSIONLESS.md). It
+// publishes `daoinfo`, `proposals` and `stake-<address>`; voting happens in Yap.
 export async function getGovernanceStatus() {
   const cfg = extendedNetworkConfig();
   if (!cfg.dao) return { configured: false, status: "not-deployed", proposals: [] };
-  type ProposalState = { id?: number | string; eligible?: Record<string, unknown>;
-    voters?: Record<string, unknown>; [key: string]: unknown };
-  const state = await readJson<{
-    totalStaked?: number; quorumBps?: number; votingPeriodMs?: number;
-    minProposalStake?: number; proposals?: Record<string, ProposalState>;
-  }>(`${cfg.node}/${cfg.dao}~process@1.0/now/daostate`);
-  const proposals = Object.values(state.proposals ?? {}).map((proposal) => {
-    const voters = proposal.voters && typeof proposal.voters === "object"
-      ? Object.keys(proposal.voters as Record<string, unknown>).length : 0;
-    const { eligible: _eligible, voters: _voters, ...publicProposal } = proposal;
-    void _eligible; void _voters;
-    return { ...publicProposal, voters };
-  }).sort((a, b) => Number(b.id ?? 0) - Number(a.id ?? 0));
-  return { configured: true, process: cfg.dao, token: cfg.token, unit: 1000000,
-    totalStaked: state.totalStaked ?? 0,
-    quorumBps: state.quorumBps ?? 0, votingPeriodMs: state.votingPeriodMs ?? 0,
-    minProposalStake: state.minProposalStake ?? 0, proposals };
+  const base = `${cfg.node}/${cfg.dao}~process@1.0/now`;
+  const [info, proposals] = await Promise.all([
+    readJson<Record<string, unknown>>(`${base}/daoinfo`).catch(() => null),
+    readJson<unknown[]>(`${base}/proposals`).catch(() => []),
+  ]);
+  if (!info || info.Standard !== "stake-dao/1") {
+    return { configured: false, status: "not-stake-dao", process: cfg.dao, proposals: [] };
+  }
+  return { configured: true, status: info.Configured === true ? "configured" : "unconfigured",
+    process: cfg.dao, beacon: cfg.anyHonest, info, proposals: Array.isArray(proposals) ? proposals : [] };
+}
+
+export async function getDaoStake(address: string) {
+  if (!/^[A-Za-z0-9_-]{43}$/.test(address)) throw new Error("address must be a 43-character AO address");
+  const cfg = extendedNetworkConfig();
+  if (!cfg.dao) throw new Error("the DAO is not deployed");
+  const stake = await readJson<Record<string, unknown>>(`${cfg.node}/${cfg.dao}~process@1.0/now/stake-${address}`).catch(() => null);
+  return { address, stake: stake ?? { active: "0", cooling: "0", releaseAt: 0, lockedUntil: 0, votes: {} } };
 }
 
 export async function sha256Hex(bytes: Uint8Array | string) {
@@ -219,11 +228,7 @@ export async function getNetworkStatus(requestedRound?: number) {
     signatureValid,
     valueValid: expectedValue === round.value,
     verified: signatureValid && expectedValue === round.value,
-    tokenInfo: {
-      ticker: tokenInfo.Ticker,
-      faucetAmount: Number(tokenInfo.FaucetAmount) / denomination,
-      faucetLifetimeCap: Number(tokenInfo.FaucetLifetimeCap) / denomination,
-    },
+    tokenInfo: { ticker: tokenInfo.Ticker, denomination },
     checkedAt: new Date().toISOString(),
   };
 }

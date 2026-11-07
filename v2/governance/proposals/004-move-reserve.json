@@ -1,0 +1,6 @@
+{
+  "title": "Move the Foundation reserve to the successor",
+  "body": "Queues Gov.Move-Reserve for 7 days. At apply it needs an applied successor that has sent Successor-Ack, and the same token.",
+  "execProcess": "$BEACON",
+  "execTags": { "Action": "Gov.Move-Reserve" }
+}

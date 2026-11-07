@@ -11,6 +11,7 @@ package-lock.json
 constants.txt
 process.lua
 examples/
+!/v2/console/examples/
 hera.json
 demo.json
 process.lua

@@ -1,0 +1,10 @@
+{
+  "predecessor": "MZMoXv-2aLD1MaR5tHEpXNrZgc6DoUpdw2q4DvlfxC0",
+  "T": 134217728,
+  "commitWindowMs": 5000, "revealWindowMs": 30000, "abandonAfterMs": 360000,
+  "minCommits": 2, "maxActive": 64, "maxValidators": 256,
+  "cadenceMs": 100, "targetIntervalMs": 500, "maxInFlight": 3, "catchUpMs": 30000,
+  "heartbeat": 1, "roundPrice": 1, "requestPrice": 4, "subscriptionPrice": 1, "subscriptionRounds": 1000,
+  "crackBounty": 10, "stake": 25000, "slash": 1000, "rejoinBaseMs": 60000, "rejoinCapMs": 3600000,
+  "fairWindowMs": 60000
+}

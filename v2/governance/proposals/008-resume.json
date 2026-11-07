@@ -1,0 +1,6 @@
+{
+  "title": "Resume the beacon",
+  "body": "Gov.Resume lifts a Gov.Pause (from the guardian or the DAO) and restores the heartbeat.",
+  "execProcess": "$BEACON",
+  "execTags": { "Action": "Gov.Resume" }
+}

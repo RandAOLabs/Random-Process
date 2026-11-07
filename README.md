@@ -12,21 +12,28 @@ device verifies BLS signatures, time-lock reveals and cracks, and deterministic
 byte derivation.
 
 The threshold protocol is in [`v2/SPEC.md`](./v2/SPEC.md); the time-lock beacon,
-fixed economics, subscriptions, and validator exits are in
+economics, subscriptions, validators, governance and fair play are in
 [`v2/ANY_HONEST.md`](./v2/ANY_HONEST.md).
+
+Any-Honest v3 (branch `permissionless`, not yet deployed) is permissionless
+(anyone bonds and validates), governed by the RNG DAO, paid in a fixed-supply
+RNG token, and offers fair play. Design: [`v2/docs/PERMISSIONLESS.md`](./v2/docs/PERMISSIONLESS.md);
+launch runbook: [`v2/deploy/README.md`](./v2/deploy/README.md).
 
 ## Components
 
 - `v2/lib/rng.lua`: deterministic local and beacon-backed Lua API;
 - `v2/beacon/beacon.lua`: prepaid, round-locked threshold beacon process;
-- `v2/beacon/anyhonest.lua`: Foundation-funded Any-Honest beacon (one round every 5 s);
-- `v2/provider/`: 2-of-3 BLS committee daemon and joint Feldman DKG;
-- `v2/governance/dao.lua`: advisory staked governance with manual execution;
-- `v2/token/rng-token.lua`: replay-safe test payment token;
+- `v2/beacon/anyhonest.lua`: Any-Honest beacon v3, permissionless and DAO-governed (2 rounds/s target);
+- `v2/fair/fair.lua`, `v2/lib/fair.lua`: fair play (player commit/reveal over a beacon value);
+- `v2/provider/`: 2-of-3 BLS committee daemon, joint Feldman DKG, the JS
+  Any-Honest validator and the cracker;
+- `v2/governance/proposals/`: RNG DAO proposal templates (Exec-Tags for `Gov.*`);
+- `v2/token/rng-token.lua`: fixed-supply RNG token (genesis allocation, sealed, `sequenced-v1`);
 - `v2/deploy/`: HyperBEAM testnet and provider operations;
 - `v2/console/`: live console, documentation, deterministic demo, and MCP
   server; and
-- `v2/test/`: RNG, token, beacon, DKG, BLS, and interoperability coverage.
+- `v2/test/`: RNG, token, beacon, fair play, validator, DKG, BLS, and deploy coverage.
 
 ## Use it
 
@@ -43,10 +50,11 @@ rng.request(msg, { on = "Loot-Roll", ctx = { player = msg.From } })
 ```
 
 For value-bearing actions, configure the beacon and request the `beacon` tier.
-The testnet currently charges 3 TEST-RNG per request: one unit for each of two
-serving committee members and one protocol unit. Test credits have no monetary
-value and are available from the signed faucet. Applications should prepay
-their process balance so end users do not need to manage RNG credits.
+The threshold testnet charges 3 TEST-RNG per request: one unit for each of two
+serving committee members and one protocol unit. An Any-Honest v3 request costs
+4 RNG and takes one message (a Transfer with `X-Request-Id`). v3 RNG has no
+faucet. Applications should prepay their process balance so end users do not
+need to manage RNG.
 
 The live [RNG Labs Console](https://randao.net) shows the current committee,
 price, verification mode, and an independently verified round. It also offers
