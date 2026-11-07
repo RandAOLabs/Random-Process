@@ -613,11 +613,14 @@ local ENVELOPE = {
 --- verified; a `Tags` table adds tags but never replaces the body or an
 --- envelope field, so it cannot forge a signer or a process payer.
 local function caseInsensitive(raw)
-  local t = {}
-  for k, v in pairs(raw) do if k ~= "Tags" then t[k] = v end end
+  local t, named = {}, {}
+  for k, v in pairs(raw) do if k ~= "Tags" then t[k] = v; named[tostring(k):lower()] = true end end
+  -- A tag never shadows a body field in another case: the node's body keys
+  -- are lowercase ("quantity"), and a "Quantity" tag would otherwise win.
   if type(raw.Tags) == "table" then
     for k, v in pairs(raw.Tags) do
-      if t[k] == nil and not ENVELOPE[tostring(k):lower()] then t[k] = v end
+      local key = tostring(k):lower()
+      if not named[key] and not ENVELOPE[key] then t[k] = v; named[key] = true end
     end
   end
   local lower = {}

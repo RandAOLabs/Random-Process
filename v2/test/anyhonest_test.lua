@@ -58,7 +58,22 @@ local function tick(ms) return send(wallet(F.stranger, { Action = "Get-Info" }),
 
 function runTimelockTests()
   local U = F.unit
-  local r, ob = configure(F.config)
+  -- Attack (G13): tokens sent before genesis. No token is known yet, so the
+  -- notice is refunded through the process that sent it, on a sequence stream
+  -- of its own; genesis carries the real token's stream and references on.
+  local r, ob = send(delivery(F.token, { Action = "Credit-Notice", Sender = F.game, Quantity = tostring(5 * U), Reference = "t900" }))
+  local rf = ob["rng-refund"]
+  check("pre-genesis credit refunded through its token", r.error == "Not-Configured" and rf and rf.target == F.token
+    and rf.Action == "Transfer" and rf.Recipient == F.game and rf.Quantity == string.format("%d", 5 * U)
+    and rf["X-Transfer-Sequence"] == "1" and next(Timelock.balances) == nil, encode(ob))
+  r, ob = send(delivery(F.token, { Action = "Credit-Notice", Sender = F.game, Quantity = tostring(5 * U), Reference = "t900" }))
+  check("pre-genesis duplicate notice refunds once", r.duplicate == true and next(ob) == nil, encode(r))
+  r, ob = send(delivery(F.stranger, { Action = "Credit-Notice", Sender = F.game, Quantity = tostring(9 * U), Reference = "t1" }))
+  check("a fake token's refund goes to the fake token, on its own stream", ob["rng-refund"]
+    and ob["rng-refund"].target == F.stranger and ob["rng-refund"]["X-Transfer-Sequence"] == "1", encode(ob))
+  r, ob = send(wallet(F.stranger, { Action = "Credit-Notice", Sender = F.game, Quantity = tostring(9 * U), Reference = "t2" }))
+  check("a wallet is no token: refused, nothing sent", r.error == "Not the configured token" and next(ob) == nil, encode(r))
+  r, ob = configure(F.config)
   local ack = ob["rng-successor-ack"]
   check("genesis acks the predecessor", ack and ack.target == F.predecessor and ack.Action == "Successor-Ack")
   r = send(wallet(F.stranger, { Action = "Gov.Configure", Data = F.config }))
@@ -67,6 +82,8 @@ function runTimelockTests()
   eq("N is the device's modulus", params().n, F.dev.generator.n)
   check("beaconinfo leaves out g, n and h", info().g == nil and info().n == nil and info().params.h == nil)
   eq("h set with its proof", params().h, F.h)
+  check("genesis continues the token's refund stream", Timelock.transferSeq == 1 and Timelock.credited["900"] == true
+    and next(Timelock.strays) == nil, tostring(Timelock.transferSeq))
 
   -- Configure: floors, h checked as a crack of g, token set once.
   TestHarness = false
@@ -417,6 +434,23 @@ function runTimelockTests()
     and Timelock.balances[F.stranger] == sb0 + 1 and not Timelock.credited["403"], encode(r))
   r = send(notice)
   check("the same notice then credits once", r.credited == 3 and Timelock.balances[F.stranger] == sb0 + 4, encode(r))
+  -- Attack (P12): on lua-patch@1.0 too (no fresh published copy to restore
+  -- from), a throwing handler is undone, `seen` included.
+  Lua53bPatchMode, thrown = true, false
+  local gameBal, seq0 = Timelock.balances[F.game], Timelock.transferSeq
+  encode = function(v) if not thrown then thrown = true; error("boom") end return realEncode(v) end
+  r = request("rollback-1")
+  encode = realEncode
+  check("lua-patch@1.0: a throwing request rolls back its charge and its guard", tostring(r.error):match("boom")
+    and Timelock.balances[F.game] == gameBal and Timelock.seen[F.game .. "|rollback-1"] == nil
+    and Timelock.transferSeq == seq0, encode(r))
+  thrown = false
+  encode = function(v) if not thrown then thrown = true; error("boom") end return realEncode(v) end
+  r = send(delivery(F.token, { Action = "Credit-Notice", Sender = F.stranger, Quantity = tostring(3 * U), Reference = "t405" }))
+  encode = realEncode
+  Lua53bPatchMode = nil
+  check("lua-patch@1.0: a throwing credit rolls back", tostring(r.error):match("boom")
+    and Timelock.balances[F.stranger] == sb0 + 4 and not Timelock.credited["405"], encode(r))
   Timelock.balances[F.stranger] = sb0
   -- Dust: what is below one whole RNG goes back to the sender.
   r, ob = send(delivery(F.token, { Action = "Credit-Notice", Sender = F.stranger, Quantity = tostring(2 * U + 7), Reference = "t404" }))
@@ -495,11 +529,18 @@ function runTimelockTests()
   eq("owed outputs block Ready", ready(C).error, "Not-In-Good-Standing")
   tick(60000)
   check("complete rounds wait for their crack", Timelock.opens[tostring(s)] ~= nil and Timelock.opens[tostring(s + 1)] ~= nil)
-  local fundedTreasury = Timelock.treasuryAtoms
-  Timelock.treasuryAtoms = 0
+  -- Attack (liveness): a stuck round tells crackers how long to keep trying,
+  -- does not hold the pipeline, and is abandoned (refunded) after 7 days.
+  local held = info().revealing[1]
+  check("a stuck round is published not abandonable, until 7 days past its deadline", held.round == s
+    and held.abandonable == false and held.abandonAt == held.revealDeadline + 7 * 86400000, encode(held))
+  Timelock.params.maxInFlight = 1
   tick(1)
-  Timelock.treasuryAtoms = fundedTreasury
-  check("held rounds abandoned", Timelock.opens[tostring(s)] == nil and Timelock.opens[tostring(s + 1)] == nil)
+  eq("late rounds do not fill the pipeline", info().nextRoundAt, Timelock.lastOpenAt)
+  Timelock.params.maxInFlight = 3
+  tick(7 * 86400000)
+  check("held rounds abandoned after 7 days, the Treasury still funded", Timelock.treasuryAtoms >= 10 * U
+    and Timelock.opens[tostring(s)] == nil and Timelock.opens[tostring(s + 1)] == nil)
   eq("still nothing more slashed", Timelock.bonds[C], 22000)
   eq("rejoin needs the full stake back", ready(C).error, "Stake-Too-Low")
   Timelock.accruedAtoms[C] = 3000 * U
@@ -556,7 +597,12 @@ function runTimelockTests()
     and ob["rng-bond-refund"].Quantity == string.format("%d", 25000 * U) and Timelock.validators[B] == nil)
   -- The rhythm: round r is due every targetIntervalMs from the anchor. An early
   -- round waits for its slot; a late one opens as soon as cadenceMs allows.
-  configure({ targetIntervalMs = 500, cadenceMs = 100, maxInFlight = 3, catchUpMs = 30000 })
+  -- (The rhythm parameters are timelocked after genesis: set directly here.)
+  local q = configure({ targetIntervalMs = 500, cadenceMs = 100, maxInFlight = 3, catchUpMs = 30000 }).queued
+  check("rhythm changes are queued, not applied", q and q.params.targetIntervalMs == 500 and q.params.cadenceMs == 100
+    and Timelock.params.targetIntervalMs == 0 and Timelock.params.cadenceMs == 0, encode(q))
+  send(wallet(F.owner, { Action = "Gov.Cancel", ["Gov-Id"] = tostring(q.id) }))
+  Timelock.params.targetIntervalMs, Timelock.params.cadenceMs = 500, 100
   local anchor = clock
   Timelock.rhythmAt, Timelock.rhythmRound, Timelock.lastOpenAt = anchor, Timelock.next - 1, anchor
   tick(1)
@@ -568,7 +614,7 @@ function runTimelockTests()
   tick(1)
   eq("no anchor yet: cadenceMs alone", info().nextRoundAt, anchor + 20100)
   eq("rhythm parameters checked", configure({ maxInFlight = 0 }).error, "Bad-Parameter")
-  configure({ targetIntervalMs = 0, cadenceMs = 0 })
+  Timelock.params.targetIntervalMs, Timelock.params.cadenceMs = 0, 0
 
   -- v3: permissionless join, the active set, reserve fallback, governance.
   local D, E, X, Y = F.w[1], F.w[2], F.w[3], F.w[4]
@@ -622,6 +668,12 @@ function runTimelockTests()
   -- its lowest-ranked entry that never sent Ready; one idle for 7 days anyone evicts.
   local Z = string.rep("z", 43)
   configure({ maxValidators = 5 })
+  -- Attack (P6b): a fresh registration is not bumped at once by the next bond.
+  r, ob = bond(Z, 25000)
+  check("full registry: an entry registered under an hour ago is not evicted", r.error == "Registry-Full"
+    and Timelock.validators[Y] ~= nil and Timelock.validators[Z] == nil and ob["rng-evicted-refund"] == nil
+    and ob["rng-refund"] and ob["rng-refund"].Recipient == Z, encode(r))
+  Timelock.validators[Y].joinedAt = clock - 3600000
   r, ob = bond(Z, 25000)
   check("full registry: a new bond evicts the lowest-ranked never-ready entry", r.bond == 25000 and Timelock.validators[Z]
     and Timelock.validators[Y] == nil and ob["rng-evicted-refund"] and ob["rng-evicted-refund"].Recipient == Y
@@ -745,13 +797,25 @@ function runTimelockTests()
     { ["Min-Commits"] = "1" }, { ["Min-Commits"] = "3", ["Max-Active"] = "2" }, { ["Max-Active"] = "129" },
     { ["Max-Validators"] = "1025" }, { ["Max-Active"] = "64", ["Max-Validators"] = "63" },
     { Heartbeat = "2" }, { ["Round-Price"] = "0" }, { ["Request-Price"] = "0" }, { ["Subscription-Price"] = "0" },
-    { ["Crack-Bounty"] = "0" }, { T = "4294967297" }, { ["Request-Price"] = "1.5" }, { ["Fair-Window-Ms"] = "0" } }) do
+    { ["Crack-Bounty"] = "0" }, { T = "4294967297" }, { ["Request-Price"] = "1.5" }, { ["Fair-Window-Ms"] = "0" },
+    -- Attack (G1b): a crack takes at most a slash; rounds in flight bounded;
+    -- one incident at most half the stake; the rhythm cannot be stretched.
+    { ["Crack-Bounty"] = "1001" }, { ["Crack-Bounty"] = "25000" }, { ["Max-In-Flight"] = "9" },
+    { Slash = "2500", ["Max-In-Flight"] = "4" }, { ["Cadence-Ms"] = "60001" }, { ["Target-Interval-Ms"] = "600001" },
+    { ["Abandon-After-Ms"] = "604800001" } }) do
     bad.Action = "Gov.Configure"
     eq("bound " .. i .. " rejected", dao(bad).error, "Bad-Parameter")
   end
   eq("token fixed after genesis", dao({ Action = "Gov.Configure", Token = F.stranger }).error, "Token-Locked")
   eq("predecessor fixed after genesis", dao({ Action = "Gov.Configure", Predecessor = F.stranger }).error, "Token-Locked")
   check("bounds rejected whole", Timelock.params.revealWindowMs == 10000 and Timelock.params.slash == 1000)
+  r = dao({ Action = "Gov.Configure", ["Crack-Bounty"] = "1000", ["Max-In-Flight"] = "4", ["Cadence-Ms"] = "60000",
+    ["Target-Interval-Ms"] = "600000" })
+  local qb = r.queued
+  check("bounty and rhythm changes queued 10 days, not applied", r.ok == true and qb and qb.params.crackBounty == 1000
+    and qb.params.maxInFlight == 4 and qb.params.cadenceMs == 60000 and qb.params.targetIntervalMs == 600000
+    and Timelock.params.crackBounty == 10 and Timelock.params.maxInFlight == 3 and Timelock.params.cadenceMs == 0, r.error)
+  dao({ Action = "Gov.Cancel", ["Gov-Id"] = tostring(qb.id) })
 
   -- Attack (G1): governance tries to take the bonds: the biggest slash and a
   -- commit window nobody meets. A fault takes at most a tenth of the stake, and

@@ -136,6 +136,7 @@ export const FAIR_ERRORS: Record<string, string> = {
   "Not-Expired": "The reveal window is still open.",
   "Not-Opened": "The game has not opened this session for this player key (or the allowance lapsed).",
   "Game-Full": "The game holds too many open sessions; try again shortly.",
+  "Game-Not-Allowed": "This fair process has not allowed the game to open sessions (its deployer adds games with allowGames).",
   "Bad-Player": "The player key is not a valid address.",
   "Not-Beacon": "Only the configured beacon can bind a value.",
   "Stale-Result": "That beacon result is not for the outstanding request.",
@@ -283,7 +284,9 @@ export class FairError extends Error {
 export class NotScheduledError extends Error {}
 
 export type FairInfo = { beacon: string; fairWindowMs: number; at: number; protocol: string;
-  outstanding?: { batch: number; requestId: string; sentAt: number } | null; requestAfter?: number; minIntervalMs?: number };
+  outstanding?: { batch: number; requestId: string; sentAt: number } | null; requestAfter?: number; minIntervalMs?: number;
+  /** The games allowed to open sessions (unless openToAll). */
+  allowGames?: Record<string, boolean>; openToAll?: boolean };
 export type CommitOptions = { retries?: number; delayMs?: number; sleep?: (ms: number) => Promise<void> };
 
 /** One fair process, driven by this browser's throwaway key. */

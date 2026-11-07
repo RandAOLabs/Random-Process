@@ -179,3 +179,23 @@ export function roundValue(beacon, round, outputs) {
 /** A request-specific value derived from one Any-Honest round. */
 export const requestValue = (value, requester, requestId) =>
   crypto.createHash('sha256').update(`hyperbeam/rng/any-honest/v1/request|${value}|${requester}|${requestId}`, 'latin1').digest('hex');
+
+/** Every reveal still missing after its deadline in a beaconinfo:
+ *  [{ round, target, c, T, giveUpAt }]. giveUpAt is when the beacon abandons
+ *  the round: its published `abandonAt` (a round that is not abandonable waits
+ *  for its crack up to 7 days), else, from an older beacon, abandonAfterMs. */
+export function crackJobs(i, now) {
+  const out = [];
+  for (const x of i.revealing ?? []) {
+    if (x.phase !== 'reveal' || !(x.revealDeadline > 0) || now < x.revealDeadline) continue;
+    const giveUpAt = Number.isFinite(x.abandonAt) ? x.abandonAt
+      : x.revealDeadline + Number(i.params?.abandonAfterMs ?? 1_800_000);
+    for (const [target, c] of Object.entries(x.committed ?? {})) {
+      // A beacon shows a commitment whole only once its round is late; before
+      // that it is a 16-digit prefix, nothing to crack.
+      if ((x.revealed ?? []).includes(target) || typeof c !== 'string' || c.length <= 16) continue;
+      out.push({ round: x.round, target, c, T: x.T ?? i.params.T, giveUpAt });
+    }
+  }
+  return out.sort((a, b) => a.round - b.round);
+}

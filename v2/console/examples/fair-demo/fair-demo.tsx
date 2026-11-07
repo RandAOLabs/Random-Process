@@ -6,7 +6,8 @@
 // `authorize(session, player)` asks YOUR game to open the session for this
 // browser's key (the game charges the entry and sends
 // `fairOpenTags(session, player)` to the fair process); the commit is only
-// accepted after that.
+// accepted after that. The fair process refuses Fair.Open (Game-Not-Allowed)
+// until its deployer has allowed the game (`deploy.mjs fair-allow <game>`).
 // Typecheck: npx tsc --noEmit -p examples/fair-demo
 //
 // The browser commits H(secret) with a throwaway key kept in IndexedDB, waits

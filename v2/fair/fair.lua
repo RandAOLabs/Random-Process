@@ -5,13 +5,17 @@
 --
 -- Messages (tags):
 --   Fair.Open { Session, Player }                        the game (wallet signer or attested process):
---                                                         lets key Player commit to Session (10 min)
+--                                                         lets key Player commit to Session (10 min);
+--                                                         only a game the deployer allowed (allowGames)
 --   Fair.Commit { Game, Session, Commit, Commit-Time }   signed by the player key P, after Fair.Open
 --   Fair.Reveal { Game, Session, Secret [, Player] }      anyone (Player defaults to the signer)
 --   Fair.Expire { Game, Session, Player }                 anyone, after revealBy
 --   RNG-Result / RNG-Error                                the configured beacon only (attested)
 --   Fair.Configure { Data = { beacon, fairWindowMs, keep, maxOpen,
---                    minIntervalMs, maxGames, maxPerGame } }       the deployer
+--                    minIntervalMs, maxGames, maxPerGame,
+--                    allowGames = [game...], removeGames = [game...], openToAll } }  the deployer
+--     Every session is paid from this process's beacon balance, so no game may
+--     open sessions until the deployer allows it (or sets openToAll = true).
 --   Get-Info                                              anyone; also sends a due request
 -- Sends: Request-Random -> beacon (paid from this process's beacon balance),
 --        Fair-Result -> Game.
@@ -24,7 +28,7 @@
 local json = require(".json")
 local SIGNATURE_ALGS = { ["rsa-pss-sha512"] = true, ["rsa-pss-sha256"] = true }
 
-Fair = Fair or { rev = 0, owner = "", state = fair.new() }
+Fair = Fair or { rev = 0, owner = "", state = fair.new({ allow = {} }) }
 
 local function deflate(v)
   if type(v) == "number" then return math.tointeger(v) or v end
@@ -37,7 +41,7 @@ local function restore(base)
   if tonumber(base.fairrev or "0") <= Fair.rev then return end
   local ok, saved = pcall(json.decode, base.fairstate or "")
   if ok and type(saved) == "table" then
-    local st = fair.new()
+    local st = fair.new({ allow = {} })
     for k, v in pairs(deflate(saved.state or {})) do st[k] = v end
     Fair = { rev = math.tointeger(saved.rev) or 0, owner = saved.owner or "", state = st }
   end
@@ -166,7 +170,19 @@ local function configure(msg, from)
   local mg = d.maxGames ~= nil and bounded(d.maxGames, B.maxGames)
   local mp = d.maxPerGame ~= nil and bounded(d.maxPerGame, B.maxPerGame)
   if w == nil or k == nil or m == nil or mi == nil or mg == nil or mp == nil then return nil, "Bad-Parameter" end
+  local function games(list)
+    if list == nil then return {} end
+    if type(list) ~= "table" or #list > 1024 then return nil end
+    for _, g in ipairs(list) do if type(g) ~= "string" or #g ~= 43 or not g:match("^[%w_%-]+$") then return nil end end
+    return list
+  end
+  local add, remove = games(d.allowGames), games(d.removeGames)
+  if not add or not remove or (d.openToAll ~= nil and type(d.openToAll) ~= "boolean") then return nil, "Bad-Parameter" end
   st.changes = (st.changes or 0) + 1
+  st.allow = st.allow or {}
+  for _, g in ipairs(add) do st.allow[g] = true end
+  for _, g in ipairs(remove) do st.allow[g] = nil end
+  if d.openToAll ~= nil then st.openToAll = d.openToAll end
   if d.beacon then st.beacon = d.beacon end
   if w then st.windowMs = w end
   if k then st.keep = k end
@@ -174,8 +190,11 @@ local function configure(msg, from)
   if mi then st.minIntervalMs = mi end
   if mg then st.maxGames = mg end
   if mp then st.maxPerGame = mp end
+  local allowed = 0
+  for _ in pairs(st.allow) do allowed = allowed + 1 end
   return { ok = true, beacon = st.beacon, fairWindowMs = st.windowMs, keep = st.keep, maxOpen = st.maxOpen,
-    minIntervalMs = st.minIntervalMs, maxGames = st.maxGames, maxPerGame = st.maxPerGame }, {}
+    minIntervalMs = st.minIntervalMs, maxGames = st.maxGames, maxPerGame = st.maxPerGame,
+    allowedGames = allowed, openToAll = st.openToAll }, {}
 end
 
 --- The game registry as JSON objects (empty `allow` maps stay objects).
@@ -235,12 +254,13 @@ function compute(base, req)
     outstanding = st.outstanding, attempts = st.attempts, retryAt = st.retryAt,
     minIntervalMs = st.minIntervalMs, maxGames = st.maxGames, maxPerGame = st.maxPerGame,
     games = jsonObject(gamesState(st.games)), gameCount = st.gameCount, lastRequestAt = st.lastRequestAt,
-    changes = st.changes } })
+    allow = jsonObject(st.allow or {}), openToAll = st.openToAll, changes = st.changes } })
   result.fairsessions = encode(jsonObject(fair.sessionsView(st)))
   result.fairbatches = encode(fair.batchesView(st))
   result.fairinfo = encode({ beacon = st.beacon, fairWindowMs = st.windowMs, keep = st.keep, maxOpen = st.maxOpen,
     open = st.open, next = st.next, outstanding = st.outstanding, at = now, protocol = "rng/fair/v1",
     minIntervalMs = st.minIntervalMs, maxGames = st.maxGames, maxPerGame = st.maxPerGame, games = st.gameCount,
+    allowGames = jsonObject(st.allow or {}), openToAll = st.openToAll,
     requestAfter = st.lastRequestAt and (st.lastRequestAt + st.minIntervalMs) or 0 })
   return result
 end

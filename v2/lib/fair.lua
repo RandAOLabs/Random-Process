@@ -18,6 +18,9 @@
 -- make this process pay the beacon for a game that did not ask. Each game
 -- holds at most `maxPerGame` open allowances plus unresolved sessions, and at
 -- most `maxGames` games are tracked (an idle game's history is evicted first).
+-- With `allow` set (fair/fair.lua sets it), only the games in it may open
+-- sessions, unless `openToAll`: every session costs this process a beacon
+-- request share, so an unknown game must not spend its balance.
 --
 -- Pure library over a state table: no globals, no I/O. Every call returns
 -- (data, outbox) on success or (nil, errorCode[, extra]) on refusal; `outbox`
@@ -69,6 +72,8 @@ function fair.new(opts)
     minIntervalMs = opts.minIntervalMs or 5000, -- between two beacon requests
     maxGames = opts.maxGames or 1024,   -- games tracked at once
     maxPerGame = opts.maxPerGame or 64, -- open allowances + unresolved sessions per game
+    allow = opts.allow,  -- game -> true: the games that may open sessions (nil: any game)
+    openToAll = opts.openToAll == true, -- with `allow` set: let any game in anyway
     games = {},      -- game -> { live = n, allow = { "session|player" = expiresAt } }
     gameCount = 0,
     lastRequestAt = nil, -- ms of the last beacon request sent
@@ -135,6 +140,8 @@ end
 
 --- The game's entry, created on its first Fair.Open. At `maxGames`, an idle
 --- game (no allowance, no unresolved session) is evicted with its history.
+local prune
+
 local function gameEntry(st, game, now)
   st.games = st.games or {}
   local g = st.games[game]
@@ -142,6 +149,10 @@ local function gameEntry(st, game, now)
   if (st.gameCount or 0) >= st.maxGames then
     local idle
     for name, e in pairs(st.games) do
+      -- Lapsed allowances count for nothing: without this, a game's expired
+      -- ones were dropped only on its own next Fair.Open, and maxGames
+      -- throwaway games held the registry for good.
+      prune(e, now)
       local e0 = idle and st.games[idle]
       if e.live <= 0 and (not e0 or (e.last or 0) < (e0.last or 0)
           or ((e.last or 0) == (e0.last or 0) and name < idle)) then idle = name end
@@ -162,7 +173,7 @@ local function gameEntry(st, game, now)
   return g
 end
 
-local function prune(g, now)
+function prune(g, now)
   for sp, untilMs in pairs(g.allow) do
     if untilMs < now then g.allow[sp] = nil; g.live = g.live - 1 end
   end
@@ -173,6 +184,7 @@ end
 function fair.open(st, p)
   local now = p.now
   if not isAddress(p.game) then return nil, "Unsigned" end
+  if st.allow and not st.openToAll and not st.allow[p.game] then return nil, "Game-Not-Allowed" end
   if not isSession(p.session) then return nil, "Bad-Session" end
   if not isAddress(p.player) then return nil, "Bad-Player" end
   local k = key(p.game, p.session, p.player)

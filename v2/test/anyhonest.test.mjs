@@ -100,3 +100,23 @@ test('request value binds the requester', () => {
   assert.equal(a, createHash('sha256').update('hyperbeam/rng/any-honest/v1/request|ab|P1|r1').digest('hex'));
   assert.notEqual(a, tl.requestValue('ab', 'P2', 'r1'));
 });
+
+test('crackJobs: a stuck round is worked on until the beacon abandons it, not abandonAfterMs', () => {
+  const c = 'a'.repeat(512);
+  const info = { params: { T: 8, abandonAfterMs: 360_000 }, revealing: [
+    // Every validator committed and a crack is paid for: the beacon waits 7 days.
+    { round: 5, phase: 'reveal', revealDeadline: 1000, abandonable: false, abandonAt: 1000 + 7 * 86_400_000,
+      committed: { A: c, B: c }, revealed: ['A'] },
+    // An older beacon without abandonAt: abandonAfterMs, as before.
+    { round: 4, phase: 'reveal', revealDeadline: 1000, committed: { C: c }, revealed: [] },
+    // Not late yet (prefix only): nothing to crack.
+    { round: 6, phase: 'reveal', revealDeadline: 9e12, committed: { D: c.slice(0, 16) }, revealed: [] },
+  ] };
+  const now = 1000 + 3_600_000; // an hour past the deadline, past abandonAfterMs
+  const jobs = tl.crackJobs(info, now);
+  assert.deepEqual(jobs.map((j) => [j.round, j.target]), [[4, 'C'], [5, 'B']]);
+  const stuck = jobs.find((j) => j.round === 5);
+  assert.equal(stuck.giveUpAt, 1000 + 7 * 86_400_000);
+  assert.ok(stuck.giveUpAt - now > 180_000 * 1.1 + 60_000, 'the cracker still starts it');
+  assert.equal(jobs.find((j) => j.round === 4).giveUpAt, 1000 + 360_000);
+});

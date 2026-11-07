@@ -26,7 +26,8 @@ validators, and authenticated subscription path have all been verified.
 
 ## Any-Honest cracker
 
-Its own container, separate from HyperBEAM, pinned to one core the node does not use (on a shared host the node runs on cores 1-15, daemons on core 0):
+Its own container, separate from HyperBEAM, pinned to one core the node does not use (on a shared host the node runs on cores 1-15, daemons on core 0).
+It works on a late round until the beacon's published `abandonAt`: a round every validator committed to waits for its crack (up to 7 days) while the Treasury can pay the bounty.
 
 ```bash
 docker build -t rng-cracker -f provider/Dockerfile.cracker .
@@ -79,7 +80,11 @@ node deploy/deploy.mjs plan --dry-run      # review every message first
    no handler for it; that refusal is expected).
 4. **Fund.** `fund-reserve` (200 M) and `fund-treasury` (50 M) from the genesis
    allocation. Every `fund-*` refuses until `beaconinfo.token` is set (step 3):
-   before genesis the beacon refuses the Credit-Notice and the atoms strand. Fair play: `spawn-fair`, `configure-fair`, `fund-fair 10000`.
+   before genesis the beacon can only refund the Credit-Notice through its
+   sender, and past 16 senders or 256 notices each the atoms strand. Fair play:
+   `spawn-fair`, `configure-fair`, `fund-fair 10000`, then `fair-allow <game...>`
+   for each game that may open sessions (the fair process refuses every other
+   game with `Game-Not-Allowed`: sessions are paid from its beacon balance).
 5. **Validators bond and migrate.** `bond-for 100000 deploy/anyhonest-validators.json`
    bonds the three node wallets at 4 x stake, the rank cap, from day one, so a
    newcomer must bond as much to outrank them (a quarter of the seats go by

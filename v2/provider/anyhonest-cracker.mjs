@@ -57,26 +57,14 @@ async function info() {
   return JSON.parse(r.value);
 }
 
-/** Every reveal still missing after its deadline: [{ round, target, c, T, giveUpAt }]. */
-function missing(i, now) {
-  const out = [];
-  for (const x of i.revealing ?? []) {
-    if (x.phase !== 'reveal' || !(x.revealDeadline > 0) || now < x.revealDeadline) continue;
-    for (const [target, c] of Object.entries(x.committed ?? {})) {
-      // A beacon shows a commitment whole only once its round is late; before
-      // that it is a 16-digit prefix, nothing to crack.
-      if ((x.revealed ?? []).includes(target) || typeof c !== 'string' || c.length <= 16) continue;
-      out.push({ round: x.round, target, c, T: x.T ?? i.params.T,
-        giveUpAt: x.revealDeadline + Number(i.params.abandonAfterMs ?? 1_800_000) });
-    }
-  }
-  return out.sort((a, b) => a.round - b.round);
-}
+/** Every reveal still missing after its deadline (see tl.crackJobs). */
+const missing = tl.crackJobs;
 
 // A crack the beacon will have abandoned before it finishes is not started.
 // The estimate starts at a measured native crack of T = 2^27 on one core
-// (~175 s) and then follows this machine's last crack. It must stay below the
-// beacon's abandon time (6 min), or nothing would ever be cracked.
+// (~175 s) and then follows this machine's last crack. A round every
+// validator committed to is not abandoned while a crack can be paid for, so
+// the beacon publishes a later abandonAt for it (up to 7 days): keep trying.
 let lastCrackMs = 180_000;
 const done = new Set(); // `${round}|${target}` already posted
 const jitterMs = Number(cfg.jitterMs ?? 60_000);

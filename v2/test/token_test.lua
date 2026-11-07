@@ -221,6 +221,14 @@ local function walletTests()
     Tags = { Quantity = "999", Recipient = F.stranger } }))
   eq("Tags cannot override a body tag", Balances[F.recipient], 11)
   send(wallet(F.recipient, { Action = "Transfer", Recipient = F.user, Quantity = "1" }))
+  -- The node delivers body keys lowercase: a Tags key in another case must not
+  -- shadow one (a "Quantity" tag beside the signed "quantity").
+  local strangerBefore = Balances[F.stranger] or 0
+  r = send(wallet(F.user, { action = "Transfer", recipient = F.recipient, quantity = "1",
+    Tags = { Quantity = "999", Recipient = F.stranger } }))
+  check("Tags never shadow a lowercase body field", Balances[F.recipient] == 11
+    and (Balances[F.stranger] or 0) == strangerBefore, r.error)
+  send(wallet(F.recipient, { Action = "Transfer", Recipient = F.user, Quantity = "1" }))
 
   -- The target door: a Transfer signed for another token is not replayed here.
   local otherToken = string.rep("o", 43)

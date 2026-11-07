@@ -55,9 +55,18 @@ local GOV_DELAY_MS = { ["Set-Successor"] = 10 * DAY_MS, ["Move-Reserve"] = 10 * 
 local GOV_EXPIRE_MS = 14 * DAY_MS   -- a queued action not applied this long after it is due is dropped
 local SPEND_WINDOW_MS = 30 * DAY_MS -- treasury outflow (spends + reserve funding) per window: 10 % of its start
 -- Parameters that change what a validator's bond is exposed to: timelocked.
-local TIMELOCKED_PARAMS = { stake = true, slash = true, commitWindowMs = true, revealWindowMs = true }
+-- crackBounty is taken from a withholder's bond per crack; maxInFlight bounds
+-- how many rounds one incident can fault; cadenceMs and targetIntervalMs set
+-- how fast rounds (and so duties) come.
+local TIMELOCKED_PARAMS = { stake = true, slash = true, commitWindowMs = true, revealWindowMs = true,
+  crackBounty = true, maxInFlight = true, cadenceMs = true, targetIntervalMs = true }
+-- A round no crack has finished this long after its reveal deadline is
+-- abandoned (requests refunded) even while the Treasury could pay a bounty:
+-- nothing stays stuck, and the withholder was slashed at the deadline.
+local ABANDON_CAP_MS = 7 * DAY_MS
 local GUARDIAN_MS = 90 * DAY_MS -- the guardian may pause (and cancel queued actions) this long after Gov.Handover
 local IDLE_EVICT_MS = 7 * DAY_MS -- a registered validator that never sent Ready may be evicted after this
+local IDLE_FLOOR_MS = 3600000    -- ... and only after this, by a new bond into a full registry
 local MAX_SUBSCRIPTIONS = 16     -- live subscriptions per subscriber
 local INFO_VALIDATORS = 128     -- validators listed in beaconinfo; the full registry is `beaconvalidators`
 
@@ -109,6 +118,7 @@ local function freshState()
     successorAcks = {},    -- pid -> ms: a Successor-Ack from the successor (or a queued one)
     successorSince = 0,    -- queuedAt of the Set-Successor that named the successor; older acks do not count
     transferSeq = 0,       -- X-Transfer-Sequence of the last token Transfer; only ever increases
+    strays = {},           -- before genesis: sender -> { seq, refs } of Credit-Notices refunded (strayCredit)
     health = { status = "halted", since = 0 },
   }
 end
@@ -161,6 +171,37 @@ local function seenIndex()
   return SeenIdx
 end
 
+--- `seen` changes this message, newest last: { id, previous bound }. A
+--- handler that throws is undone from here, not from a copy (the map holds
+--- ten minutes of request ids).
+local SeenUndo = {}
+local function setSeen(id, bound)
+  SeenUndo[#SeenUndo + 1] = { id, Timelock.seen[id] }
+  Timelock.seen[id] = bound
+end
+
+local function deepCopy(v)
+  if type(v) ~= "table" then return v end
+  local t = {}
+  for k, x in pairs(v) do t[k] = deepCopy(x) end
+  return t
+end
+
+--- The state before a handler runs, `seen` left out (see SeenUndo).
+local function snapshot()
+  local out = {}
+  for k, v in pairs(Timelock) do if k ~= "seen" then out[k] = deepCopy(v) end end
+  return out
+end
+
+local function rollback(saved)
+  for i = #SeenUndo, 1, -1 do Timelock.seen[SeenUndo[i][1]] = SeenUndo[i][2] end
+  local seen = Timelock.seen
+  Timelock = saved
+  Timelock.seen = seen
+  SeenIdx = nil
+end
+
 local function deflate(v)
   if type(v) == "number" then return math.tointeger(v) or v end
   if type(v) ~= "table" then return v end
@@ -168,8 +209,8 @@ local function deflate(v)
   return v
 end
 
-local function restore(base, force)
-  if not force and int(base.timelockrev, 0) <= int(Timelock.rev, 0) then return end
+local function restore(base)
+  if int(base.timelockrev, 0) <= int(Timelock.rev, 0) then return end
   local ok, saved = pcall(json.decode, base.timelockstate or "")
   if ok and type(saved) == "table" then
     Timelock = freshState()
@@ -508,9 +549,12 @@ local function count(t) local n = 0 for _ in pairs(t) do n = n + 1 end return n 
 --- apart, at most maxInFlight rounds in flight) to catch up, after fast ones they
 --- wait. Lateness beyond catchUpMs is forgiven when the next round opens, so an
 --- outage is not repaid in one burst. targetIntervalMs 0 turns the rhythm off.
+--- Rounds revealing and not yet past their reveal deadline. A late round
+--- (waiting for a crack) does not hold the pipeline: its withholder was
+--- slashed and suspended at the deadline, so it is in no round opened after.
 local function inFlight()
   local n = 0
-  for _, o in pairs(Timelock.opens) do if o.phase == "reveal" then n = n + 1 end end
+  for _, o in pairs(Timelock.opens) do if o.phase == "reveal" and not o.late then n = n + 1 end end
   return n
 end
 
@@ -601,10 +645,20 @@ end
 --- Treasury pays the bounty). Abandoning such a round would let a withholder
 --- who has seen the other outputs void a value it dislikes (selective abort):
 --- it waits for its crack instead. A round short of commits was set before
---- any output was revealed.
-local function abandonable(o)
+--- any output was revealed. Past ABANDON_CAP_MS every round may be abandoned:
+--- a withholder buys a void only with its slash and a week's delay.
+local function abandonable(o, now)
+  if now and now >= int(o.revealDeadline, 0) + ABANDON_CAP_MS then return true end
   for _, addr in ipairs(o.active or {}) do if not o.commits[addr] then return true end end
   return int(Timelock.treasuryAtoms, 0) < int(Timelock.params.crackBounty, 10) * int(Timelock.unit, 1)
+end
+
+--- When advance() abandons a late round: abandonAfterMs past its deadline if
+--- abandonable now, else ABANDON_CAP_MS (crackers work until then).
+local function abandonAt(o)
+  local due = int(o.revealDeadline, 0) + int(Timelock.params.abandonAfterMs, 1800000)
+  if abandonable(o) then return due end
+  return math.max(due, int(o.revealDeadline, 0) + ABANDON_CAP_MS)
 end
 
 --- Run before every handler: close due commits, slash every output missing at
@@ -627,7 +681,7 @@ local function advance(now)
       table.sort(addrs)
       for _, addr in ipairs(addrs) do fault(addr, r, "reveal", now) end
     end
-    if now >= o.revealDeadline + int(Timelock.params.abandonAfterMs, 1800000) and abandonable(o) then abandon(o) end
+    if now >= o.revealDeadline + int(Timelock.params.abandonAfterMs, 1800000) and abandonable(o, now) then abandon(o) end
   end
   -- A round that never opens (too few validators, nobody committing) would
   -- hold its requests forever: past abandonAfterMs from the oldest, refund
@@ -726,7 +780,7 @@ local function finalize(base, o, now)
     if next(expired) then
       for k, bound in pairs(Timelock.seen) do
         if expired[int(bound, 0) // 50] then
-          Timelock.seen[k] = nil
+          setSeen(k, nil)
           local ix, sh = seenIndex(), shardOf(bound)
           if ix[sh] then ix[sh][k] = nil end
           SeenDirty[sh] = true
@@ -780,8 +834,37 @@ local function markCredited(seq)
   end
 end
 
+--- Before genesis no token is configured, so nothing can be credited. The
+--- attested process that sent the Credit-Notice is taken at its word as a
+--- token and the atoms go back to Sender by a Transfer to it (one from a fake
+--- token moves nothing). Each sender gets its own X-Transfer-Sequence stream,
+--- so a refund through a fake token leaves no gap in the real one's; genesis
+--- continues the stream of the token it names and counts the references
+--- refunded as credited. Past STRAY_TOKENS senders or STRAY_REFS references
+--- each, the atoms strand as before (the deploy script never sends early).
+local STRAY_TOKENS, STRAY_REFS = 16, 256
+local function strayCredit(base, msg, from)
+  local atoms = int(msg.Quantity, 0)
+  local seq = int(tostring(msg.Reference or ""):match("^t(%d+)$"), nil)
+  local strays = Timelock.strays
+  local s = isAoAddress(from) and strays[from]
+  if not FromProcess or not isAoAddress(from) or not seq or atoms <= 0 or not isAoAddress(msg.Sender)
+     or (not s and count(strays) >= STRAY_TOKENS) then
+    return fail(base, "Not the configured token")
+  end
+  if not s then s = { seq = 0, refs = {} }; strays[from] = s end
+  if s.refs[tostring(seq)] then return reply(base, { duplicate = true }) end
+  if count(s.refs) >= STRAY_REFS then return fail(base, "Not the configured token") end
+  s.refs[tostring(seq)] = true
+  s.seq = int(s.seq, 0) + 1
+  return reply(base, { error = "Not-Configured", refunded = atoms }, { ["rng-refund"] = { target = from, Action = "Transfer",
+    Recipient = msg.Sender, Quantity = string.format("%d", atoms), ["X-Note"] = "RNG credit refund: beacon not configured",
+    ["X-Transfer-Sequence"] = string.format("%d", s.seq) } })
+end
+
 H["Credit-Notice"] = function(base, msg, from, now)
-  if from ~= Timelock.token or Timelock.token == "" then return fail(base, "Not the configured token") end
+  if Timelock.token == "" then return strayCredit(base, msg, from) end
+  if from ~= Timelock.token then return fail(base, "Not the configured token") end
   local seq = int(tostring(msg.Reference or ""):match("^t(%d+)$"), nil)
   if not seq then return fail(base, "Missing-Reference") end
   if seq <= int(Timelock.creditFloor, 0) or Timelock.credited[tostring(seq)] then return reply(base, { duplicate = true }) end
@@ -815,14 +898,17 @@ H["Credit-Notice"] = function(base, msg, from, now)
     -- Joining is permissionless: the first bond must bring it to the full
     -- stake, and the registry must have room. Otherwise it goes back. A full
     -- registry makes room by evicting (and refunding) its lowest-ranked entry
-    -- that has never sent Ready: registering alone does not hold a seat.
+    -- that has never sent Ready and registered IDLE_FLOOR_MS ago: registering
+    -- alone does not hold a seat, but a fresh one cannot be bumped at once.
     local outbox = {}
     if not Timelock.validators[who] then
       local refused = nil
       if int(Timelock.bonds[who], 0) + amount < int(Timelock.params.stake, 25000) then refused = "Bond-Below-Stake"
       elseif count(Timelock.validators) >= int(Timelock.params.maxValidators, 256) then
         local idle = {}
-        for a, v in pairs(Timelock.validators) do if v.readyAt == nil then idle[#idle + 1] = a end end
+        for a, v in pairs(Timelock.validators) do
+          if v.readyAt == nil and now - int(v.joinedAt, now) >= IDLE_FLOOR_MS then idle[#idle + 1] = a end
+        end
         if #idle == 0 then refused = "Registry-Full" else
           local gone = rankSort(idle)[#idle]
           local refund = evict(gone, "RNG bond refund: evicted, never ready")
@@ -898,7 +984,7 @@ H["Request-Random"] = function(base, msg, from, now)
   -- commits close, so nobody can know its value yet.
   local r = current().round
   Timelock.balances[from] = bal - cost
-  Timelock.seen[key] = r
+  setSeen(key, r)
   local ix, sh = seenIndex(), shardOf(r)
   ix[sh] = ix[sh] or {}
   ix[sh][key] = r
@@ -1227,7 +1313,7 @@ local function badParams(p)
   return p.T < minT() or p.T > 4294967296 -- at most 2^32 bounds the device's work on a crack proof
      or p.revealWindowMs < 10000 or p.revealWindowMs > 600000
      or p.commitWindowMs < 500 or p.commitWindowMs > 10000
-     or p.abandonAfterMs < p.revealWindowMs
+     or p.abandonAfterMs < p.revealWindowMs or p.abandonAfterMs > ABANDON_CAP_MS
      -- A fault takes at most a tenth of the stake: no setting turns slashing into confiscation.
      or p.slash < 1 or p.slash * 10 > p.stake or p.stake > 10000000
      or p.rejoinBaseMs < p.revealWindowMs or p.rejoinCapMs < p.rejoinBaseMs or p.rejoinCapMs > 30 * DAY_MS
@@ -1235,8 +1321,15 @@ local function badParams(p)
      or p.maxValidators < p.maxActive or p.maxValidators > 1024
      or (p.heartbeat ~= 0 and p.heartbeat ~= 1)
      or p.roundPrice < 1 or p.requestPrice < 1 or p.subscriptionPrice < 1 or p.crackBounty < 1
+     -- A crack takes at most a slash from the withholder's bond.
+     or p.crackBounty > p.slash
      or p.subscriptionRounds < 1 or p.subscriptionRounds > 31536000
-     or p.cadenceMs < 0 or p.targetIntervalMs < 0 or p.maxInFlight < 1 or p.catchUpMs < 0
+     or p.cadenceMs < 0 or p.cadenceMs > 60000 or p.targetIntervalMs < 0 or p.targetIntervalMs > 600000
+     or p.maxInFlight < 1 or p.maxInFlight > 8 or p.catchUpMs < 0
+     -- One incident faults at most the committing round and the maxInFlight
+     -- revealing ones (a fault suspends), each a slash plus at most one
+     -- crack: together at most half the stake.
+     or 2 * (1 + p.maxInFlight) * (p.slash + p.crackBounty) > p.stake
      or p.fairWindowMs < 1
 end
 
@@ -1312,9 +1405,8 @@ end
 --- Checked whole before any of it applies. A new T comes with h = g^(2^T)
 --- and hProof, checked as a crack of g. The first Configure that names the
 --- token is genesis: token, unit, self and predecessor are fixed from then on.
---- After genesis a change to stake, slash, commitWindowMs or revealWindowMs
---- (what a bond is exposed to) is queued for GOV_DELAY_MS.Configure; the
---- rest applies at once.
+--- After genesis a change to a TIMELOCKED_PARAMS entry (what a bond is
+--- exposed to) is queued for GOV_DELAY_MS.Configure; the rest applies at once.
 H["Gov.Configure"] = function(base, msg, from, now)
   if not govOnly(msg, from) then return fail(base, "Not authorised") end
   local arg = govArgs(msg)
@@ -1367,7 +1459,12 @@ H["Gov.Configure"] = function(base, msg, from, now)
     end
     if unit ~= nil then Timelock.unit = int(unit, Timelock.unit) end
     if token ~= nil then
-      Timelock.token, Timelock.credited, Timelock.creditFloor = token, {}, 0
+      -- Refunds made through this token before genesis (strayCredit): its
+      -- sequence stream goes on from there, and those notices are not credited.
+      local stray = (Timelock.strays or {})[token]
+      Timelock.token, Timelock.credited, Timelock.creditFloor = token, stray and stray.refs or {}, 0
+      if stray then Timelock.transferSeq = math.max(int(Timelock.transferSeq, 0), int(stray.seq, 0)) end
+      Timelock.strays = {}
       GuardsChanged = true
     end
   end
@@ -1695,7 +1792,10 @@ local function info(now, healthNow)
     return { round = o.round, phase = o.phase, pending = #(Timelock.pending[tostring(o.round)] or {}),
              firstCommitAt = o.firstCommitAt, T = o.T, late = o.late == true,
              commitDeadline = (o.firstCommitAt or 0) > 0 and o.firstCommitAt + Timelock.params.commitWindowMs or 0,
-             revealDeadline = o.revealDeadline, active = o.active, committed = commitView(o), revealed = revealed }
+             revealDeadline = o.revealDeadline, active = o.active, committed = commitView(o), revealed = revealed,
+             -- For crackers: a late round is worked on until abandonAt.
+             abandonable = o.phase == "reveal" and abandonable(o, now) == true,
+             abandonAt = o.phase == "reveal" and o.revealDeadline > 0 and abandonAt(o) or nil }
   end
   local older = {}
   for _, o in pairs(Timelock.opens) do if o.phase == "reveal" then older[#older + 1] = roundInfo(o) end end
@@ -1761,7 +1861,7 @@ function compute(base, req)
   local msg = caseInsensitive(type(raw) == "table" and raw or {})
   -- The scheduler's assignment time only; a Timestamp tag is the caller's word.
   local now = int(req and (req.timestamp or req.Timestamp), 0)
-  Notices, GuardsChanged, SeenDirty = {}, false, {}
+  Notices, GuardsChanged, SeenDirty, SeenUndo = {}, false, {}, {}
   local handler = resolveHandler(msg.Action or "none")
   local result
   local refused = TargetRefusal(raw, req)
@@ -1770,7 +1870,7 @@ function compute(base, req)
   elseif not handler then
     result = fail(base, "unknown action '" .. tostring(msg.Action) .. "'")
   else
-    local seq = Timelock.transferSeq
+    local saved = snapshot()
     local ok, out = pcall(function()
       advance(now)
       local from = actor(msg, base)
@@ -1788,14 +1888,10 @@ function compute(base, req)
     end)
     if not ok then
       -- A handler that failed sends nothing, so it takes no sequence number,
-      -- and leaves no half-applied state: where the published state is the
-      -- previous message's (lua@5.3a), it comes back from there. On
-      -- lua-patch@1.0 the checkpoint is older, so only transferSeq is restored.
-      Timelock.transferSeq = seq
-      if Lua53bPatchMode ~= true and type(base.timelockstate) == "string" then
-        restore(base, true)
-        Notices, GuardsChanged, SeenDirty = {}, false, {}
-      end
+      -- and leaves no half-applied state: the state comes back from the copy
+      -- taken before it ran (on lua-patch@1.0 too, whose checkpoint is older).
+      rollback(saved)
+      Notices, GuardsChanged, SeenDirty = {}, false, {}
     end
     result = ok and out or fail(base, tostring(out))
   end

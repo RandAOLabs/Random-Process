@@ -77,6 +77,19 @@ local function runFairTests()
                        fair.finalValue(V.vb, V.vb), fair.forfeitValue(V.vb) }) do seen[x] = true end
   eq("domains separated", count(seen), 4)
 
+  -- Attack (fair drain): every session is paid from this process's beacon
+  -- balance, so no game opens one until the deployer allows it.
+  eq("an unknown game cannot open sessions", open(F.p1, "unallowed").error, "Game-Not-Allowed")
+  eq("allowGames checked", configure({ allowGames = { "short" } }).error, "Bad-Parameter")
+  eq("openToAll checked", configure({ openToAll = "yes" }).error, "Bad-Parameter")
+  check("deployer allows games", configure({ allowGames = { F.game, F.stranger, F.other } }).allowedGames == 3)
+  check("and removes them", configure({ removeGames = { F.other } }).allowedGames == 2)
+  eq("allowlist published", json.decode(base.fairinfo).allowGames[F.game], true)
+  eq("a removed game is refused", open(F.p1, "removed", F.other).error, "Game-Not-Allowed")
+  check("openToAll lets any game in", configure({ openToAll = true }).openToAll == true
+    and open(F.p1, "anyone", F.other).opened == true)
+  configure({ openToAll = false })
+  eq("allowed games only again", open(F.p1, "anyone-2", F.other).error, "Game-Not-Allowed")
   -- Configure: deployer only, bounded, beacon fixed once set.
   eq("configure deployer-only", configure({ beacon = F.beacon }, F.stranger).error, "Not authorised")
   eq("window below 10 s refused", configure({ fairWindowMs = 9999 }).error, "Bad-Parameter")
@@ -285,6 +298,7 @@ local function runFairTests()
   local gamesBefore = Fair.state.gameCount
   Fair = { rev = 0, owner = "", state = fair.new() }
   send(wallet(F.stranger, { Action = "Get-Info" }))
+  check("restored allowlist", Fair.state.allow and Fair.state.allow[F.game] == true and Fair.state.openToAll == false)
   check("restored game registry", gamesBefore > 0 and Fair.state.gameCount == gamesBefore
     and Fair.state.games[F.game] ~= nil, Fair.state.gameCount)
   eq("restored beacon", Fair.state.beacon, F.beacon)
@@ -338,11 +352,21 @@ local function runFairTests()
     commit = F.c1, commitTime = tostring(1000 + 600001), now = 1000 + 600001 })), "Not-Opened")
   check("lapsed allowances free the game's slots",
     fair.open(st, { game = F.game, session = "c3", player = F.p1, now = 1000 + 600001 }) ~= nil)
-  -- F.game2's allowance lapses too: idle, so a new game evicts it.
-  st.games[F.game2].allow = {}; st.games[F.game2].live = 0
+  -- Attack (registry lock): F.game2's allowance lapsed but F.game2 never
+  -- opened again. The eviction scan drops lapsed allowances itself, so the
+  -- throwaway game is idle and a new game evicts it.
   check("idle game evicted for a new one", fair.open(st, { game = F.other, session = "c1", player = F.p1, now = 1000 + 600002 }) ~= nil)
   eq("still two games", st.gameCount, 2)
   eq("the idle one went", st.games[F.game2], nil)
+  st = fair.new({ beacon = F.beacon, maxGames = 3 })
+  for i = 1, 3 do fair.open(st, { game = string.rep(tostring(i), 43), session = "s", player = F.p1, now = 1000 }) end
+  eq("throwaway games fill the registry", select(2, fair.open(st, { game = F.game, session = "s", player = F.p1, now = 2000 })), "Fair-Full")
+  check("their lapsed allowances free it", fair.open(st, { game = F.game, session = "s", player = F.p1, now = 1000 + 600001 }) ~= nil
+    and st.gameCount == 3 and st.games[F.game] ~= nil)
+  -- Embedded mode (no `allow`): any game; with `allow`, only those in it.
+  st = fair.new({ beacon = F.beacon, allow = { [F.game] = true } })
+  eq("library allowlist", select(2, fair.open(st, { game = F.other, session = "s", player = F.p1, now = 1000 })), "Game-Not-Allowed")
+  check("library allowlist admits its games", fair.open(st, { game = F.game, session = "s", player = F.p1, now = 1000 }) ~= nil)
 
   lines[#lines + 1] = passed .. " passed, " .. failed .. " failed"
   return table.concat(lines, "\n")

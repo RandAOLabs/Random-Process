@@ -8,7 +8,7 @@
 //   genesis-configure [params.json]         deployer Gov.Configure naming the token (locks token/unit/self/predecessor)
 //   fund-reserve <rng> | fund-treasury <rng>  deployer Transfer with X-Foundation / X-Treasury
 //   fund <rng> [for]                        a beacon balance (X-For)
-//   spawn-fair | configure-fair [windowMs] | fund-fair <rng>
+//   spawn-fair | configure-fair [windowMs] | fund-fair <rng> | fair-allow <game...>
 //   grant <address> <rng>                   plain RNG transfer from the deployer
 //   bond-for <rng> <address...|validators.json>  Transfer X-Bond X-For each validator
 //   gov <Gov.Action> [Tag=Value ...]        any deployer-path Gov.* (Pause, Resume, Apply, Set-Successor, ...)
@@ -104,7 +104,7 @@ export function badParams(p) {
   need(p.T >= 134217728 && p.T <= 4294967296, 'T in [2^27, 2^32]');
   need(p.revealWindowMs >= 10000 && p.revealWindowMs <= 600000, 'revealWindowMs in [10s, 600s]');
   need(p.commitWindowMs >= 500 && p.commitWindowMs <= 10000, 'commitWindowMs in [500, 10000]');
-  need(p.abandonAfterMs >= p.revealWindowMs, 'abandonAfterMs >= revealWindowMs');
+  need(p.abandonAfterMs >= p.revealWindowMs && p.abandonAfterMs <= 7 * DAY, 'revealWindowMs <= abandonAfterMs <= 7 d');
   need(p.slash >= 1 && p.slash * 10 <= p.stake && p.stake <= 10000000, '1 <= slash <= stake / 10, stake <= 10^7');
   need(p.rejoinBaseMs >= p.revealWindowMs && p.rejoinCapMs >= p.rejoinBaseMs && p.rejoinCapMs <= 30 * DAY,
     'revealWindowMs <= rejoinBaseMs <= rejoinCapMs <= 30 d');
@@ -113,7 +113,10 @@ export function badParams(p) {
   need(p.heartbeat === 0 || p.heartbeat === 1, 'heartbeat 0 or 1');
   need(p.roundPrice >= 1 && p.requestPrice >= 1 && p.subscriptionPrice >= 1 && p.crackBounty >= 1, 'prices and bounty >= 1');
   need(p.subscriptionRounds >= 1 && p.subscriptionRounds <= 31536000, 'subscriptionRounds in [1, 31536000]');
-  need(p.cadenceMs >= 0 && p.targetIntervalMs >= 0 && p.maxInFlight >= 1 && p.catchUpMs >= 0, 'rhythm parameters');
+  need(p.cadenceMs >= 0 && p.cadenceMs <= 60000 && p.targetIntervalMs >= 0 && p.targetIntervalMs <= 600000
+    && p.maxInFlight >= 1 && p.maxInFlight <= 8 && p.catchUpMs >= 0, 'rhythm parameters (cadence <= 60 s, interval <= 10 min, maxInFlight <= 8)');
+  need(p.crackBounty <= p.slash, 'crackBounty <= slash');
+  need(2 * (1 + p.maxInFlight) * (p.slash + p.crackBounty) <= p.stake, 'one incident ((1 + maxInFlight) x (slash + crackBounty)) <= stake / 2');
   need(p.fairWindowMs >= 1, 'fairWindowMs >= 1');
   return bad;
 }
@@ -532,6 +535,11 @@ async function main(argv) {
       return send(state.fair, 'Fair.Configure', { data: JSON.stringify(d) });
     },
     'fund-fair': async (rng) => fundBeacon(rng, { 'X-For': state.fair }),
+    // The fair process opens sessions only for games the deployer allowed.
+    async 'fair-allow'(...games) {
+      if (!games.length || !games.every(isPid)) throw new Error('fair-allow <game...>');
+      return send(state.fair, 'Fair.Configure', { data: JSON.stringify({ allowGames: games }) });
+    },
 
     async gov(action, ...kv) {
       if (!/^Gov\.[A-Za-z-]+$/.test(action || '')) throw new Error('gov <Gov.Action> [Tag=Value ...]');
