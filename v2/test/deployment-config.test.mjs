@@ -6,7 +6,7 @@ import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import {
   loadAllocations, genesisPrelude, badParams, genesisConfig, daoRules, sameScheduler,
-  fillTemplate, proposalErrors, checkV3, SUPPLY_ATOMS,
+  fillTemplate, proposalErrors, checkV3, SUPPLY_ATOMS, handoverErrors, fundError, BEACON_GOV_DELAY_MS,
 } from '../deploy/deploy.mjs';
 
 const V2 = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -92,7 +92,7 @@ test('v3 params template is inside the beacon hard bounds, and each bound bites'
   assert.equal(predecessor, state.anyHonest, 'predecessor is the live v2 beacon');
   assert.deepEqual(badParams(p), []);
   for (const bad of [{ T: 2 ** 26 }, { revealWindowMs: 9999 }, { commitWindowMs: 10001 }, { abandonAfterMs: 1000 },
-    { slash: 30000 }, { stake: 10 ** 7 + 1 }, { rejoinBaseMs: 1000 }, { rejoinCapMs: 31 * 86400000 },
+    { slash: 30000 }, { slash: 2501 }, { stake: 10 ** 7 + 1 }, { rejoinBaseMs: 1000 }, { rejoinCapMs: 31 * 86400000 },
     { minCommits: 1 }, { maxActive: 129 }, { maxValidators: 63 }, { heartbeat: 2 }, { roundPrice: 0 },
     { subscriptionRounds: 0 }, { maxInFlight: 0 }, { fairWindowMs: 0 }, { stake: 1.5 }]) {
     assert.notDeepEqual(badParams({ ...p, ...bad }), [], JSON.stringify(bad));
@@ -215,7 +215,7 @@ test('dry-run plan prints the whole v3 sequence and sends nothing', () => {
   assert.equal(transfers.find((l) => l.tags['X-For'] === fair).tags.Recipient, beacon);
   const bonds = transfers.filter((l) => l.tags['X-Bond']);
   assert.deepEqual(bonds.map((l) => l.tags['X-For']), readJson('deploy/anyhonest-validators.json'));
-  assert.ok(bonds.every((l) => l.tags.Quantity === '25000000000'));
+  assert.ok(bonds.every((l) => l.tags.Quantity === '100000000000'), 'operators bond 4 x stake');
   assert.deepEqual(sends[at('Fair.Configure')].data.beacon, beacon);
   const handover = sends[at('Gov.Handover')];
   assert.deepEqual(handover.tags, { Governor: dao, Guardian: pid('guardian') });
@@ -239,4 +239,48 @@ test('legacy commands target the live v2 beacon from the read-only inventory', (
   const tune = JSON.parse(run('legacy-tune', 'commitWindowMs=5000'));
   assert.deepEqual([tune.target, tune.action, tune.data], [state.anyHonest, 'Configure', { commitWindowMs: 5000 }]);
   assert.equal(fs.readFileSync(path.join(V2, 'deploy/native-testnet.json'), 'utf8'), before);
+});
+
+test('plan refuses to default the guardian to the deployer', () => {
+  assert.throws(() => execFileSync(process.execPath, [path.join(V2, 'deploy/deploy.mjs'), 'plan', '--dry-run'], {
+    env: { ...process.env, HB_NODE: 'http://127.0.0.1:9', HB_WALLET: '', RNG_DEPLOYER: DEPLOYER, RNG_GUARDIAN: '',
+      RNG_SCHEDULER: pid('sched'), RNG_STATE: path.join(V2, 'deploy/does-not-exist.json') },
+    encoding: 'utf8', stdio: 'pipe' }), /guardian is never defaulted/);
+});
+
+test('handover is refused onto a wallet, a foreign DAO or over a queued action', () => {
+  const s = { token: pid('t'), dao: pid('d'), beacon: pid('b') };
+  const beaconinfo = { token: pid('t'), governor: '', govQueue: [] };
+  const daoinfo = { Standard: 'stake-dao/1', Configured: true, Token: pid('t'), Admin: '', VotingPeriod: 7 * 86400000 };
+  assert.deepEqual(handoverErrors({ state: s, beaconinfo, daoinfo, me: DEPLOYER }), []);
+  const why = (patch) => handoverErrors({ state: s, beaconinfo, daoinfo, me: DEPLOYER, ...patch }).join('; ');
+  assert.match(why({ daoinfo: null }), /no daoinfo: not a live DAO process/);
+  assert.match(why({ state: { ...s, dao: DEPLOYER } }), /deployer wallet/);
+  assert.match(why({ beaconinfo: { ...beaconinfo, govQueue: [{ id: 1, kind: 'Treasury-Spend' }] } }), /1 queued governance/);
+  assert.match(why({ beaconinfo: { ...beaconinfo, governor: pid('x') } }), /already governed/);
+  assert.match(why({ daoinfo: { ...daoinfo, Standard: 'other/1' } }), /not stake-dao\/1/);
+  assert.match(why({ daoinfo: { ...daoinfo, Token: pid('x') } }), /not a DAO configured on our token/);
+  assert.match(why({ daoinfo: { ...daoinfo, Admin: pid('a') } }), /has an admin/);
+  assert.match(why({ daoinfo: { ...daoinfo, VotingPeriod: BEACON_GOV_DELAY_MS } }), /voting period/);
+});
+
+test('fund-* refuses a beacon that has not run genesis-configure', () => {
+  const s = { token: pid('t'), beacon: pid('b') };
+  assert.equal(fundError({ state: s, beaconinfo: { token: pid('t') } }), null);
+  assert.match(fundError({ state: s, beaconinfo: { token: '' } }), /strand/);
+  assert.match(fundError({ state: s, beaconinfo: null }), /strand/);
+});
+
+test('every beacon governance delay outlasts the DAO vote', () => {
+  const lua = fs.readFileSync(path.join(V2, 'beacon/anyhonest.lua'), 'utf8');
+  const block = /local GOV_DELAY_MS = \{([\s\S]*?)\}/.exec(lua)[1];
+  const delays = [...block.matchAll(/\["([A-Za-z-]+)"\] = (\d+) \* DAY_MS/g)].map((m) => [m[1], Number(m[2]) * 86400000]);
+  assert.deepEqual(delays.map(([k]) => k).sort(), ['Configure', 'Fund-Reserve', 'Move-Reserve', 'Set-Successor', 'Treasury-Spend']);
+  const vote = Number(daoRules({ token: pid('t') })['Voting-Period']);
+  for (const [kind, ms] of delays) {
+    assert.ok(ms > vote, `${kind} delay ${ms} must exceed the voting period ${vote}`);
+    assert.ok(ms >= BEACON_GOV_DELAY_MS, kind);
+  }
+  const move = readJson('governance/proposals/004-move-reserve.json');
+  assert.equal(move.execTags.Successor, '$SUCCESSOR', 'Move-Reserve names its successor');
 });

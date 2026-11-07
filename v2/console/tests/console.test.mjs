@@ -98,10 +98,11 @@ test('signDataItem matches the vendored ANS-104 layout and verifies', async () =
 
 test('FairClient commits, waits for reveal-due, then reveals (memory store)', async () => {
   const game = addr('game'), fairPid = 'F'.repeat(43);
-  let view = null;
+  let view = null, info = {};
   const sent = [];
   const fetchStub = async (url, init) => {
     if (url.endsWith('/now/fairsessions')) return new Response(JSON.stringify(view ? { [game]: [view] } : {}));
+    if (url.endsWith('/now/fairinfo')) return new Response(JSON.stringify(info));
     if (url.includes('/schedule')) { sent.push(init.body); return new Response('', { headers: { slot: String(sent.length) } }); }
     if (url.includes('/push&')) return new Response('{}');
     return new Response('{"ok":true}');
@@ -114,14 +115,59 @@ test('FairClient commits, waits for reveal-due, then reveals (memory store)', as
   assert.equal(saved.commit, ref.commit(game, 'sess-1', saved.secret));
   assert.equal(sent.length, 1);
   view = { game, session: 'sess-1', player: key.address, commit: saved.commit, status: 'committed' };
+  info = { outstanding: { batch: 1, requestId: 'fair-1', sentAt: 0 }, requestAfter: 0 };
   assert.equal((await client.step(saved)).step, 'wait');
   assert.equal(sent.length, 1, 'no reveal while committed');
+  // No request out and the interval passed: the client pokes the process (Get-Info).
+  info = { outstanding: null, requestAfter: Date.now() + 60_000 };
+  await client.step(saved);
+  assert.equal(sent.length, 1, 'no poke before requestAfter');
+  info = { outstanding: null, requestAfter: 0 };
+  await client.step(saved);
+  assert.equal(sent.length, 2, 'poke once the interval passed');
+  assert.ok(Buffer.from(sent[1]).includes(Buffer.from('Get-Info')));
+  sent.pop();
   view = { ...view, status: 'reveal-due', revealBy: Date.now() + 60_000 };
   assert.equal((await client.step(saved)).step, 'reveal');
   assert.equal(sent.length, 2);
   assert.ok(Buffer.from(sent[1]).includes(Buffer.from(saved.secret)), 'the reveal carries the secret');
   // A browser that lost IndexedDB sees the forfeit coming.
   assert.equal(fair.nextStep(view, null, Date.now()), 'forfeit-expected');
+});
+
+test('fairOpenTags is the game-side authorization', () => {
+  assert.deepEqual(fair.fairOpenTags('sess-1', addr('player')), { Action: 'Fair.Open', Session: 'sess-1', Player: addr('player') });
+});
+
+test('FairClient.commit keeps the secret once the commit was scheduled (C9), retries Not-Opened', async () => {
+  const game = addr('game'), fairPid = 'F'.repeat(43);
+  const store = fair.memoryStore();
+  await store.putKey(await fair.createKey());
+  const make = (handler) => new fair.FairClient({ fair: fairPid, node: 'http://node', store, fetch: handler });
+  // Scheduled, then the result read fails: the commit may be in; keep the secret.
+  let client = make(async (url) => url.includes('/schedule') ? new Response('', { headers: { slot: '1' } })
+    : url.includes('/push&') ? new Response('{}') : new Response('', { status: 502 }));
+  await assert.rejects(client.commit(game, 'kept', { retries: 0 }));
+  assert.equal((await store.list()).filter((s) => s.session === 'kept').length, 1, 'scheduled commit keeps its secret');
+  // Never scheduled (node refused, or network down): drop it.
+  client = make(async () => new Response('', { status: 500 }));
+  await assert.rejects(client.commit(game, 'refused', { retries: 0 }), fair.NotScheduledError);
+  client = make(async () => { throw new TypeError('network down'); });
+  await assert.rejects(client.commit(game, 'offline', { retries: 0 }), fair.NotScheduledError);
+  assert.deepEqual((await store.list()).map((s) => s.session), ['kept']);
+  // Not-Opened is retried until the game's Fair.Open lands.
+  let tries = 0;
+  client = make(async (url) => url.includes('/schedule') ? new Response('', { headers: { slot: String(++tries) } })
+    : url.includes('/push&') ? new Response('{}')
+    : new Response(tries < 3 ? '{"error":"Not-Opened"}' : '{"committed":true}'));
+  const saved = await client.commit(game, 'retried', { retries: 5, sleep: async () => {} });
+  assert.equal(tries, 3);
+  assert.equal(saved.session, 'retried');
+  // A definite refusal (retries exhausted) drops the secret.
+  client = make(async (url) => url.includes('/schedule') ? new Response('', { headers: { slot: '9' } })
+    : url.includes('/push&') ? new Response('{}') : new Response('{"error":"Not-Opened"}'));
+  await assert.rejects(client.commit(game, 'never', { retries: 1, sleep: async () => {} }), (e) => e.code === 'Not-Opened');
+  assert.equal((await store.list()).some((s) => s.session === 'never'), false);
 });
 
 test('WP6 beaconHealth: v3 health wins, v2 is derived', () => {

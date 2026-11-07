@@ -37,15 +37,20 @@ local function batches() return json.decode(base.fairbatches) end
 local function sessionOf(name, player, game)
   for _, s in ipairs(sessions(game)) do if s.session == name and (not player or s.player == player) then return s end end
 end
-local function commit(player, session, c, at)
+--- The game authorizes the player's key for the session (Fair.Open).
+local function open(player, session, game)
+  return send(delivery(game or F.game, { Action = "Fair.Open", Session = session, Player = player }))
+end
+local function commit(player, session, c, at, noOpen)
+  if not noOpen then open(player, session) end
   return send(wallet(player, { Action = "Fair.Commit", Game = F.game, Session = session, Commit = c,
     ["Commit-Time"] = at or string.format("%d", clock) }))
 end
-local function result(requestId, roundValue, from)
+local function result(requestId, roundValue, from, advance)
   local value = rng.hex(rng.sha256("hyperbeam/rng/any-honest/v1/request|" .. roundValue .. "|" .. SELF .. "|" .. requestId))
   local body = { round = 7, tier = "any-honest", value = roundValue,
     results = { { requestId = requestId, round = 7, value = value } } }
-  return send(delivery(from or F.beacon, { Action = "RNG-Result", Data = encode(body) }))
+  return send(delivery(from or F.beacon, { Action = "RNG-Result", Data = encode(body) }), advance)
 end
 local function rngError(requestId, err) return send(delivery(F.beacon, { Action = "RNG-Error",
   Data = encode({ error = err or "Insufficient-Balance", requestId = requestId }) })) end
@@ -78,7 +83,16 @@ local function runFairTests()
   eq("window above 10 min refused", configure({ fairWindowMs = 600001 }).error, "Bad-Parameter")
   r, ob = commit(F.p1, "early", F.c1)
   eq("no request before a beacon is set", count(ob), 0)
-  check("configured", configure({ beacon = F.beacon, fairWindowMs = 60000, keep = 3, maxOpen = 8 }).ok == true)
+  -- Publishing only when the state moves.
+  local rev = base.fairrev
+  commit(F.p1, "unopened0", F.c1, nil, true)
+  eq("a refusal publishes nothing", base.fairrev, rev)
+  send(wallet(F.stranger, { Action = "Get-Info" }))
+  eq("a no-op Get-Info publishes nothing", base.fairrev, rev)
+  check("configured", configure({ beacon = F.beacon, fairWindowMs = 60000, keep = 3, maxOpen = 8, minIntervalMs = 1000 }).ok == true)
+  eq("min interval below 1 s refused", configure({ minIntervalMs = 999 }).error, "Bad-Parameter")
+  eq("maxGames 0 refused", configure({ maxGames = 0 }).error, "Bad-Parameter")
+  eq("maxPerGame above 4096 refused", configure({ maxPerGame = 4097 }).error, "Bad-Parameter")
   eq("beacon locked", configure({ beacon = F.other }).error, "Beacon-Locked")
   check("same beacon again fine", configure({ beacon = F.beacon }).ok == true)
 
@@ -86,10 +100,32 @@ local function runFairTests()
   r = send(wallet(F.owner, { Action = "Fair.Configure", Data = encode({ keep = 3 }), target = string.rep("o", 43) }))
   eq("message for another process refused", r.error, "Refused: not signed for this process")
 
+  -- The game authorizes sessions: no Fair.Open, no commit (and no beacon request).
+  r, ob = commit(F.p1, "unopened", F.c1, nil, true)
+  eq("commit without Fair.Open refused", r.error, "Not-Opened")
+  eq("refused commit sends nothing", count(ob), 0)
+  open(F.p1, "stranger-opened", F.stranger)
+  r = commit(F.p1, "stranger-opened", F.c1, nil, true)
+  eq("an allowance from another sender is not the game's", r.error, "Not-Opened")
+  r = send(wallet(F.stranger, { Action = "Fair.Open", Session = "spoof", Player = F.p1, ["from-process"] = F.game }))
+  check("wallet-forged from-process opens for the wallet, not the game",
+    r.opened == true and r.game == F.stranger, r.game)
+  eq("so the game's session stays closed", commit(F.p1, "spoof", F.c1, nil, true).error, "Not-Opened")
+  r = send({ target = SELF, Action = "Fair.Open", Session = "x", Player = F.p1 })
+  eq("unsigned open refused", r.error, "Unsigned")
+  r = open("short", "x")
+  eq("open needs a player address", r.error, "Bad-Player")
+  r = open(F.p2, "a|b")
+  eq("open checks the session", r.error, "Bad-Session")
+  r = open(F.p1, "dup")
+  check("open", r.opened == true)
+  check("open again is a duplicate", open(F.p1, "dup").duplicate == true)
+
   -- Commit validation.
   eq("bad commit", commit(F.p1, "x", "zz").error, "Bad-Commit")
   eq("bad session", commit(F.p1, "a|b", F.c1).error, "Bad-Session")
   eq("long session", commit(F.p1, string.rep("s", 65), F.c1).error, "Bad-Session")
+  open(F.p1, "x")
   r = send(wallet(F.p1, { Action = "Fair.Commit", Game = F.game, Session = "x", Commit = F.c1 }))
   eq("missing commit time", r.error, "Missing-Commit-Time")
   eq("stale commit time (replay)", commit(F.p1, "x", F.c1, string.format("%d", clock - 700000)).error, "Stale-Commit")
@@ -175,7 +211,7 @@ local function runFairTests()
   eq("expire after reveal changes nothing", expire("sess-1", F.p1).duplicate, true)
 
   -- Batch 2: sess-3 revealed by a third party (Player tag), sess-2 forfeits.
-  r, ob = result("fair-2", F.round2)
+  r, ob = result("fair-2", F.round2, nil, 1000)
   eq("batch 3 requested next", ob["fair-request"] and ob["fair-request"]["Request-Id"], "fair-3")
   eq("expire before revealBy refused", expire("sess-2", F.p2).error, "Not-Expired")
   r = reveal(F.stranger, "sess-3", F.s3, F.p3)
@@ -229,6 +265,7 @@ local function runFairTests()
   eq("both bound together", sessionOf("e2").status, "reveal-due")
 
   -- A request never answered is given up after 30 min (no second one before).
+  send(wallet(F.stranger, { Action = "Get-Info" }), 1000) -- past the min interval
   commit(F.p3, "lost", F.c3)
   local lostId = batches().outstanding.requestId
   r, ob = send(wallet(F.stranger, { Action = "Get-Info" }), 1700000)
@@ -245,14 +282,21 @@ local function runFairTests()
 
   -- Restore: a fresh VM rebuilds from fairstate.
   local before = base.fairsessions
+  local gamesBefore = Fair.state.gameCount
   Fair = { rev = 0, owner = "", state = fair.new() }
   send(wallet(F.stranger, { Action = "Get-Info" }))
+  check("restored game registry", gamesBefore > 0 and Fair.state.gameCount == gamesBefore
+    and Fair.state.games[F.game] ~= nil, Fair.state.gameCount)
   eq("restored beacon", Fair.state.beacon, F.beacon)
   eq("restored sessions", json.decode(base.fairsessions)[F.game][1].commit, json.decode(before)[F.game][1].commit)
 
-  -- Embedded mode: a game keeps the state itself.
+  -- Embedded mode: a game keeps the state itself (and opens its own sessions).
   local st = fair.new({ beacon = F.beacon, windowMs = 30000 })
   local d, o = fair.dispatch(st, "Fair.Commit", { Game = F.game, Session = "sess-1", Commit = F.c1, ["Commit-Time"] = "1000" },
+    F.p1, false, 1000)
+  eq("embedded: commit before open refused", o, "Not-Opened")
+  fair.open(st, { game = F.game, session = "sess-1", player = F.p1, now = 1000 })
+  d, o = fair.dispatch(st, "Fair.Commit", { Game = F.game, Session = "sess-1", Commit = F.c1, ["Commit-Time"] = "1000" },
     F.p1, false, 1000)
   eq("embedded commit sends request", o["fair-request"]["Request-Id"], "fair-1")
   d = fair.dispatch(st, "RNG-Result", { Data = { results = { { requestId = "fair-1", value = F.vb1 } } } }, F.beacon, false, 2000)
@@ -266,6 +310,39 @@ local function runFairTests()
   eq("embedded final", d.session.final, fair.finalValue(fair.sessionValue(F.vb1, F.game, "sess-1"), F.s1))
   x, y = fair.dispatch(st, "Other", {}, F.p1, false, 3000)
   check("embedded: other actions not fair's", x == nil and y == nil)
+
+  -- Minimum interval between beacon requests (drain bound).
+  st = fair.new({ beacon = F.beacon, minIntervalMs = 5000 })
+  local function openCommit(name, c, player, now)
+    fair.open(st, { game = F.game, session = name, player = player or F.p1, now = now })
+    return fair.commit(st, { game = F.game, session = name, player = player or F.p1, commit = c,
+      commitTime = tostring(now), now = now })
+  end
+  d, o = openCommit("m1", F.c1, F.p1, 10000)
+  eq("first request at once", o["fair-request"] and o["fair-request"]["Request-Id"], "fair-1")
+  d, o = openCommit("m2", F.c2, F.p1, 10500)
+  d, o = fair.onResult(st, { now = 11000, data = { results = { { requestId = "fair-1", value = F.vb1 } } } })
+  eq("next batch waits for the interval", o["fair-request"], nil)
+  eq("not at 4.999 s", fair.pump(st, 14999), nil)
+  local m = fair.pump(st, 15000)
+  eq("sent once the interval has passed", m and m["Request-Id"], "fair-2")
+
+  -- Caps: sessions per game, games tracked, allowance expiry.
+  st = fair.new({ beacon = F.beacon, maxPerGame = 2, maxGames = 2 })
+  check("per-game 1", fair.open(st, { game = F.game, session = "c1", player = F.p1, now = 1000 }) ~= nil)
+  check("per-game 2", fair.open(st, { game = F.game, session = "c2", player = F.p1, now = 1000 }) ~= nil)
+  eq("per-game cap", select(2, fair.open(st, { game = F.game, session = "c3", player = F.p1, now = 1000 })), "Game-Full")
+  check("second game", fair.open(st, { game = F.game2, session = "c1", player = F.p1, now = 1000 }) ~= nil)
+  eq("game cap with no idle game", select(2, fair.open(st, { game = F.other, session = "c1", player = F.p1, now = 1000 })), "Fair-Full")
+  eq("commit after the allowance lapsed refused", select(2, fair.commit(st, { game = F.game, session = "c1", player = F.p1,
+    commit = F.c1, commitTime = tostring(1000 + 600001), now = 1000 + 600001 })), "Not-Opened")
+  check("lapsed allowances free the game's slots",
+    fair.open(st, { game = F.game, session = "c3", player = F.p1, now = 1000 + 600001 }) ~= nil)
+  -- F.game2's allowance lapses too: idle, so a new game evicts it.
+  st.games[F.game2].allow = {}; st.games[F.game2].live = 0
+  check("idle game evicted for a new one", fair.open(st, { game = F.other, session = "c1", player = F.p1, now = 1000 + 600002 }) ~= nil)
+  eq("still two games", st.gameCount, 2)
+  eq("the idle one went", st.games[F.game2], nil)
 
   lines[#lines + 1] = passed .. " passed, " .. failed .. " failed"
   return table.concat(lines, "\n")

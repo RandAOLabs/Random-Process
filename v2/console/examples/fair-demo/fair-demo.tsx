@@ -2,7 +2,11 @@
 
 // Fair-play demo: a player's browser as the honest actor (docs/PERMISSIONLESS.md).
 // Mount it on any console page, e.g. app/fair/page.tsx:
-//   <FairDemo fair="<fair process id>" game="<game process id>" />
+//   <FairDemo fair="<fair process id>" game="<game process id>" authorize={askTheGame} />
+// `authorize(session, player)` asks YOUR game to open the session for this
+// browser's key (the game charges the entry and sends
+// `fairOpenTags(session, player)` to the fair process); the commit is only
+// accepted after that.
 // Typecheck: npx tsc --noEmit -p examples/fair-demo
 //
 // The browser commits H(secret) with a throwaway key kept in IndexedDB, waits
@@ -15,7 +19,9 @@ import { FairClient, FairError, fairExpireTags, nextStep, verifySession, type Fa
 
 type Row = { session: FairSession; mine: boolean; local: SavedSession | null; step: string; check?: string };
 
-export function FairDemo({ fair, game, node }: { fair: string; game: string; node?: string }) {
+export type Authorize = (session: string, player: string) => Promise<void>;
+
+export function FairDemo({ fair, game, node, authorize }: { fair: string; game: string; node?: string; authorize: Authorize }) {
   const client = useRef<FairClient | null>(null);
   const [player, setPlayer] = useState("");
   const [rows, setRows] = useState<Row[]>([]);
@@ -56,7 +62,11 @@ export function FairDemo({ fair, game, node }: { fair: string; game: string; nod
   const play = async () => {
     if (!client.current) return;
     setBusy(true); setError("");
-    try { await client.current.commit(game, `demo-${Date.now()}`); }
+    try {
+      const session = `demo-${Date.now()}`;
+      await authorize(session, await client.current.player());
+      await client.current.commit(game, session);
+    }
     catch (e) { setError(e instanceof FairError ? `${e.code}: ${e.message}` : e instanceof Error ? e.message : String(e)); }
     finally { setBusy(false); }
   };

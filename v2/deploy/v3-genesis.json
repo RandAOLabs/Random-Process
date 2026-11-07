@@ -1,6 +1,6 @@
 {
   "ticker": "TEST-RNG",
-  "note": "Testnet genesis: every role goes to the deployer, which forwards reserve (X-Foundation) and treasury (X-Treasury) to the beacon. Mainnet: give each non-beacon role its own wallet. Sum must be exactly 1,000,000,000 RNG.",
+  "note": "Testnet genesis: every role goes to the deployer, which forwards reserve (X-Foundation) and treasury (X-Treasury) to the beacon. Mainnet: give each non-beacon role its own wallet. Sum must be exactly 1,000,000,000 RNG. Operator validators bond 4 x stake (100,000 RNG) from day one: rank is capped bond, so a newcomer has to bond as much to outrank them (a quarter of the seats go by seniority).",
   "allocations": [
     { "role": "reserve", "address": "$DEPLOYER", "rng": 200000000, "forward": "X-Foundation" },
     { "role": "treasury", "address": "$DEPLOYER", "rng": 50000000, "forward": "X-Treasury" },

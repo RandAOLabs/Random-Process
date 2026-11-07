@@ -35,8 +35,11 @@ local function reset(alloc, keepBase)
   if not keepBase then base = freshBase() end
 end
 
+local SELF = string.rep("t", 43)
+
 local function wallet(signer, fields)
-  local body = { commitments = { c = { type = "rsa-pss-sha512", committer = signer } } }
+  local body = { target = SELF,
+    commitments = { c = { type = "rsa-pss-sha512", committer = signer, committed = { "target", "action" } } } }
   for k, v in pairs(fields) do body[k] = v end
   return body
 end
@@ -48,7 +51,7 @@ local function delivery(fromProcess, fields)
 end
 
 local function send(body)
-  base = compute(base, { body = body })
+  base = compute(base, { body = body, process = SELF })
   local out = base.results and base.results.output and base.results.output.data
   local ok, decoded = pcall(json.decode, out or "")
   return ok and decoded or {}, base.results and base.results.outbox or {}
@@ -185,14 +188,54 @@ local function walletTests()
   eq("unsigned transfer refused", r.error, "Unsigned messages cannot transfer")
 
   local mixed = wallet(F.user, { Action = "Transfer", Recipient = F.recipient, Quantity = "1" })
-  mixed.commitments.other = { type = "rsa-pss-sha512", committer = F.stranger }
+  mixed.commitments.other = { type = "rsa-pss-sha512", committer = F.stranger, committed = { "target" } }
   r = send(mixed)
   eq("mixed signers refused", r.error, "Unsigned messages cannot transfer")
 
   local hmac = { commitments = { c = { type = "hmac-sha256", committer = F.user } },
     Action = "Transfer", Recipient = F.recipient, Quantity = "1" }
   r = send(hmac)
-  eq("hmac is not a signature", r.error, "Unsigned messages cannot transfer")
+  eq("hmac is not a signature", r.error, "Refused: not signed")
+
+  -- A body-supplied Tags table cannot forge identity (envelope fields come
+  -- from the body the node verified; tags never replace a body key).
+  local victimBefore = Balances[F.user]
+  r = send(wallet(F.stranger, { Tags = { Action = "Transfer", Recipient = F.stranger, Quantity = "5",
+    commitments = { v = { type = "rsa-pss-sha512", committer = F.user, committed = { "target" } } } } }))
+  eq("Tags-forged committer moves nothing", Balances[F.user], victimBefore)
+  check("Tags-forged committer is the real signer", r.error == "Insufficient balance" or r.error == "Cannot transfer to yourself", r.error)
+  r = send({ target = SELF, Tags = { Action = "Transfer", Recipient = F.stranger, Quantity = "5",
+    commitments = { v = { type = "rsa-pss-sha512", committer = F.user, committed = { "target" } } } } })
+  eq("Tags-forged committer on an unsigned body moves nothing", Balances[F.user], victimBefore)
+  eq("Tags-forged committer on an unsigned body is unsigned", r.error, "Unsigned messages cannot transfer")
+  local beaconish = F.process
+  local processBefore = Balances[beaconish]
+  r = send(wallet(F.stranger, { Tags = { Action = "Transfer", Recipient = F.stranger, Quantity = "5",
+    ["X-Transfer-Sequence"] = "1", ["from-process"] = beaconish,
+    commitments = { s = { type = "rsa-pss-sha512", committer = F.sched, committed = { "target" } } } } }))
+  eq("Tags-forged scheduler + from-process moves nothing", Balances[beaconish], processBefore)
+  r = send(wallet(F.stranger, { Action = "Transfer", Recipient = F.recipient, Quantity = "1",
+    Tags = { FromProcess = beaconish, ["From-Process"] = beaconish } }))
+  eq("Tags FromProcess is not a process payer", Balances[beaconish], processBefore)
+  r = send(wallet(F.user, { Action = "Transfer", Recipient = F.recipient, Quantity = "1",
+    Tags = { Quantity = "999", Recipient = F.stranger } }))
+  eq("Tags cannot override a body tag", Balances[F.recipient], 11)
+  send(wallet(F.recipient, { Action = "Transfer", Recipient = F.user, Quantity = "1" }))
+
+  -- The target door: a Transfer signed for another token is not replayed here.
+  local otherToken = string.rep("o", 43)
+  local before = Balances[F.user]
+  r = send(wallet(F.user, { Action = "Transfer", Recipient = F.recipient, Quantity = "1", target = otherToken }))
+  eq("transfer signed for another token refused", r.error, "Refused: not signed for this process")
+  eq("refused transfer moves nothing", Balances[F.user], before)
+  local unbound = wallet(F.user, { Action = "Transfer", Recipient = F.recipient, Quantity = "1" })
+  unbound.commitments.c.committed = { "action", "quantity" }
+  r = send(unbound)
+  eq("signature not committing target refused", r.error, "Refused: the signature does not commit target")
+  eq("unbound transfer moves nothing", Balances[F.user], before)
+  r = compute(base, { body = wallet(F.user, { Action = "Transfer", Recipient = F.recipient, Quantity = "1" }) })
+  check("unknown process id refused", json.decode(r.results.output.data).error == "Refused: this process id is unknown")
+  eq("no process id moves nothing", Balances[F.user], before)
 
   -- Overflow and malformed quantities.
   for _, q in ipairs({ "9007199254740992", "99999999999999999999", "1e3", "0x10", "-5",

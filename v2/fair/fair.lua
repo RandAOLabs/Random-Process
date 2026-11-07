@@ -4,11 +4,14 @@
 -- and publishing. Games that want to save the hop embed lib/fair.lua instead.
 --
 -- Messages (tags):
---   Fair.Commit { Game, Session, Commit, Commit-Time }   signed by the player key P
+--   Fair.Open { Session, Player }                        the game (wallet signer or attested process):
+--                                                         lets key Player commit to Session (10 min)
+--   Fair.Commit { Game, Session, Commit, Commit-Time }   signed by the player key P, after Fair.Open
 --   Fair.Reveal { Game, Session, Secret [, Player] }      anyone (Player defaults to the signer)
 --   Fair.Expire { Game, Session, Player }                 anyone, after revealBy
 --   RNG-Result / RNG-Error                                the configured beacon only (attested)
---   Fair.Configure { Data = { beacon, fairWindowMs, keep, maxOpen } }   the deployer
+--   Fair.Configure { Data = { beacon, fairWindowMs, keep, maxOpen,
+--                    minIntervalMs, maxGames, maxPerGame } }       the deployer
 --   Get-Info                                              anyone; also sends a due request
 -- Sends: Request-Random -> beacon (paid from this process's beacon balance),
 --        Fair-Result -> Game.
@@ -159,12 +162,27 @@ local function configure(msg, from)
   local w = d.fairWindowMs ~= nil and bounded(d.fairWindowMs, B.windowMs)
   local k = d.keep ~= nil and bounded(d.keep, B.keep)
   local m = d.maxOpen ~= nil and bounded(d.maxOpen, B.maxOpen)
-  if w == nil or k == nil or m == nil then return nil, "Bad-Parameter" end
+  local mi = d.minIntervalMs ~= nil and bounded(d.minIntervalMs, B.minIntervalMs)
+  local mg = d.maxGames ~= nil and bounded(d.maxGames, B.maxGames)
+  local mp = d.maxPerGame ~= nil and bounded(d.maxPerGame, B.maxPerGame)
+  if w == nil or k == nil or m == nil or mi == nil or mg == nil or mp == nil then return nil, "Bad-Parameter" end
+  st.changes = (st.changes or 0) + 1
   if d.beacon then st.beacon = d.beacon end
   if w then st.windowMs = w end
   if k then st.keep = k end
   if m then st.maxOpen = m end
-  return { ok = true, beacon = st.beacon, fairWindowMs = st.windowMs, keep = st.keep, maxOpen = st.maxOpen }, {}
+  if mi then st.minIntervalMs = mi end
+  if mg then st.maxGames = mg end
+  if mp then st.maxPerGame = mp end
+  return { ok = true, beacon = st.beacon, fairWindowMs = st.windowMs, keep = st.keep, maxOpen = st.maxOpen,
+    minIntervalMs = st.minIntervalMs, maxGames = st.maxGames, maxPerGame = st.maxPerGame }, {}
+end
+
+--- The game registry as JSON objects (empty `allow` maps stay objects).
+local function gamesState(games)
+  local out = {}
+  for name, g in pairs(games or {}) do out[name] = { live = g.live, last = g.last, allow = jsonObject(g.allow) } end
+  return out
 end
 
 function compute(base, req)
@@ -177,6 +195,7 @@ function compute(base, req)
   local now = math.tointeger(tonumber(req and (req.timestamp or req.Timestamp)) or 0) or 0
   local action = tostring(msg.Action or "")
   local st = Fair.state
+  local changesBefore = st.changes or 0
   local refused = TargetRefusal(raw, req)
   local result
   if refused then
@@ -204,16 +223,24 @@ function compute(base, req)
       result = reply(base, data, outbox)
     end
   end
+  -- Publish only when the state moved (or nothing is published yet): a
+  -- refusal or a no-op Get-Info re-encodes nothing.
+  if (st.changes or 0) == changesBefore and base.fairstate ~= nil then return result end
   Fair.rev = Fair.rev + 1
   result.fairrev = string.format("%d", Fair.rev)
   result.fairstate = encode({ rev = Fair.rev, owner = Fair.owner, state = {
     beacon = st.beacon, windowMs = st.windowMs, keep = st.keep, maxOpen = st.maxOpen,
     sessions = jsonObject(st.sessions), byGame = jsonObject(st.byGame), done = jsonObject(st.done),
     open = st.open, next = st.next, batches = jsonObject(st.batches), bound = st.bound,
-    outstanding = st.outstanding, attempts = st.attempts, retryAt = st.retryAt } })
+    outstanding = st.outstanding, attempts = st.attempts, retryAt = st.retryAt,
+    minIntervalMs = st.minIntervalMs, maxGames = st.maxGames, maxPerGame = st.maxPerGame,
+    games = jsonObject(gamesState(st.games)), gameCount = st.gameCount, lastRequestAt = st.lastRequestAt,
+    changes = st.changes } })
   result.fairsessions = encode(jsonObject(fair.sessionsView(st)))
   result.fairbatches = encode(fair.batchesView(st))
   result.fairinfo = encode({ beacon = st.beacon, fairWindowMs = st.windowMs, keep = st.keep, maxOpen = st.maxOpen,
-    open = st.open, next = st.next, outstanding = st.outstanding, at = now, protocol = "rng/fair/v1" })
+    open = st.open, next = st.next, outstanding = st.outstanding, at = now, protocol = "rng/fair/v1",
+    minIntervalMs = st.minIntervalMs, maxGames = st.maxGames, maxPerGame = st.maxPerGame, games = st.gameCount,
+    requestAfter = st.lastRequestAt and (st.lastRequestAt + st.minIntervalMs) or 0 })
   return result
 end

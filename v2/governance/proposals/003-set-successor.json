@@ -1,6 +1,9 @@
 {
   "title": "Name the successor beacon",
-  "body": "Queues Gov.Set-Successor for 7 days; anyone runs Gov.Apply after. Validators follow once the successor names this beacon as its predecessor.",
+  "body": "Queues Gov.Set-Successor for 10 days (it supersedes any queued one); anyone runs Gov.Apply after, within 14 days. Validators follow once the successor names this beacon as its predecessor.",
   "execProcess": "$BEACON",
-  "execTags": { "Action": "Gov.Set-Successor", "Successor": "$SUCCESSOR" }
+  "execTags": {
+    "Action": "Gov.Set-Successor",
+    "Successor": "$SUCCESSOR"
+  }
 }

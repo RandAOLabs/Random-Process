@@ -13,7 +13,8 @@
 //   bond-for <rng> <address...|validators.json>  Transfer X-Bond X-For each validator
 //   gov <Gov.Action> [Tag=Value ...]        any deployer-path Gov.* (Pause, Resume, Apply, Set-Successor, ...)
 //   resend-ack                              Resend-Successor-Ack to the predecessor
-//   handover <guardian|--no-guardian> --confirm   Gov.Handover to the recorded DAO (one way)
+//   handover <guardian|--no-guardian> --confirm   Gov.Handover to the recorded DAO (one way; refused unless
+//                                           the beacon's queue is empty and the DAO is a live stake-dao/1)
 //   dao-stake <rng> | dao-propose <template.json> [KEY=VALUE ...] | dao-vote <id> <Yes|No|NoWithVeto|Abstain>
 //   status | verify                         read and check token, DAO, beacon, fair (verify exits 1 on a failure)
 //   test-subscription                       authenticated-push acceptance test against the v3 beacon
@@ -32,7 +33,8 @@
 // wallet's address, RNG_SCHEDULER for the node's.
 //
 // Env: HB_NODE, HB_WALLET (deployer), RNG_STATE, RNG_LEGACY_STATE, RNG_SCHEDULER
-//      (pin; must equal the node's), PARALITH_MONO (for spawn-dao), RNG_GUARDIAN (plan).
+//      (pin; must equal the node's), PARALITH_MONO (for spawn-dao), RNG_GUARDIAN (plan; required,
+//      never defaulted to the deployer).
 import fs from 'node:fs';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
@@ -103,7 +105,7 @@ export function badParams(p) {
   need(p.revealWindowMs >= 10000 && p.revealWindowMs <= 600000, 'revealWindowMs in [10s, 600s]');
   need(p.commitWindowMs >= 500 && p.commitWindowMs <= 10000, 'commitWindowMs in [500, 10000]');
   need(p.abandonAfterMs >= p.revealWindowMs, 'abandonAfterMs >= revealWindowMs');
-  need(p.slash >= 1 && p.slash <= p.stake && p.stake <= 10000000, '1 <= slash <= stake <= 10^7');
+  need(p.slash >= 1 && p.slash * 10 <= p.stake && p.stake <= 10000000, '1 <= slash <= stake / 10, stake <= 10^7');
   need(p.rejoinBaseMs >= p.revealWindowMs && p.rejoinCapMs >= p.rejoinBaseMs && p.rejoinCapMs <= 30 * DAY,
     'revealWindowMs <= rejoinBaseMs <= rejoinCapMs <= 30 d');
   need(p.minCommits >= 2 && p.minCommits <= p.maxActive && p.maxActive <= 128, '2 <= minCommits <= maxActive <= 128');
@@ -172,7 +174,7 @@ const EXEC_RESERVED = new Set(['target', 'fromprocess', 'from', 'owner', 'signat
   'xtransfersequence', 'xreference', 'cast']);
 const GOV_TAGS = {
   'Gov.Configure': null, // checked against CONFIGURE_TAGS
-  'Gov.Set-Successor': ['Successor'], 'Gov.Move-Reserve': [], 'Gov.Treasury-Spend': ['Recipient', 'Quantity'],
+  'Gov.Set-Successor': ['Successor'], 'Gov.Move-Reserve': ['Successor'], 'Gov.Treasury-Spend': ['Recipient', 'Quantity'],
   'Gov.Fund-Reserve': ['Quantity'], 'Gov.Remove-Validator': ['Validator'], 'Gov.Pause': [], 'Gov.Resume': [],
   'Gov.Clear-Guardian': [], 'Gov.Cancel': ['Gov-Id'], 'Gov.Apply': ['Gov-Id'],
 };
@@ -220,6 +222,44 @@ export function proposalErrors(p, { token } = {}) {
     if (action === 'Gov.Configure' && names.length > 15) errs.push('Gov.Configure takes at most 14 parameters');
   }
   return errs;
+}
+
+/** The beacon's shortest governance delay (anyhonest.lua GOV_DELAY_MS): the DAO's
+ * voting period must be shorter, so a Gov.Cancel can pass before an action lands. */
+export const BEACON_GOV_DELAY_MS = 10 * DAY;
+
+/** Why Gov.Handover must not be sent yet (empty: go). The governor must be a
+ * live stake-dao/1 process on our token (a wallet publishes no daoinfo), and
+ * the beacon must have nothing queued: the deployer's queue would land under
+ * the DAO's name. */
+export function handoverErrors({ state, beaconinfo, daoinfo, me }) {
+  const errs = [];
+  if (!isPid(state.dao)) errs.push('no DAO recorded: spawn-dao first');
+  if (state.dao && state.dao === me) errs.push('the governor is the deployer wallet');
+  if (!beaconinfo) errs.push(`beacon ${state.beacon} publishes no beaconinfo`);
+  else {
+    if (beaconinfo.token !== state.token) errs.push('beacon has not run genesis-configure');
+    if (beaconinfo.governor) errs.push(`beacon is already governed by ${beaconinfo.governor}`);
+    const queued = Array.isArray(beaconinfo.govQueue) ? beaconinfo.govQueue.length : 0;
+    if (queued) errs.push(`beacon has ${queued} queued governance action(s): Gov.Cancel them first`);
+  }
+  if (!daoinfo) errs.push(`governor ${state.dao} publishes no daoinfo: not a live DAO process (a wallet?)`);
+  else {
+    if (daoinfo.Standard !== 'stake-dao/1') errs.push(`governor is ${daoinfo.Standard}, not stake-dao/1`);
+    if (daoinfo.Configured !== true || daoinfo.Token !== state.token) errs.push('governor is not a DAO configured on our token');
+    if (daoinfo.Admin !== '') errs.push('governor DAO has an admin');
+    if (!(Number(daoinfo.VotingPeriod) < BEACON_GOV_DELAY_MS)) errs.push('DAO voting period is not shorter than the beacon governance delay');
+  }
+  return errs;
+}
+
+/** Why a transfer to the beacon would strand (null: go): before genesis the
+ * beacon refuses every Credit-Notice. */
+export function fundError({ state, beaconinfo }) {
+  if (!beaconinfo || !state.token || beaconinfo.token !== state.token) {
+    return `beacon ${state.beacon} has not run genesis-configure (beaconinfo.token unset): a transfer now would strand`;
+  }
+  return null;
 }
 
 /** Live checks over the published keys; each { check, ok, detail }. */
@@ -376,6 +416,14 @@ async function main(argv) {
     if (!state.token) throw new Error('spawn-token first');
     return send(state.token, 'Transfer', { tags: { Recipient: recipient, Quantity: atomsOf(rng), ...extraTags } });
   };
+  // Every fund-* is refused until the beacon has its token (genesis-configure).
+  const fundBeacon = async (rng, tags) => {
+    if (!DRY) {
+      const err = fundError({ state, beaconinfo: await key(state.beacon, 'beaconinfo') });
+      if (err) throw new Error(err);
+    }
+    return transfer(state.beacon, rng, tags);
+  };
   const readJson = (file) => JSON.parse(fs.readFileSync(path.resolve(file), 'utf8'));
   const loadParams = (file) => readJson(file || path.join(HERE, 'v3-params.json'));
 
@@ -458,9 +506,9 @@ async function main(argv) {
       return send(state.beacon, 'Gov.Configure', { data: JSON.stringify(data) });
     },
 
-    'fund-reserve': (rng) => transfer(state.beacon, rng ?? state.genesis?.reserveRng, { 'X-Foundation': 'true' }),
-    'fund-treasury': (rng) => transfer(state.beacon, rng ?? state.genesis?.treasuryRng, { 'X-Treasury': 'true' }),
-    fund: (rng, forWho) => transfer(state.beacon, rng, { 'X-For': forWho || me }),
+    'fund-reserve': async (rng) => fundBeacon(rng ?? state.genesis?.reserveRng, { 'X-Foundation': 'true' }),
+    'fund-treasury': async (rng) => fundBeacon(rng ?? state.genesis?.treasuryRng, { 'X-Treasury': 'true' }),
+    fund: async (rng, forWho) => fundBeacon(rng, { 'X-For': forWho || me }),
     grant: (address, rng) => {
       if (!isPid(address)) throw new Error('grant <address> <rng>');
       return transfer(address, rng);
@@ -483,7 +531,7 @@ async function main(argv) {
       const d = { beacon: state.beacon, fairWindowMs: Number(windowMs || 60000), keep: 64, maxOpen: 10000 };
       return send(state.fair, 'Fair.Configure', { data: JSON.stringify(d) });
     },
-    'fund-fair': (rng) => transfer(state.beacon, rng, { 'X-For': state.fair }),
+    'fund-fair': async (rng) => fundBeacon(rng, { 'X-For': state.fair }),
 
     async gov(action, ...kv) {
       if (!/^Gov\.[A-Za-z-]+$/.test(action || '')) throw new Error('gov <Gov.Action> [Tag=Value ...]');
@@ -498,8 +546,14 @@ async function main(argv) {
       sameScheduler(state, ['token', 'dao', 'beacon']);
       const tags = { Governor: state.dao };
       if (!flag('--no-guardian')) {
-        if (!isPid(guardian)) throw new Error('handover <guardian> (or --no-guardian)');
+        // Never defaulted (to the deployer or anyone): name it, or --no-guardian.
+        if (!isPid(guardian)) throw new Error('handover <guardian> (or --no-guardian): the guardian is never defaulted');
         tags.Guardian = guardian;
+      }
+      if (!DRY) {
+        const [beaconinfo, daoinfo] = await Promise.all([key(state.beacon, 'beaconinfo'), key(state.dao, 'daoinfo')]);
+        const errs = handoverErrors({ state, beaconinfo, daoinfo, me });
+        if (errs.length) throw new Error(`handover refused: ${errs.join('; ')}`);
       }
       const r = await send(state.beacon, 'Gov.Handover', { tags });
       state.governor = state.dao;
@@ -571,9 +625,11 @@ async function main(argv) {
       await v3['spawn-fair']();
       await v3['configure-fair']();
       await v3['fund-fair'](1000);
-      await v3['bond-for'](25000, path.join(HERE, 'anyhonest-validators.json'));
+      // Operator validators bond 4 x stake from day one: rank is capped bond,
+      // so a newcomer must bond as much to outrank them (PERMISSIONLESS.md P2).
+      await v3['bond-for'](100000, path.join(HERE, 'anyhonest-validators.json'));
       // The old beacon's Admin.Set-Successor (legacy-set-successor) goes here, live.
-      await v3.handover(process.env.RNG_GUARDIAN || me);
+      await v3.handover(process.env.RNG_GUARDIAN);
       await v3['dao-propose'](path.join(V2, 'governance', 'proposals', '001-handover-proof.json'));
       log({ op: 'check', sameScheduler: sameScheduler(state, ['token', 'dao', 'beacon', 'fair']), scheduler: state.scheduler });
     },

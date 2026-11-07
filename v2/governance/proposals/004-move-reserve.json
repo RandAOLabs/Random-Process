@@ -1,6 +1,9 @@
 {
   "title": "Move the Foundation reserve to the successor",
-  "body": "Queues Gov.Move-Reserve for 7 days. At apply it needs an applied successor that has sent Successor-Ack, and the same token.",
+  "body": "Queues Gov.Move-Reserve to the named successor for 10 days. At apply that successor must be the applied successor and have sent Successor-Ack since it was named; otherwise the entry is dropped (or waits, while the successor is still queued).",
   "execProcess": "$BEACON",
-  "execTags": { "Action": "Gov.Move-Reserve" }
+  "execTags": {
+    "Action": "Gov.Move-Reserve",
+    "Successor": "$SUCCESSOR"
+  }
 }

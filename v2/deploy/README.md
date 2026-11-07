@@ -78,9 +78,12 @@ node deploy/deploy.mjs plan --dry-run      # review every message first
    `predecessor = MZMoXv-2` and sends `Successor-Ack` to it (the v2 beacon has
    no handler for it; that refusal is expected).
 4. **Fund.** `fund-reserve` (200 M) and `fund-treasury` (50 M) from the genesis
-   allocation. Fair play: `spawn-fair`, `configure-fair`, `fund-fair 10000`.
-5. **Validators bond and migrate.** `bond-for 25000 deploy/anyhonest-validators.json`
-   bonds the three node wallets; third parties run
+   allocation. Every `fund-*` refuses until `beaconinfo.token` is set (step 3):
+   before genesis the beacon refuses the Credit-Notice and the atoms strand. Fair play: `spawn-fair`, `configure-fair`, `fund-fair 10000`.
+5. **Validators bond and migrate.** `bond-for 100000 deploy/anyhonest-validators.json`
+   bonds the three node wallets at 4 x stake, the rank cap, from day one, so a
+   newcomer must bond as much to outrank them (a quarter of the seats go by
+   seniority whatever the bond); third parties run
    `node provider/anyhonest-validator.mjs init`, get RNG (`grant`), then `bond`
    and `run`. The in-node devices need the v3-aware `rng-validator@1.0` (WP5)
    build first. Soak 72 h on deployer ownership: `status`, `test-subscription`.
@@ -101,7 +104,12 @@ node deploy/deploy.mjs plan --dry-run      # review every message first
    `test/deployment-config.test.mjs` stays green. Point each cracker's
    `config.json` `beacon` at v3 and restart it.
 9. **Handover to the DAO.** `handover <guardian wallet> --confirm`
-   (`Gov.Handover`, one way; the guardian may pause for 90 days). Prove it:
+   (`Gov.Handover`, one way; the guardian may pause and cancel queued actions
+   for 90 days). Name the guardian explicitly (an ops wallet, not the
+   deployer; `plan` needs `RNG_GUARDIAN`). It refuses unless the beacon's
+   `govQueue` is empty (`gov Gov.Cancel Gov-Id=<id>` first) and the DAO
+   publishes a `stake-dao/1` `daoinfo` on our token, no admin, voting period
+   under the beacon's 10-day delays. Prove it:
    `dao-stake 30000`, `dao-propose governance/proposals/001-handover-proof.json`,
    `dao-vote <id> Yes`. After the 7-day vote the DAO executes it; check the
    proposal is `executed` and `Reveal-Window-Ms` is still 30000 with no
@@ -119,5 +127,5 @@ bound, one scheduler). Validators: `anyhonest-validator.mjs status`.
   MZMoXv-2, which keeps running until retired. Do not retire it before the
   soak ends.
 - After step 9: the guardian pauses (`HB_WALLET=<guardian.json> ... gov Gov.Pause`).
-  The fix is a new beacon voted in with `003-set-successor.json` (7 days).
+  The fix is a new beacon voted in with `003-set-successor.json` (10 days).
   Validators can `Pause`/`Exit` at any time; governance can never take a bond.

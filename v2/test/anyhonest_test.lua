@@ -298,7 +298,17 @@ function runTimelockTests()
   eq("slash goes to the DAO Treasury", Timelock.treasuryAtoms - treasuryBefore, 1000 * U)
   r = ready(C)
   eq("ready refused while an output is owed", r.error, "Not-In-Good-Standing")
-  r, ob = tick(60000)
+  -- Selective abort: c saw a's and b's outputs before withholding. Every
+  -- validator of round 5 committed and a crack is still paid for, so the round
+  -- is not abandoned past abandonAfterMs: it waits for its crack.
+  tick(60000)
+  check("selective abort: a complete, crackable round is never abandoned", Timelock.opens["5"] ~= nil
+    and Timelock.pending["5"] ~= nil and Timelock.balances[F.game] == 16)
+  -- Only once a crack can no longer be paid for is it abandoned.
+  local fundedTreasury = Timelock.treasuryAtoms
+  Timelock.treasuryAtoms = 10 * U - 1
+  r, ob = tick(1)
+  Timelock.treasuryAtoms = fundedTreasury
   check("round 5 abandoned", Timelock.opens["5"] == nil and Timelock.pending["5"] == nil and state().rounds["5"] == nil)
   eq("abandoned request refunded in full", Timelock.balances[F.game], 20)
   local note = ob["rng-abandoned-5-1"]
@@ -389,6 +399,30 @@ function runTimelockTests()
   check("commitments in Tags ignored", r.error == "Not authorised" and Timelock.params.cadenceMs == 0, r.error)
   r = send({ Action = "Get-Info", Tags = "x" })
   check("string Tags handled", r.ok == true, r.error)
+  -- The node delivers body keys lowercase. A Tags table naming the same field
+  -- in another case adds nothing: it never shadows the verified body.
+  local sb0 = Timelock.balances[F.stranger] or 0
+  r = send(delivery(F.token, { Action = "Credit-Notice", sender = F.stranger, quantity = tostring(1 * U), reference = "t401",
+    Tags = { Quantity = tostring(1000 * U), Sender = F.owner, Reference = "t402" } }))
+  check("Tags never shadow a lowercase body field", r.credited == 1 and r.account == F.stranger
+    and Timelock.balances[F.stranger] == sb0 + 1 and Timelock.credited["401"] and not Timelock.credited["402"], encode(r))
+  -- A handler that throws leaves no half-applied state: on lua@5.3a the state
+  -- comes back from the previous message's published copy.
+  local realEncode, thrown = encode, false
+  encode = function(v) if not thrown then thrown = true; error("boom") end return realEncode(v) end
+  local notice = delivery(F.token, { Action = "Credit-Notice", Sender = F.stranger, Quantity = tostring(3 * U), Reference = "t403" })
+  r = send(notice)
+  encode = realEncode
+  check("a throwing handler rolls the state back", tostring(r.error):match("boom") and thrown
+    and Timelock.balances[F.stranger] == sb0 + 1 and not Timelock.credited["403"], encode(r))
+  r = send(notice)
+  check("the same notice then credits once", r.credited == 3 and Timelock.balances[F.stranger] == sb0 + 4, encode(r))
+  Timelock.balances[F.stranger] = sb0
+  -- Dust: what is below one whole RNG goes back to the sender.
+  r, ob = send(delivery(F.token, { Action = "Credit-Notice", Sender = F.stranger, Quantity = tostring(2 * U + 7), Reference = "t404" }))
+  check("credit remainder refunded", r.credited == 2 and ob["rng-dust-refund"] and ob["rng-dust-refund"].Recipient == F.stranger
+    and ob["rng-dust-refund"].Quantity == "7", encode(ob))
+  Timelock.balances[F.stranger] = sb0
   TestHarness = false
   r = send({ Action = "Request-Random", Tier = "any-honest", ["Request-Id"] = "forged", ["from-process"] = F.game })
   eq("unsigned from-process is nobody on a node", r.error, "Unsigned")
@@ -460,6 +494,11 @@ function runTimelockTests()
     Timelock.bonds[C] == 22000 and Timelock.validators[C].faults == fC + 3, Timelock.bonds[C])
   eq("owed outputs block Ready", ready(C).error, "Not-In-Good-Standing")
   tick(60000)
+  check("complete rounds wait for their crack", Timelock.opens[tostring(s)] ~= nil and Timelock.opens[tostring(s + 1)] ~= nil)
+  local fundedTreasury = Timelock.treasuryAtoms
+  Timelock.treasuryAtoms = 0
+  tick(1)
+  Timelock.treasuryAtoms = fundedTreasury
   check("held rounds abandoned", Timelock.opens[tostring(s)] == nil and Timelock.opens[tostring(s + 1)] == nil)
   eq("still nothing more slashed", Timelock.bonds[C], 22000)
   eq("rejoin needs the full stake back", ready(C).error, "Stake-Too-Low")
@@ -501,6 +540,16 @@ function runTimelockTests()
     r.exited == true and ob["rng-bond-refund"] and ob["rng-bond-refund"].Recipient == A)
   r = send(delivery(F.game, { Action = "Subscribe", ["Subscription-Id"] = "late-feed", Rounds = "1" }))
   eq("subscription after reveal starts on the next open round", r.effectiveRound, open + 1)
+  -- P7: at most MAX_SUBSCRIPTIONS live subscriptions per subscriber.
+  Timelock.balances[F.game] = Timelock.balances[F.game] + 100
+  local refusedAt = nil
+  for k = 1, 20 do
+    r = send(delivery(F.game, { Action = "Subscribe", ["Subscription-Id"] = "cap-" .. k, Rounds = "1" }))
+    if r.error and not refusedAt then refusedAt = r.error end
+  end
+  local live = 0
+  for _, sub in pairs(Timelock.subscriptions) do if sub.subscriber == F.game then live = live + 1 end end
+  check("subscriptions capped per subscriber", refusedAt == "Too-Many-Subscriptions" and live == 16, tostring(refusedAt) .. " " .. live)
 
   r, ob = send(wallet(F.owner, { Action = "Gov.Remove-Validator", Validator = B }))
   check("removal refunds the full bond", ob["rng-bond-refund"] and ob["rng-bond-refund"].Recipient == B
@@ -569,6 +618,40 @@ function runTimelockTests()
   check("room again: y registered", Timelock.validators[Y] ~= nil and r.bond == 25000, r.error)
   eq("registry published whole in beaconvalidators", #json.decode(base.beaconvalidators), 5)
   check("beaconinfo lists earnedAtoms per validator", info().validators[1].earnedAtoms ~= nil)
+  -- Attack (P6): squatting the registry. A full registry evicts (and refunds)
+  -- its lowest-ranked entry that never sent Ready; one idle for 7 days anyone evicts.
+  local Z = string.rep("z", 43)
+  configure({ maxValidators = 5 })
+  r, ob = bond(Z, 25000)
+  check("full registry: a new bond evicts the lowest-ranked never-ready entry", r.bond == 25000 and Timelock.validators[Z]
+    and Timelock.validators[Y] == nil and ob["rng-evicted-refund"] and ob["rng-evicted-refund"].Recipient == Y
+    and ob["rng-evicted-refund"].Quantity == string.format("%d", 25000 * U), encode(ob))
+  eq("a ready validator is never evicted", send(wallet(F.stranger, { Action = "Evict-Idle", Validator = C })).error, "Has-Been-Ready")
+  eq("not before 7 days idle", send(wallet(F.stranger, { Action = "Evict-Idle", Validator = Z })).error, "Too-Early")
+  Timelock.validators[Z].joinedAt = clock - 7 * DAY
+  r, ob = send(wallet(F.stranger, { Action = "Evict-Idle", Validator = Z }))
+  check("anyone evicts a validator idle 7 days, its bond refunded", r.evicted == Z and Timelock.validators[Z] == nil
+    and ob["rng-evicted-refund"] and ob["rng-evicted-refund"].Recipient == Z, encode(r))
+  refN = refN + 1
+  r, ob = send(delivery(F.token, { Action = "Credit-Notice", Sender = Y, Quantity = tostring(25000 * U + 3),
+    ["X-Bond"] = "true", Reference = "t" .. refN }))
+  seqOf(ob)
+  check("bond remainder refunded", r.bond == 25000 and ob["rng-dust-refund"] and ob["rng-dust-refund"].Quantity == "3", encode(ob))
+  configure({ maxValidators = 256 })
+
+  -- Attack (P2): bonding past the incumbents buys rank, not every seat: a
+  -- quarter of the seats go to the validators ready the longest.
+  ready(Y)
+  for _, v in ipairs({ E, X, Y }) do Timelock.bonds[v] = 100000 end
+  Timelock.validators[C].readyAt = 1
+  configure({ maxActive = 4 })
+  act = rank()
+  check("seniority seat: the longest-ready incumbent keeps a seat it is outbid for",
+    act[C].rank == 5 and act[C].active and act[D].active and act[E].active and act[X].active and not act[Y].active
+    and info().health.active == 4, encode(act[C]))
+  for _, v in ipairs({ E, X, Y }) do Timelock.bonds[v] = 25000 end
+  configure({ maxActive = 2 })
+  Timelock.validators[Y].ready = false
 
   -- An empty reserve: heartbeat rounds stop, request rounds go on.
   Timelock.foundationReserveAtoms = 0
@@ -605,6 +688,7 @@ function runTimelockTests()
   check("round record lists its requests with their values", rec.round == rd and #rec.requests == 2 and rec.served == 2
     and rec.requests[1].requester == F.stranger and rec.requests[1].requestId == "pay-1" and #rec.requests[1].value == 64
     and rec.requests[2].value == pushed, encode(rec.requests))
+  eq("expired subscriptions are deleted", next(Timelock.subscriptions), nil)
   -- Every eligible validator paused: halted.
   for _, v in ipairs({ C, D, E, X, Y }) do send(wallet(v, { Action = "Pause" })) end
   eq("no eligible validators: halted", info().health.status, "halted")
@@ -618,6 +702,15 @@ function runTimelockTests()
   r = send(wallet(F.stranger, { Action = "Gov.Handover", Governor = F.dao }))
   eq("handover is the deployer's", r.error, "Not authorised")
   eq("handover needs a governor", send(wallet(F.owner, { Action = "Gov.Handover", Governor = "x" })).error, "Bad-Governor")
+  eq("the deployer cannot hand over to itself", send(wallet(F.owner, { Action = "Gov.Handover", Governor = F.owner })).error, "Bad-Governor")
+  eq("nor to the token", send(wallet(F.owner, { Action = "Gov.Handover", Governor = F.token })).error, "Bad-Governor")
+  -- Attack (G2): the deployer queues a spend to itself, then hands over so it lands under the DAO.
+  local pre = send(wallet(F.owner, { Action = "Gov.Treasury-Spend", Recipient = F.owner, Quantity = "1" })).queued
+  check("the deployer queues a spend", pre ~= nil and pre.kind == "Treasury-Spend")
+  eq("handover refused while anything is queued",
+    send(wallet(F.owner, { Action = "Gov.Handover", Governor = F.dao, Guardian = F.guardian })).error, "Queue-Not-Empty")
+  send(wallet(F.owner, { Action = "Gov.Cancel", ["Gov-Id"] = tostring(pre.id) }))
+  eq("cancel gives the window its share back", info().treasuryWindow.used, "0")
   r = send(wallet(F.owner, { Action = "Gov.Handover", Governor = F.dao, Guardian = F.guardian }))
   check("handover sets governor and guardian", r.governor == F.dao and info().governor == F.dao
     and info().guardianUntil == clock + 90 * DAY, r.error)
@@ -625,8 +718,10 @@ function runTimelockTests()
   eq("handover only once", send(wallet(F.owner, { Action = "Gov.Handover", Governor = F.stranger })).error, "Not authorised")
   r = dao({ Action = "Gov.Configure", ["Abandon-After-Ms"] = "70000", commit_window_ms = "4000", catchupms = "1000" })
   check("DAO-attested Configure accepted, tag names normalized", r.ok == true and Timelock.params.abandonAfterMs == 70000
-    and Timelock.params.commitWindowMs == 4000 and Timelock.params.catchUpMs == 1000, r.error)
-  r = dao({ Action = "Gov.Configure", Data = encode({ cadenceMs = 7 }) })
+    and Timelock.params.catchUpMs == 1000, r.error)
+  local qcw = r.queued
+  check("a commit window change is queued 10 days, not applied", Timelock.params.commitWindowMs == 3000 and qcw
+    and qcw.kind == "Configure" and qcw.params.commitWindowMs == 4000 and qcw.at == clock + 10 * DAY, encode(qcw))  r = dao({ Action = "Gov.Configure", Data = encode({ cadenceMs = 7 }) })
   check("the DAO's Data is not read", r.ok == true and Timelock.params.cadenceMs == 0, r.error)
   eq("the DAO's wallet-signed message is not the DAO",
     send(wallet(F.dao, { Action = "Gov.Configure", ["Abandon-After-Ms"] = "90000" })).error, "Not authorised")
@@ -645,7 +740,7 @@ function runTimelockTests()
   for i, bad in ipairs({
     { ["Reveal-Window-Ms"] = "9999" }, { ["Reveal-Window-Ms"] = "600001", ["Abandon-After-Ms"] = "700000", ["Rejoin-Base-Ms"] = "700000", ["Rejoin-Cap-Ms"] = "700000" },
     { ["Commit-Window-Ms"] = "499" }, { ["Commit-Window-Ms"] = "10001" }, { ["Abandon-After-Ms"] = "9999" },
-    { Slash = "0" }, { Slash = "25001" }, { Stake = "10000001" },
+    { Slash = "0" }, { Slash = "25001" }, { Slash = "2501" }, { Stake = "10000001" },
     { ["Rejoin-Base-Ms"] = "9999" }, { ["Rejoin-Cap-Ms"] = "2592000001" }, { ["Rejoin-Cap-Ms"] = "9999" },
     { ["Min-Commits"] = "1" }, { ["Min-Commits"] = "3", ["Max-Active"] = "2" }, { ["Max-Active"] = "129" },
     { ["Max-Validators"] = "1025" }, { ["Max-Active"] = "64", ["Max-Validators"] = "63" },
@@ -658,6 +753,30 @@ function runTimelockTests()
   eq("predecessor fixed after genesis", dao({ Action = "Gov.Configure", Predecessor = F.stranger }).error, "Token-Locked")
   check("bounds rejected whole", Timelock.params.revealWindowMs == 10000 and Timelock.params.slash == 1000)
 
+  -- Attack (G1): governance tries to take the bonds: the biggest slash and a
+  -- commit window nobody meets. A fault takes at most a tenth of the stake, and
+  -- the change waits 10 days (longer than a DAO vote), so validators can leave.
+  r = dao({ Action = "Gov.Configure", Slash = "2500", ["Commit-Window-Ms"] = "500" })
+  local qslash = r.queued
+  check("bond-exposure changes queued, not applied", r.ok == true and Timelock.params.slash == 1000
+    and Timelock.params.commitWindowMs == 3000 and qslash and qslash.params.slash == 2500, r.error)
+  eq("a stranger cannot cancel", send(wallet(F.stranger, { Action = "Gov.Cancel", ["Gov-Id"] = tostring(qslash.id) })).error, "Not authorised")
+  r = send(wallet(F.guardian, { Action = "Gov.Cancel", ["Gov-Id"] = tostring(qslash.id) }))
+  check("the guardian cancels a queued action", r.cancelled == qslash.id and r.by == "guardian"
+    and Timelock.gov.queue[tostring(qslash.id)] == nil, r.error)
+  local qexp = dao({ Action = "Gov.Configure", ["Commit-Window-Ms"] = "3500" }).queued
+  eq("timelocked configure: not before 10 days", apply(qcw.id, qcw.at - clock - 1).error, "Too-Early")
+  r = apply(qcw.id, 1)
+  check("timelocked configure applies once due", r.applied == qcw.id and Timelock.params.commitWindowMs == 4000, r.error)
+  r = apply(qexp.id, qexp.at + 14 * DAY + 1 - clock)
+  check("a queued action expires 14 days after it is due", r.error == "Expired" and Timelock.params.commitWindowMs == 4000
+    and Timelock.gov.queue[tostring(qexp.id)] == nil, r.error)
+
+  -- G10: the DAO executes a proposal once; a redelivery does nothing.
+  check("proposal executes", dao({ Action = "Gov.Pause", ["X-Dao-Proposal"] = "41" }).paused == true)
+  dao({ Action = "Gov.Resume", ["X-Dao-Proposal"] = "42" })
+  r = dao({ Action = "Gov.Pause", ["X-Dao-Proposal"] = "41" })
+  check("the same proposal again is a no-op", r.duplicate == true and not Timelock.paused, encode(r))
   -- The guardian may pause, never resume, and only for 90 days.
   r = send(wallet(F.guardian, { Action = "Gov.Pause" }))
   check("guardian pauses: heartbeat off", r.paused == true and Timelock.params.heartbeat == 0 and info().mode == "paused", r.error)
@@ -671,21 +790,24 @@ function runTimelockTests()
   r = dao({ Action = "Gov.Resume" })
   check("the DAO resumes, heartbeat restored", r.paused == false and Timelock.params.heartbeat == 1 and not Timelock.paused, r.error)
 
-  -- Timelocked actions: queued, applied by anyone once due, never before.
+  -- Timelocked actions: queued 10 days, applied by anyone once due, never before.
   eq("successor set only by governance", send(wallet(F.stranger, { Action = "Gov.Set-Successor", Successor = F.successor })).error, "Not authorised")
   eq("bad successor refused", dao({ Action = "Gov.Set-Successor", Successor = "nope" }).error, "Bad-Successor")
+  eq("move reserve must name the (queued) successor", dao({ Action = "Gov.Move-Reserve", Successor = F.successor }).error, "Bad-Successor")
   local qs = dao({ Action = "Gov.Set-Successor", Successor = F.successor }).queued
-  local qm = dao({ Action = "Gov.Move-Reserve" }).queued
-  local qc = dao({ Action = "Gov.Move-Reserve" }).queued
-  check("queued for 7 days", qs and qs.at == clock - 200 + 7 * DAY and qm.kind == "Move-Reserve")
+  local qm = dao({ Action = "Gov.Move-Reserve", Successor = F.successor }).queued
+  local qc = dao({ Action = "Gov.Move-Reserve", Successor = F.successor }).queued
+  check("queued for 10 days, longer than the DAO's 7-day vote", qs and qs.at == clock - 200 + 10 * DAY
+    and qm.kind == "Move-Reserve" and qm.successor == F.successor)
   eq("queue published", #info().govQueue, 3)
   eq("cancel is governance only", send(wallet(F.stranger, { Action = "Gov.Cancel", ["Gov-Id"] = tostring(qc.id) })).error, "Not authorised")
   dao({ Action = "Gov.Cancel", ["Gov-Id"] = tostring(qc.id) })
   eq("timelock: no apply before at", apply(qs.id, qs.at - clock - 1).error, "Too-Early")
   eq("timelock: still no successor", info().successor, "")
-  eq("cancelled action cannot apply", apply(qc.id, 7 * DAY).error, "Unknown-Gov-Id")
+  eq("cancelled action cannot apply", apply(qc.id, 1).error, "Unknown-Gov-Id")
   r = apply(qm.id)
-  eq("move reserve needs a successor", r.error, "No-Successor")
+  eq("move reserve needs its successor applied", r.error, "No-Successor")
+  check("and stays queued", Timelock.gov.queue[tostring(qm.id)] ~= nil)
   -- The successor's genesis ack arrives before it is queued here: refused, resent later.
   eq("ack from an unknown process refused", send(delivery(F.stranger, { Action = "Successor-Ack" })).error, "Not-A-Successor")
   eq("ack must be attested", send(wallet(F.successor, { Action = "Successor-Ack" })).error, "Process-Required")
@@ -704,19 +826,67 @@ function runTimelockTests()
   r, ob = send(wallet(F.stranger, { Action = "Resend-Successor-Ack" }))
   check("anyone resends our ack to the predecessor", ob["rng-successor-ack"] and ob["rng-successor-ack"].target == F.predecessor)
 
-  -- Treasury: at most a tenth per action, after 48 h.
+  -- Attack (G3/G9): a Move-Reserve queued for one successor never pays
+  -- another, and an ack does not outlive the Set-Successor it answered.
+  Timelock.foundationReserveAtoms = 50 * U
+  local EVIL = string.rep("e", 43)
+  local qe = dao({ Action = "Gov.Set-Successor", Successor = EVIL }).queued
+  eq("a queued successor may ack", send(delivery(EVIL, { Action = "Successor-Ack" })).acked, EVIL)
+  local qme = dao({ Action = "Gov.Move-Reserve", Successor = EVIL }).queued
+  check("move reserve records its successor", qme and qme.successor == EVIL)
+  dao({ Action = "Gov.Cancel", ["Gov-Id"] = tostring(qe.id) })
+  eq("cancel clears the cancelled successor's ack", Timelock.successorAcks[EVIL], nil)
+  r, ob = apply(qme.id, 10 * DAY)
+  check("a Move-Reserve whose successor is gone is dropped, unpaid", r.error == "Successor-Changed"
+    and ob["rng-reserve-move"] == nil and Timelock.foundationReserveAtoms == 50 * U
+    and Timelock.gov.queue[tostring(qme.id)] == nil, r.error)
+  local q1 = dao({ Action = "Gov.Set-Successor", Successor = EVIL }).queued
+  local q2 = dao({ Action = "Gov.Set-Successor", Successor = F.successor }).queued
+  check("the newest Set-Successor supersedes a queued one", Timelock.gov.queue[tostring(q1.id)] == nil
+    and Timelock.gov.queue[tostring(q2.id)] ~= nil)
+  r = apply(q2.id, 10 * DAY)
+  check("an ack from before the successor was named again does not count", r.applied == q2.id
+    and info().successorAck == false, r.error)
+  send(delivery(F.successor, { Action = "Successor-Ack" }))
+  eq("a fresh ack counts", info().successorAck, true)
+
+  -- Treasury (G3/G4/G11): spends and reserve funding share one cap, a tenth
+  -- of the treasury per 30-day window, each after 10 days.
   local t0 = Timelock.treasuryAtoms
+  for _, to in ipairs({ F.dao, F.beacon, F.token }) do
+    eq("no treasury spend to " .. to, dao({ Action = "Gov.Treasury-Spend", Recipient = to, Quantity = "1" }).error, "Bad-Recipient")
+  end
+  local cap = t0 // 10
   eq("treasury spend over 10 % refused", dao({ Action = "Gov.Treasury-Spend", Recipient = F.stranger,
-    Quantity = string.format("%d", t0 // 10 + 1) }).error, "Over-Treasury-Cap")
-  local qt = dao({ Action = "Gov.Treasury-Spend", Recipient = F.stranger, Quantity = string.format("%d", t0 // 10) }).queued
-  check("treasury spend queued 48 h", qt and qt.at == clock + 2 * DAY)
-  eq("no spend before 48 h", apply(qt.id, 2 * DAY - 1000).error, "Too-Early")
+    Quantity = string.format("%d", cap + 1) }).error, "Over-Treasury-Cap")
+  local half = cap // 2
+  local qt = dao({ Action = "Gov.Treasury-Spend", Recipient = F.stranger, Quantity = string.format("%d", half) }).queued
+  check("treasury spend queued 10 days", qt and qt.at == clock + 10 * DAY)
+  eq("splitting past the window's cap refused", dao({ Action = "Gov.Treasury-Spend", Recipient = F.stranger,
+    Quantity = string.format("%d", cap - half + 1) }).error, "Over-Treasury-Cap")
+  eq("reserve funding counts against the same cap", dao({ Action = "Gov.Fund-Reserve",
+    Quantity = string.format("%d", cap - half + 1) }).error, "Over-Treasury-Cap")
+  eq("cannot fund past the treasury", dao({ Action = "Gov.Fund-Reserve", Quantity = string.format("%d", t0 * 10) }).error, "Insufficient-Treasury")
+  local qf = dao({ Action = "Gov.Fund-Reserve", Quantity = string.format("%d", cap - half) }).queued
+  check("reserve funding is queued, not instant", qf and qf.kind == "Fund-Reserve" and Timelock.foundationReserveAtoms == 50 * U
+    and Timelock.treasuryAtoms == t0)
+  eq("the window is full", dao({ Action = "Gov.Treasury-Spend", Recipient = F.stranger, Quantity = "1" }).error, "Over-Treasury-Cap")
+  eq("no spend before 10 days", apply(qt.id, 10 * DAY - 1000).error, "Too-Early")
   r, ob = apply(qt.id, 1000)
   check("treasury spend paid", ob["rng-treasury-spend"] and ob["rng-treasury-spend"].Recipient == F.stranger
-    and Timelock.treasuryAtoms == t0 - t0 // 10, r.error)
-  r = dao({ Action = "Gov.Fund-Reserve", Quantity = string.format("%d", 100 * U) })
-  check("treasury funds the reserve", Timelock.foundationReserveAtoms == 100 * U and Timelock.treasuryAtoms == t0 - t0 // 10 - 100 * U, r.error)
-  eq("cannot fund past the treasury", dao({ Action = "Gov.Fund-Reserve", Quantity = string.format("%d", t0 * 10) }).error, "Insufficient-Treasury")
+    and Timelock.treasuryAtoms == t0 - half, r.error)
+  r = apply(qf.id)
+  check("treasury funds the reserve once due", Timelock.foundationReserveAtoms == 50 * U + cap - half
+    and Timelock.treasuryAtoms == t0 - cap, r.error)
+  eq("applied spends still count in their window", dao({ Action = "Gov.Treasury-Spend", Recipient = F.stranger, Quantity = "1" }).error, "Over-Treasury-Cap")
+  tick(30 * DAY)
+  local qn = dao({ Action = "Gov.Treasury-Spend", Recipient = F.stranger, Quantity = string.format("%d", (t0 - cap) // 10) }).queued
+  check("a new window: a tenth of the treasury then", qn ~= nil and info().treasuryWindow.base == string.format("%d", t0 - cap))
+  local savedTreasury = Timelock.treasuryAtoms
+  Timelock.treasuryAtoms = 0
+  r = apply(qn.id, 10 * DAY)
+  Timelock.treasuryAtoms = savedTreasury
+  check("a spend the treasury cannot cover is dropped", r.error == "Insufficient-Treasury" and Timelock.gov.queue[tostring(qn.id)] == nil, r.error)
 
   -- Removal by the DAO always refunds the whole bond.
   r, ob = dao({ Action = "Gov.Remove-Validator", Validator = E })

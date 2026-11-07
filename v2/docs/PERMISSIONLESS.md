@@ -30,13 +30,13 @@ Branch `permissionless`, based on v2 at `ff06740` (beacon `MZMoXv-2`).
 | # | Decision | Why |
 |---|---|---|
 | D1 | No YapDAO changes. Governance actions are one tags-only message per proposal, and the beacon parses its parameters from tags (`Gov-*` names below). | DAO caps fit: 16 tags, values ≤ 512 B, ≤ 2048 B total. An `h`/`hProof` (< N, ≤ 512 hex chars) fits one tag each. |
-| D2 | The beacon keeps its own timelock: 7 days for `Gov.Set-Successor` and `Gov.Move-Reserve`, 48 h for `Gov.Treasury-Spend`, none for `Gov.Configure` (bounded) | The DAO has no delay (DAO.md:121). Moving money is the one irreversible lever. |
+| D2 | The beacon keeps its own timelock: 10 days (longer than the DAO's 7-day vote) for `Gov.Set-Successor`, `Gov.Move-Reserve`, `Gov.Treasury-Spend`, `Gov.Fund-Reserve` and a `Gov.Configure` of `stake`, `slash`, `commitWindowMs` or `revealWindowMs`; other Configure parameters apply at once (bounded). A queued action expires 14 days after it is due; the guardian may `Gov.Cancel` it until `guardianUntil`. | The DAO has no delay (DAO.md:121). A counter-proposal (Gov.Cancel) can pass inside the delay, and a validator can exit before a change to its bond's exposure lands. |
 | D3 | The DAO process, the beacon and the RNG token run on **one scheduler** (`hyperbeam.tylerw.ai`, where Paralith also runs) | `from-process` is believed only when *our own* scheduler signed the delivery |
 | D4 | Treasury and reserve stay inside the beacon and are never sent to the DAO | The DAO cannot target its staked token (dao.lua:192), so RNG it held would be stuck forever |
 | D5 | Fixed supply of 1,000,000,000 RNG at 6 decimals (10^15 atoms < 2^53). Minted once at genesis to an allocation table, then sealed. | Enclosed economy. A sealed token has no owner to capture. |
 | D6 | The token is a port of rune.lua's ledger (`sequenced-v1`, `t<n>` references). Every Transfer the beacon makes carries `X-Transfer-Sequence`. | `deploy-dao.mjs` L81-85 and vault.lua:407 refuse other tokens |
-| D7 | Join = a single `X-Bond` credit that brings the bond to at least `stake`. A smaller first bond is refunded. The registry holds at most `maxValidators` = 256. | Bounds `beaconinfo` (cost per published key) and spam |
-| D8 | Each round takes `maxActive` = 64 validators. Rank: `min(bond, 4·stake)` descending, then `joinedAt` ascending, then address. | Fresh Sybils cannot push out incumbents at max bond (see threat T3) |
+| D7 | Join = a single `X-Bond` credit that brings the bond to at least `stake`. A smaller first bond is refunded. The registry holds at most `maxValidators` = 256; when full, a join evicts (refunds) the lowest-ranked entry that never sent Ready, and anyone may `Evict-Idle` an entry that has not sent Ready 7 days after joining. | Bounds `beaconinfo` (cost per published key) and spam; registering alone does not hold a seat |
+| D8 | Each round takes `maxActive` = 64 validators. `maxActive // 4` seats go by seniority (earliest `readyAt`: ready without a break; a fault or Pause starts it over); the rest by rank: `min(bond, 4·stake)` descending, then `joinedAt` ascending, then address. Operator validators bond 4·stake from day one. | Fresh Sybils cannot push out incumbents at max bond, and bonding alone never buys every seat (see threat T3) |
 | D9 | Ready (first time and every rejoin) needs bond + earnings refill ≥ `stake`. `rejoinBond` is removed. | Owner goal: rejoin = top back up to full stake |
 | D10 | `Admin.Reinstate`, `Admin.Add-Validator` and `Claim-Protocol` are deleted. `Admin.Remove-Validator` becomes DAO-only `Gov.Remove-Validator`, which always refunds the full bond to the validator. | The DAO cannot take a bond |
 | D11 | The deployer wallet is owner until `Gov.Handover`, a one-way switch to the DAO. A guardian wallet may `Gov.Pause` (heartbeat off, no new requests) until `guardianUntil` = handover + 90 d. The DAO can clear the guardian early. | Emergency brake during bootstrap. It can stop the beacon, never move funds. |
@@ -80,18 +80,20 @@ Branch `permissionless`, based on v2 at `ff06740` (beacon `MZMoXv-2`).
 
 | Action | Who | Tags | Effect |
 |---|---|---|---|
-| `Gov.Handover` | deployer | `Governor` (pid), `Guardian` (addr, optional) | sets governor; the deployer path is off forever; `guardianUntil = now + 90 d` |
-| `Gov.Configure` | gov | any of `T`, `H`, `H-Proof`, `Commit-Window-Ms`, `Reveal-Window-Ms`, `Abandon-After-Ms`, `Min-Commits`, `Max-Active`, `Max-Validators`, `Cadence-Ms`, `Target-Interval-Ms`, `Max-In-Flight`, `Catch-Up-Ms`, `Stake`, `Slash`, `Rejoin-Base-Ms`, `Rejoin-Cap-Ms`, `Heartbeat`, `Round-Price`, `Request-Price`, `Subscription-Price`, `Subscription-Rounds`, `Crack-Bounty`, `Fair-Window-Ms` (≤ 15 per message) | applied immediately; the whole message is checked against the bounds below |
-| `Gov.Set-Successor` | gov | `Successor` | queued 7 d, applied by anyone's `Gov.Apply` |
-| `Successor-Ack` | the successor process (attested) | — | records `successorAck = true`; required before Move-Reserve |
-| `Gov.Move-Reserve` | gov | — | queued 7 d; at apply, needs successor set + acked; sends `X-Foundation` to it |
-| `Gov.Treasury-Spend` | gov | `Recipient`, `Quantity` (atoms) | queued 48 h; ≤ 10 % of the treasury per action |
-| `Gov.Fund-Reserve` | gov | `Quantity` | treasury → reserve, immediate |
+| `Gov.Handover` | deployer | `Governor` (pid), `Guardian` (addr, optional) | refused while anything is queued, or if the governor is the deployer, the beacon or the token; sets governor; the deployer path is off forever; `guardianUntil = now + 90 d`. `deploy.mjs handover` also checks the governor publishes a `stake-dao/1` `daoinfo` on our token, and never defaults the guardian |
+| `Gov.Configure` | gov | any of `T`, `H`, `H-Proof`, `Commit-Window-Ms`, `Reveal-Window-Ms`, `Abandon-After-Ms`, `Min-Commits`, `Max-Active`, `Max-Validators`, `Cadence-Ms`, `Target-Interval-Ms`, `Max-In-Flight`, `Catch-Up-Ms`, `Stake`, `Slash`, `Rejoin-Base-Ms`, `Rejoin-Cap-Ms`, `Heartbeat`, `Round-Price`, `Request-Price`, `Subscription-Price`, `Subscription-Rounds`, `Crack-Bounty`, `Fair-Window-Ms` (≤ 15 per message) | the whole message is checked against the bounds below; `Stake`, `Slash`, `Commit-Window-Ms`, `Reveal-Window-Ms` are queued 10 d (re-checked at apply), the rest applies immediately |
+| `Gov.Set-Successor` | gov | `Successor` | queued 10 d, applied by anyone's `Gov.Apply`; supersedes any queued Set-Successor |
+| `Successor-Ack` | the successor process, or one queued to become it (attested) | — | records the ack time; only an ack since the naming Set-Successor was queued counts; acks of a cancelled or replaced successor are deleted |
+| `Gov.Move-Reserve` | gov | `Successor` (the successor or a queued one) | queued 10 d; pays only that successor, at apply the applied successor with a current ack; dropped if the successor changed; sends `X-Foundation` to it |
+| `Gov.Treasury-Spend` | gov | `Recipient` (not the DAO, the beacon or the token), `Quantity` (atoms) | queued 10 d; spends + reserve funding ≤ 10 % of the treasury per 30-day window (`beaconinfo.treasuryWindow`) |
+| `Gov.Fund-Reserve` | gov | `Quantity` | treasury → reserve, queued 10 d, under the same window cap |
 | `Gov.Remove-Validator` | gov | `Validator` | as the old Remove: not while committed, full bond refunded |
 | `Gov.Pause` / `Gov.Resume` | gov, or guardian before `guardianUntil` | — | `heartbeat = 0` and `paused = true` (new Request/Subscribe refused) / undo (Resume: gov only) |
 | `Gov.Clear-Guardian` | gov | — | ends the guardian's powers early |
-| `Gov.Cancel` | gov | `Gov-Id` | drops a queued action |
-| `Gov.Apply` | anyone | `Gov-Id` | runs a queued action whose `at` has passed |
+| `Gov.Cancel` | gov, or guardian before `guardianUntil` | `Gov-Id` | drops a queued action (a spend's share of the window comes back) |
+| `Gov.Apply` | anyone | `Gov-Id` | runs a queued action whose `at` has passed, until `at + 14 d` (then `Expired`, dropped); an action that can never apply is dropped |
+
+A `Gov.*` from the governor carrying an `X-Dao-Proposal` already seen runs once: a redelivery is a no-op.
 
 On a new beacon, `Successor-Ack` comes from its `Configure`/genesis outbox:
 `{ target = predecessor, Action = "Successor-Ack" }`.
@@ -100,7 +102,7 @@ On a new beacon, `Successor-Ack` comes from its `Configure`/genesis outbox:
 - `2^27 ≤ T ≤ 2^32` (`minT()` raised from 2^20; the harness keeps 1)
 - `10 000 ≤ revealWindowMs ≤ 600 000`; `500 ≤ commitWindowMs ≤ 10 000`
 - `abandonAfterMs ≥ revealWindowMs`
-- `1 ≤ slash ≤ stake`; `stake ≤ 10^7`
+- `1 ≤ slash ≤ stake / 10`; `stake ≤ 10^7`: a fault takes at most a tenth of the stake
 - `rejoinBaseMs ≥ revealWindowMs`; `rejoinBaseMs ≤ rejoinCapMs ≤ 30 d`
 - `2 ≤ minCommits ≤ maxActive ≤ 128`; `maxActive ≤ maxValidators ≤ 1024`
 - every price and the bounty ≥ 1; `heartbeat ∈ {0,1}`
@@ -108,9 +110,12 @@ On a new beacon, `Successor-Ack` comes from its `Configure`/genesis outbox:
 
 **Validators**
 - `Credit-Notice` with `X-Bond`: if `who` is not registered, refuse and refund unless the
-  credit makes the bond ≥ `stake` and the registry has room. Register `{ ready = false, joinedAt = now }`.
+  credit makes the bond ≥ `stake` and the registry has room (a full registry evicts its lowest-ranked
+  never-ready entry, refunded). Register `{ ready = false, joinedAt = now }`. Any remainder below one whole
+  RNG in a Credit-Notice is refunded to the sender.
 - `Ready`: requires `bond + refill ≥ stake` always (delete `rejoinBond`, :1022). Everything else is unchanged.
-- `activeValidators()` → eligible (ready, not exiting, not overdue), sorted by D8, then the first `maxActive`.
+- `activeValidators()` → eligible (ready, not exiting, not overdue); `maxActive // 4` by seniority, the rest by D8 rank.
+- Subscriptions are deleted once their last round has passed; at most 16 live per subscriber.
 - Delete `Admin.Add-Validator`, `Admin.Reinstate`, `Claim-Protocol`, `Admin.Set-Successor`, `Admin.Move-Reserve`, `Configure` (genesis config becomes `Gov.Configure` under `isDeployer`).
 - `beaconinfo.validators` lists only active + ready + suspended-with-bond, capped at 128. The full registry goes in one key, `beaconvalidators`, rewritten only when it changes.
 
@@ -119,6 +124,13 @@ On a new beacon, `Successor-Ack` comes from its `Configure`/genesis outbox:
   requests, open it unsponsored; otherwise fail `Nothing-Pending`. `beaconinfo.mode = "request-driven"`.
 - `advance()`: a `collecting` round whose oldest pending request is older than `abandonAfterMs` is
   refunded and notified, the same as `abandon()`.
+- A reveal-phase round is abandoned past `abandonAfterMs` (default 30 min) only if some validator in its
+  set never committed, or the treasury cannot pay a crack bounty. A complete round waits for its crack, so
+  a withholder who has seen the other outputs cannot void a value it dislikes (selective abort). Run at
+  least two independent crackers; a crack of T = 2^27 takes minutes.
+- A handler that throws leaves no partial state on `lua@5.3a`: the state is reloaded from the previous
+  message's published copy. On `lua-patch@1.0` the checkpoint is up to 1000 messages old, so only
+  `transferSeq` is restored there; handlers must not throw after mutating state (none is known to).
 - `health = { status = ok|degraded|halted, active, eligible, minCommits, since }`.
   It is `halted` when eligible < minCommits.
 - `beaconinfo.at = now` (scheduler time of this slot), for clock offset estimates.
@@ -177,7 +189,7 @@ The counter only increases and never resets, as in dao.lua's payouts.
 | optional | `anyhonest-cracker` | CPU; earns `crackBounty` per crack |
 
 Steps: init the wallet → buy RNG → `Transfer { Recipient = beacon, Quantity = stake·10^6, X-Bond = "true" }`
-→ the validator sends `Ready` itself → it works every round in the active set → `Pause` / `Exit` → `Finalize-Exit` refunds the bond.
+→ the validator sends `Ready` itself (an entry that never does can be evicted) → it works every round in the active set → `Pause` / `Exit` → `Finalize-Exit` refunds the bond.
 
 **Clock-skew fix (both clients):** measure health only from local round trips: post → the commit appears in
 `beaconinfo` (local clock both ends). Estimate `offset = min over samples of (localReadAt − info.at)`,
@@ -198,14 +210,14 @@ and compare `nextRoundAt` and `rejoinAt` against `localNow − offset`.
 | # | Threat | Mitigation | Residual |
 |---|---|---|---|
 | T1 | Forged DAO message (a tag claiming `from-process`) | believed only when our scheduler signed it; mixed signers refused | trust in the node operator (true for every AO process) |
-| T2 | DAO capture (whale buys > 50 % of staked RNG) | 7-day vote, ⅓ veto, 7-day timelock on successor and reserve, 10 %/48 h treasury cap; bonds and user balances unreachable by governance | reserve + treasury (≈ 25 % of supply) at risk over ≥ 14 days, which is visible |
-| T3 | Sybils fill the active set, then grind the last commit (all validators colluding sets the value) | D8: rank by capped bond, then seniority, so incumbents at 4·stake cannot be displaced; consumers needing per-draw guarantees use fair play | before incumbents max their bond, ~64 × 100k RNG takes the set |
-| T4 | Withholding a reveal to bias | the time-lock makes the value fixed at commit close; crack + slash | delay only |
-| T5 | Spam registrations | first bond ≥ stake; registry cap; refund otherwise | — |
+| T2 | DAO capture (whale buys > 50 % of staked RNG) | 7-day vote, ⅓ veto; 10-day timelock (longer than the vote, so a Gov.Cancel can pass; the guardian can cancel for 90 d) on successor, reserve, treasury, reserve funding and bond-exposure parameters; treasury outflow ≤ 10 % per 30 days; handover refused over a non-empty queue. **Bonds and user balances are not reachable by governance**: removal refunds in full, a fault takes ≤ stake/10, and slash/stake/window changes land 10 d after the vote, so a validator exits first. | the reserve (via a malicious successor, T9) and ≤ 10 % of the treasury per 30 days, each ≥ 17 days after the proposal, visibly |
+| T3 | Sybils fill the active set, then grind the last commit (all validators colluding sets the value) | D8: rank by capped bond, so incumbents at 4·stake cannot be displaced (operators bond 4·stake from day one); a quarter of the seats go by seniority, which bonding cannot buy; consumers needing per-draw guarantees use fair play | an attacker at 4·stake takes up to ¾ of the seats from incumbents below the cap; the whole set only if the senior seats are also its own |
+| T4 | Withholding a reveal to bias, or to abort a round after seeing the other outputs | the time-lock makes the value fixed at commit close; crack + slash; a round whose commits are complete is never abandoned while a crack is paid for | delay only; a round short of a commit can still be abandoned after `abandonAfterMs` (30 min, far above the crack time) if nobody cracks |
+| T5 | Spam registrations, registry squatting | first bond ≥ stake; registry cap; refund otherwise; a full registry evicts its lowest-ranked never-ready entry, and anyone evicts one idle 7 d | a squatter that does send Ready must then do (or be slashed for) the work |
 | T6 | Reserve drained → halt | request-driven fallback, refund of stuck requests | heartbeat consumers see gaps |
 | T7 | All validators suspended | `health = halted`, banner, validator logs; requests refunded after `abandonAfterMs` | liveness depends on operators |
 | T8 | Guardian abuse | can only pause, cannot move funds or resume; expires; DAO can clear | 90 days of censorship risk |
-| T9 | Malicious successor drains the reserve | requires a DAO vote + 7-day timelock + ack; validators' devices only follow a successor naming this beacon | same as T2 |
+| T9 | Malicious successor drains the reserve | DAO vote + 10-day timelock; Move-Reserve names its successor at queue time and pays only it, with an ack received since it was named; acks of cancelled or replaced successors are deleted; validators' devices only follow a successor naming this beacon | same as T2 |
 | T10 | Lost payout (a sequenced transfer never delivered) | the sequence never resets; a `Resend-Payout`-style handler is a follow-up (token window 256) | stalls if > 256 are lost |
 | F1 | Player grinds the secret | commit fixed before its batch's request is sent; v_b unknown to anyone until reveals (any-honest) | — |
 | F2 | Player withholds the reveal after seeing v (1-bit option) | forfeit is final and games MUST score it as the worst outcome; entry is charged before commit | a game that rewards forfeit is broken by design |
@@ -224,7 +236,7 @@ and compare `nextRoundAt` and `rejoinAt` against `localNow − offset`.
 | Request | 4 RNG: 1 treasury, 3 split among contributors | unchanged |
 | Subscription | 1 RNG per 1000 rounds → treasury | unchanged |
 | Stake | 25 000 | at n=3: ≈ 10.4 h of pay; n=64: ≈ 9.3 days of pay |
-| Slash | 1 000 per failed duty → treasury | n=3: ≈ 25 min of pay; n=64: ≈ 9 h |
+| Slash | 1 000 per failed duty → treasury; bound ≤ stake / 10 | n=3: ≈ 25 min of pay; n=64: ≈ 9 h |
 | Cooldown | 60 s base, ×2 per incident, cap 1 h; bounds ≥ reveal window, ≤ 30 d | unchanged |
 | Crack bounty | 10 from treasury, reimbursed from the withholder's bond | the treasury nets +1 000 per withheld reveal |
 | Max-rank bond | 4 × stake = 100 000 | D8 |
@@ -269,7 +281,7 @@ message formats. WP1, WP2, WP3 and WP4 run in parallel; WP5-WP8 follow.
 
 **Rollback**
 - Before step 7: deployer `Gov.Pause` or reconfigure. Consumers re-point to MZMoXv-2 (it keeps running until retired).
-- After step 7: the guardian pauses. The fix is a new beacon voted in via `Gov.Set-Successor` (7 d). Validators can `Pause`/`Exit` at any time, and bonds are never at governance risk.
+- After step 7: the guardian pauses. The fix is a new beacon voted in via `Gov.Set-Successor` (10 d). Validators can `Pause`/`Exit` at any time, and bonds are never at governance risk.
 
 ## Open questions for Tyler
 

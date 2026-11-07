@@ -1,8 +1,12 @@
 // fair-client.ts: the browser side of fair play (docs/PERMISSIONLESS.md, "Fair play")
 // and the beacon's one-message pay-and-request shape.
 //
-// The player's browser draws a secret s, commits H(s) to the fair process with a
-// throwaway RSA key (kept in IndexedDB, D13), waits until its session is
+// The game authorizes each session for the player's key first: the game itself
+// sends `Fair.Open { Session, Player }` to the fair process (e.g. when it
+// charges the entry), so nobody can make the fair process pay the beacon for a
+// game that did not ask. The player's browser draws a secret s, commits H(s)
+// to the fair process with a throwaway RSA key (kept in IndexedDB, D13),
+// waits until its session is
 // `reveal-due` (the beacon value is bound) and only then reveals s. The hashes
 // below must match lib/fair.lua byte for byte (vectors: test/run-fair-tests.mjs).
 //
@@ -39,6 +43,9 @@ export function newSecret() {
 
 // ---------------------------------------------------------------- message shapes
 
+/** Sent by the GAME (its wallet or process) to the fair process: lets key `player` commit to `session`. */
+export const fairOpenTags = (session: string, player: string) =>
+  ({ Action: "Fair.Open", Session: session, Player: player });
 export const fairCommitTags = (game: string, session: string, commit: string, now: number) =>
   ({ Action: "Fair.Commit", Game: game, Session: session, Commit: commit, "Commit-Time": String(Math.floor(now)) });
 export const fairRevealTags = (game: string, session: string, secret: string, player: string) =>
@@ -127,6 +134,9 @@ export const FAIR_ERRORS: Record<string, string> = {
   "Stale-Commit": "The commit time is too far from the process clock.",
   "Fair-Full": "The fair process holds too many open sessions; try again shortly.",
   "Not-Expired": "The reveal window is still open.",
+  "Not-Opened": "The game has not opened this session for this player key (or the allowance lapsed).",
+  "Game-Full": "The game holds too many open sessions; try again shortly.",
+  "Bad-Player": "The player key is not a valid address.",
   "Not-Beacon": "Only the configured beacon can bind a value.",
   "Stale-Result": "That beacon result is not for the outstanding request.",
 };
@@ -269,6 +279,13 @@ export class FairError extends Error {
   constructor(code: string) { super(FAIR_ERRORS[code] ?? code); this.code = code; }
 }
 
+/** The message never got a slot: the node did not schedule it, so it can have no effect. */
+export class NotScheduledError extends Error {}
+
+export type FairInfo = { beacon: string; fairWindowMs: number; at: number; protocol: string;
+  outstanding?: { batch: number; requestId: string; sentAt: number } | null; requestAfter?: number; minIntervalMs?: number };
+export type CommitOptions = { retries?: number; delayMs?: number; sleep?: (ms: number) => Promise<void> };
+
 /** One fair process, driven by this browser's throwaway key. */
 export class FairClient {
   fair: string;
@@ -293,13 +310,17 @@ export class FairClient {
 
   /** Schedule, push and read one signed message, as lib/wallet.ts does for Wander. */
   async send(tags: Record<string, string>) {
-    const signed = await signDataItem(await this.key(), { target: this.fair, tags });
     const base = `${this.node}/${this.fair}~process@1.0`;
-    const scheduled = await this.http(`${base}/schedule?codec-device=ans104@1.0`, {
-      method: "POST", headers: { "content-type": "application/ans104", "accept-bundle": "true" }, body: signed as BodyInit });
-    if (!scheduled.ok) throw new Error(`The node refused the message (${scheduled.status}).`);
+    let scheduled: Response;
+    try {
+      const signed = await signDataItem(await this.key(), { target: this.fair, tags });
+      scheduled = await this.http(`${base}/schedule?codec-device=ans104@1.0`, {
+        method: "POST", headers: { "content-type": "application/ans104", "accept-bundle": "true" }, body: signed as BodyInit });
+    } catch (error) { throw new NotScheduledError(error instanceof Error ? error.message : String(error)); }
+    if (!scheduled.ok) throw new NotScheduledError(`The node refused the message (${scheduled.status}).`);
     const slot = Number(scheduled.headers.get("slot"));
-    if (!Number.isSafeInteger(slot) || slot < 0) throw new Error("The node did not return a valid slot.");
+    if (!Number.isSafeInteger(slot) || slot < 0) throw new NotScheduledError("The node did not return a valid slot.");
+    // From here on the message is in the schedule: a later failure does not undo it.
     const pushed = await this.http(`${base}/push&slot=${slot}`);
     if (!pushed.ok) throw new Error(`The node could not deliver the message (${pushed.status}).`);
     const result = await this.http(`${base}/compute&slot=${slot}/results/output/data`);
@@ -315,29 +336,51 @@ export class FairClient {
     return response.json() as Promise<T>;
   }
 
-  info() { return this.read<{ beacon: string; fairWindowMs: number; at: number; protocol: string }>("fairinfo"); }
+  info() { return this.read<FairInfo>("fairinfo"); }
 
   async sessions(game: string) {
     const all = await this.read<Record<string, FairSession[]>>("fairsessions");
     return Array.isArray(all?.[game]) ? all[game] : [];
   }
 
-  /** Step 1. The secret is saved before the commit is sent, so a reload can still reveal. */
-  async commit(game: string, session: string) {
+  /** The address the game must open sessions for (`fairOpenTags(session, player)`). */
+  async player() { return (await this.key()).address; }
+
+  /**
+   * Step 1, after the game sent Fair.Open for this key. The secret is saved
+   * before the commit is sent, so a reload can still reveal. A `Not-Opened`
+   * refusal is retried (the game's Fair.Open may still be on its way). The
+   * secret is dropped only when the commit surely had no effect: it was never
+   * scheduled, or the process refused it.
+   */
+  async commit(game: string, session: string, opts: CommitOptions = {}) {
     const key = await this.key();
     const secret = newSecret();
     const commit = await commitHash(game, session, secret);
     const saved: SavedSession = { fair: this.fair, game, session, player: key.address, secret, commit, committedAt: Date.now() };
     await this.store.put(saved);
-    try { await this.send(fairCommitTags(game, session, commit, saved.committedAt)); }
-    catch (error) { await this.store.remove(saved); throw error; }
-    return saved;
+    const retries = opts.retries ?? 5, delayMs = opts.delayMs ?? 2000;
+    const sleep = opts.sleep ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
+    for (let attempt = 0; ; attempt++) {
+      try { await this.send(fairCommitTags(game, session, commit, saved.committedAt)); return saved; }
+      catch (error) {
+        if (error instanceof FairError && error.code === "Not-Opened" && attempt < retries) { await sleep(delayMs); continue; }
+        if (error instanceof NotScheduledError || error instanceof FairError) await this.store.remove(saved);
+        throw error;
+      }
+    }
   }
 
   /** Advance one saved session: reveal once it is reveal-due, expire it once late. */
   async step(saved: SavedSession) {
     const view = (await this.sessions(saved.game)).find((s) => s.session === saved.session && s.player === saved.player) ?? null;
     const step = nextStep(view, saved.secret, Date.now());
+    // Committed but no request out: the next one may be waiting for the
+    // process's minimum interval, which only a message can trigger.
+    if (step === "wait" && view?.status === "committed") {
+      const info = await this.info();
+      if (!info.outstanding && Date.now() >= (info.requestAfter ?? 0)) await this.send({ Action: "Get-Info" });
+    }
     if (step === "reveal") await this.send(fairRevealTags(saved.game, saved.session, saved.secret, saved.player));
     if (step === "expire") await this.send(fairExpireTags(saved.game, saved.session, saved.player));
     if (step === "done" && view) {

@@ -10,7 +10,14 @@
 --
 -- At most one beacon request is outstanding per state (F6): commits that
 -- arrive while a request is out wait in the next batch, which is requested in
--- the slot the current result arrives.
+-- the slot the current result arrives, but never sooner than `minIntervalMs`
+-- after the previous request (then by the next message, e.g. a Get-Info).
+--
+-- The game authorizes every session (Fair.Open { Session, Player }, sent by
+-- the game itself) before the player's key may commit to it, so nobody can
+-- make this process pay the beacon for a game that did not ask. Each game
+-- holds at most `maxPerGame` open allowances plus unresolved sessions, and at
+-- most `maxGames` games are tracked (an idle game's history is evicted first).
 --
 -- Pure library over a state table: no globals, no I/O. Every call returns
 -- (data, outbox) on success or (nil, errorCode[, extra]) on refusal; `outbox`
@@ -49,7 +56,8 @@ local function int(v)
 end
 
 --- Bounds a deployer may choose; the window is fixed per session at commit.
-fair.BOUNDS = { windowMs = { 10000, 600000 }, keep = { 1, 256 }, maxOpen = { 1, 100000 } }
+fair.BOUNDS = { windowMs = { 10000, 600000 }, keep = { 1, 256 }, maxOpen = { 1, 100000 },
+  minIntervalMs = { 1000, 600000 }, maxGames = { 1, 100000 }, maxPerGame = { 1, 4096 } }
 
 function fair.new(opts)
   opts = opts or {}
@@ -58,6 +66,13 @@ function fair.new(opts)
     windowMs = opts.windowMs or 60000, -- fairWindowMs
     keep = opts.keep or 32,             -- resolved sessions kept (and published) per game
     maxOpen = opts.maxOpen or 4096,     -- unresolved sessions held at once
+    minIntervalMs = opts.minIntervalMs or 5000, -- between two beacon requests
+    maxGames = opts.maxGames or 1024,   -- games tracked at once
+    maxPerGame = opts.maxPerGame or 64, -- open allowances + unresolved sessions per game
+    games = {},      -- game -> { live = n, allow = { "session|player" = expiresAt } }
+    gameCount = 0,
+    lastRequestAt = nil, -- ms of the last beacon request sent
+    changes = 0,     -- bumped on every mutation: the process publishes only when it moved
     sessions = {},   -- key -> session (see commit)
     byGame = {},     -- game -> list of resolved keys, oldest first
     done = {},       -- pruned key -> ms until which a replayed Commit is refused
@@ -71,6 +86,7 @@ function fair.new(opts)
 end
 
 local function key(game, session, player) return game .. "|" .. session .. "|" .. player end
+local function touch(st) st.changes = (st.changes or 0) + 1 end
 
 local function batch(st, b)
   local k = tostring(b)
@@ -96,12 +112,15 @@ function fair.pump(st, now)
     fair.onError(st, { requestId = st.outstanding.requestId, error = "Lost", now = now })
   end
   if st.beacon == "" or now < st.retryAt then return nil end
+  if st.lastRequestAt and now < st.lastRequestAt + (st.minIntervalMs or 0) then return nil end
   local o = st.batches[tostring(st.next)]
   if not o or #o.keys == 0 then return nil end
   -- A retried batch gets a fresh id: the beacon remembers a refunded id.
   local requestId = "fair-" .. o.batch .. (st.attempts > 0 and ("-" .. st.attempts) or "")
   o.status, o.requestId, o.sentAt = "requested", requestId, now
   st.outstanding = { batch = o.batch, requestId = requestId, sentAt = now }
+  st.lastRequestAt = now
+  touch(st)
   st.next = st.next + 1
   return { target = st.beacon, Action = "Request-Random", Tier = "any-honest",
     ["Request-Id"] = requestId, ["Request-Time"] = string.format("%d", now) }
@@ -114,7 +133,69 @@ local function withPump(st, now, data, outbox)
   return data, outbox
 end
 
---- Step 1: a commit by `player` (the proven signer). Joins the open batch.
+--- The game's entry, created on its first Fair.Open. At `maxGames`, an idle
+--- game (no allowance, no unresolved session) is evicted with its history.
+local function gameEntry(st, game, now)
+  st.games = st.games or {}
+  local g = st.games[game]
+  if g then return g end
+  if (st.gameCount or 0) >= st.maxGames then
+    local idle
+    for name, e in pairs(st.games) do
+      local e0 = idle and st.games[idle]
+      if e.live <= 0 and (not e0 or (e.last or 0) < (e0.last or 0)
+          or ((e.last or 0) == (e0.last or 0) and name < idle)) then idle = name end
+    end
+    if not idle then return nil end
+    for _, k in ipairs(st.byGame[idle] or {}) do
+      local gone = st.sessions[k]
+      st.sessions[k] = nil
+      if gone then st.done[k] = gone.commitTime + GUARD_MS end
+    end
+    st.byGame[idle] = nil
+    st.games[idle] = nil
+    st.gameCount = st.gameCount - 1
+  end
+  g = { live = 0, allow = {} }
+  st.games[game] = g
+  st.gameCount = (st.gameCount or 0) + 1
+  return g
+end
+
+local function prune(g, now)
+  for sp, untilMs in pairs(g.allow) do
+    if untilMs < now then g.allow[sp] = nil; g.live = g.live - 1 end
+  end
+end
+
+--- Step 0: the game (the proven sender) authorizes `player` to commit to
+--- `session`. The allowance lapses after GUARD_MS unless used.
+function fair.open(st, p)
+  local now = p.now
+  if not isAddress(p.game) then return nil, "Unsigned" end
+  if not isSession(p.session) then return nil, "Bad-Session" end
+  if not isAddress(p.player) then return nil, "Bad-Player" end
+  local k = key(p.game, p.session, p.player)
+  if st.sessions[k] then return nil, "Session-Taken" end
+  if st.done[k] then return nil, "Session-Done" end
+  local existing = st.games and st.games[p.game]
+  local sp = p.session .. "|" .. p.player
+  if existing and existing.allow[sp] and existing.allow[sp] >= now then
+    return { duplicate = true, opened = true, expiresAt = existing.allow[sp] }, {}
+  end
+  local g = gameEntry(st, p.game, now)
+  if not g then return nil, "Fair-Full" end
+  g.last = now
+  prune(g, now)
+  if g.live >= st.maxPerGame then return nil, "Game-Full" end
+  g.allow[sp] = now + GUARD_MS
+  g.live = g.live + 1
+  touch(st)
+  return { opened = true, game = p.game, session = p.session, player = p.player, expiresAt = g.allow[sp] }, {}
+end
+
+--- Step 1: a commit by `player` (the proven signer), to a session its game
+--- opened for it. Joins the open batch.
 function fair.commit(st, p)
   local now = p.now
   if not isAddress(p.game) then return nil, "Bad-Game" end
@@ -131,7 +212,12 @@ function fair.commit(st, p)
     return nil, "Session-Taken"
   end
   if st.done[k] then return nil, "Session-Done" end
+  local g = st.games and st.games[p.game]
+  local sp = p.session .. "|" .. p.player
+  if not g or not g.allow[sp] or g.allow[sp] < now then return nil, "Not-Opened" end
   if st.open >= st.maxOpen then return nil, "Fair-Full" end
+  g.allow[sp] = nil -- the allowance becomes the session; `live` is unchanged
+  touch(st)
   local o = batch(st, st.next)
   local s = { game = p.game, session = p.session, player = p.player, commit = p.commit, status = "committed",
     batch = o.batch, windowMs = st.windowMs, committedAt = now, commitTime = at }
@@ -154,6 +240,7 @@ function fair.onResult(st, p)
   if not mine then return nil, "Stale-Result" end
   if not isHex64(mine.value) then return nil, "Bad-Result" end
   local o = st.batches[tostring(out.batch)]
+  touch(st)
   st.outstanding, st.attempts, st.retryAt = nil, 0, 0
   o.status, o.round, o.value, o.boundAt = "bound", mine.round or data.round, mine.value, now
   for _, k in ipairs(o.keys) do
@@ -179,6 +266,7 @@ function fair.onError(st, p)
   local out = st.outstanding
   if not out or p.requestId ~= out.requestId then return nil, "Stale-Result" end
   local failed = st.batches[tostring(out.batch)]
+  touch(st)
   local into = batch(st, st.next)
   local merged = {}
   for _, k in ipairs(failed.keys) do merged[#merged + 1] = k; local s = st.sessions[k]; if s then s.batch = into.batch end end
@@ -201,6 +289,9 @@ end
 local function resolve(st, s, now, status, secret, final)
   s.status, s.secret, s.final, s.resolvedAt = status, secret, final, now
   st.open = st.open - 1
+  touch(st)
+  local g = st.games and st.games[s.game]
+  if g then g.live = math.max(0, g.live - 1) end
   local list = st.byGame[s.game] or {}
   list[#list + 1] = key(s.game, s.session, s.player)
   st.byGame[s.game] = list
@@ -282,7 +373,9 @@ function fair.dispatch(st, action, msg, from, fromProcess, now)
     local ok, t = pcall(json.decode, d or "")
     return ok and t or nil
   end
-  if a == "fair.commit" then
+  if a == "fair.open" then
+    return fair.open(st, { game = from, session = msg.Session, player = msg.Player, now = now })
+  elseif a == "fair.commit" then
     return fair.commit(st, { game = msg.Game, session = msg.Session, player = from, commit = msg.Commit,
       commitTime = msg["Commit-Time"], now = now })
   elseif a == "fair.reveal" then

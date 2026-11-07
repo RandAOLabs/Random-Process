@@ -52,9 +52,13 @@ rounds reveal or wait for a crack.
 4. **Crack:** after the reveal deadline, anyone may submit the missing output
    and proof to `~rng@1.0/verify-crack`. Rounds after a late one go on without
    waiting; only the late round's value waits for its crack.
-5. **Abandon:** a round still missing an output `abandonAfterMs` (360,000, about
-   two crack times) after its reveal deadline gets no value. Its requests are
-   refunded in full and requesting processes are told `Round-Abandoned`.
+5. **Abandon:** a round still missing an output `abandonAfterMs` (1,800,000,
+   many crack times) after its reveal deadline gets no value, but only if a
+   validator in its set never committed or the Treasury cannot pay a crack
+   bounty. A round with every commit waits for its crack, so a withholder who
+   has seen the other outputs cannot void the value (run two or more
+   crackers). An abandoned round's requests are refunded in full and
+   requesting processes are told `Round-Abandoned`.
 6. **Finalize:** canonical outputs ordered by validator address form one round
    value under `hyperbeam/rng/any-honest/v1/round`.
 
@@ -165,12 +169,13 @@ final value. Membership changes cannot mutate an existing round.
 
 The new beacon's genesis `Gov.Configure` names the old one as `predecessor`
 and sends it `Successor-Ack` (`Resend-Successor-Ack` sends it again). On the
-old beacon, governance queues `Gov.Set-Successor` (7 days, then anyone's
+old beacon, governance queues `Gov.Set-Successor` (10 days, then anyone's
 `Gov.Apply`). A validator stops taking new rounds on the old beacon (Pause),
 reveals what it still owes, then moves to a successor that names the old
 beacon as predecessor, and records the move in `secrets-dir/beacon.json`.
-`Gov.Move-Reserve` (7 days) sends the unspent reserve to an acked successor on
-the same token. Stakes do not move: validators exit the old beacon to get
+`Gov.Move-Reserve` (10 days) sends the unspent reserve to the successor it
+names, once that is the successor and has acked since it was named, on the
+same token. Stakes do not move: validators exit the old beacon to get
 theirs back and bond on the new one.
 
 ## Published keys
@@ -236,15 +241,19 @@ message, sent by the DAO process) can act:
 
 | Action | Delay | Effect |
 | --- | --- | --- |
-| `Gov.Configure` | none | parameters, inside hard bounds; token, unit, self and predecessor never change after genesis |
-| `Gov.Set-Successor`, `Gov.Move-Reserve` | 7 days | name a successor; move the reserve to an acked successor |
-| `Gov.Treasury-Spend` | 48 hours | at most 10% of the Treasury per action |
-| `Gov.Fund-Reserve`, `Gov.Remove-Validator` | none | Treasury to reserve; remove a validator, bond refunded in full |
+| `Gov.Configure` | none; 10 days for `stake`, `slash`, `commitWindowMs`, `revealWindowMs` | parameters, inside hard bounds (`slash` at most a tenth of `stake`); token, unit, self and predecessor never change after genesis |
+| `Gov.Set-Successor`, `Gov.Move-Reserve` | 10 days | name a successor (the newest supersedes); move the reserve to the successor it names |
+| `Gov.Treasury-Spend`, `Gov.Fund-Reserve` | 10 days | together at most 10% of the Treasury per 30 days; never to the DAO, the beacon or the token |
+| `Gov.Remove-Validator` | none | remove a validator, bond refunded in full |
 | `Gov.Pause` / `Gov.Resume`, `Gov.Clear-Guardian`, `Gov.Cancel` | none | the brake; end the guardian; drop a queued action |
 
-Anyone runs `Gov.Apply` once a queued action is due. A guardian wallet may
-`Gov.Pause` for 90 days after handover; it cannot resume or move funds.
-Governance can never take a bond or a user balance. Proposal templates are in
+Every delay is longer than the DAO's 7-day vote, so a cancelling proposal can
+pass first. Anyone runs `Gov.Apply` once a queued action is due; 14 days after
+that it expires. `Gov.Handover` is refused while anything is queued. A guardian
+wallet may `Gov.Pause` and `Gov.Cancel` for 90 days after handover; it cannot
+resume or move funds. Governance can never take a bond or a user balance: a
+fault costs at most a tenth of the stake, and changes to what a bond is exposed
+to land 10 days after the vote, time enough to exit. Proposal templates are in
 `governance/proposals/`.
 
 ## Fair play

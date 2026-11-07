@@ -46,17 +46,26 @@ local G = "af837d388770d250471f03e561cef2f1d2793a166c01b582123ab1d418a26533"
 local function minT() return TestHarness == true and 1 or 134217728 end
 
 local DAY_MS = 86400000
--- Governance actions that move money or the beacon wait this long after the
--- DAO votes (the DAO itself has no delay); anyone applies them once due.
-local GOV_DELAY_MS = { ["Set-Successor"] = 7 * DAY_MS, ["Move-Reserve"] = 7 * DAY_MS, ["Treasury-Spend"] = 2 * DAY_MS }
-local GUARDIAN_MS = 90 * DAY_MS -- the guardian may pause this long after Gov.Handover
+-- Governance actions that move money, the beacon or a validator's risk wait
+-- this long after the DAO votes; anyone applies them once due. Every delay is
+-- longer than the DAO's 7-day voting period, so a counter-proposal (Gov.Cancel)
+-- can pass before the action lands, and a validator can leave first.
+local GOV_DELAY_MS = { ["Set-Successor"] = 10 * DAY_MS, ["Move-Reserve"] = 10 * DAY_MS,
+  ["Treasury-Spend"] = 10 * DAY_MS, ["Fund-Reserve"] = 10 * DAY_MS, ["Configure"] = 10 * DAY_MS }
+local GOV_EXPIRE_MS = 14 * DAY_MS   -- a queued action not applied this long after it is due is dropped
+local SPEND_WINDOW_MS = 30 * DAY_MS -- treasury outflow (spends + reserve funding) per window: 10 % of its start
+-- Parameters that change what a validator's bond is exposed to: timelocked.
+local TIMELOCKED_PARAMS = { stake = true, slash = true, commitWindowMs = true, revealWindowMs = true }
+local GUARDIAN_MS = 90 * DAY_MS -- the guardian may pause (and cancel queued actions) this long after Gov.Handover
+local IDLE_EVICT_MS = 7 * DAY_MS -- a registered validator that never sent Ready may be evicted after this
+local MAX_SUBSCRIPTIONS = 16     -- live subscriptions per subscriber
 local INFO_VALIDATORS = 128     -- validators listed in beaconinfo; the full registry is `beaconvalidators`
 
 local function freshState()
   return {
     rev = 0, self = "", token = "", unit = 1000000,
     params = {
-      T = 134217728, h = "", commitWindowMs = 5000, revealWindowMs = 30000, abandonAfterMs = 360000,
+      T = 134217728, h = "", commitWindowMs = 5000, revealWindowMs = 30000, abandonAfterMs = 1800000,
       minCommits = 2, cadenceMs = 100, targetIntervalMs = 500, maxInFlight = 3, catchUpMs = 30000,
       stake = 25000, slash = 1000, heartbeat = 1,
       -- Each round takes at most maxActive validators (ranked: capped bond,
@@ -92,10 +101,13 @@ local function freshState()
     -- Governance. Before Gov.Handover the deployer wallet (Owner) governs;
     -- after it only `governor`, the DAO process, as attested by our scheduler.
     governor = "", guardian = "", guardianUntil = 0,
-    gov = { queue = {}, nextId = 1 }, -- queue: "id" -> { id, kind, at, queuedAt, ... }
+    -- queue: "id" -> { id, kind, at, queuedAt, ... }; window: the treasury outflow cap's
+    -- { start, base, used } (atoms); executed: "governor|X-Dao-Proposal" -> true.
+    gov = { queue = {}, nextId = 1, executed = {} },
     paused = false, pausedHeartbeat = 1,
     successor = "", predecessor = "",
-    successorAcks = {},    -- pid -> true: a Successor-Ack from the successor (or a queued one)
+    successorAcks = {},    -- pid -> ms: a Successor-Ack from the successor (or a queued one)
+    successorSince = 0,    -- queuedAt of the Set-Successor that named the successor; older acks do not count
     transferSeq = 0,       -- X-Transfer-Sequence of the last token Transfer; only ever increases
     health = { status = "halted", since = 0 },
   }
@@ -156,8 +168,8 @@ local function deflate(v)
   return v
 end
 
-local function restore(base)
-  if int(base.timelockrev, 0) <= int(Timelock.rev, 0) then return end
+local function restore(base, force)
+  if not force and int(base.timelockrev, 0) <= int(Timelock.rev, 0) then return end
   local ok, saved = pcall(json.decode, base.timelockstate or "")
   if ok and type(saved) == "table" then
     Timelock = freshState()
@@ -392,11 +404,29 @@ local function rankSort(list)
   return list
 end
 
---- The validators a new round is given to: the first maxActive eligible, by rank.
+--- The validators a new round is given to: maxActive of the eligible. A
+--- quarter of the seats (maxActive // 4) go by seniority, to those ready the
+--- longest without a break (readyAt: a fault or Pause starts it over), so a
+--- newcomer bonding past the incumbents cannot buy the whole set; the rest go
+--- by rank.
 local function activeValidators()
-  local out = rankSort(eligibleValidators())
-  for k = #out, int(Timelock.params.maxActive, 64) + 1, -1 do out[k] = nil end
-  return out
+  local eligible = eligibleValidators()
+  local max = int(Timelock.params.maxActive, 64)
+  if #eligible <= max then return rankSort(eligible) end
+  local function since(a) local v = Timelock.validators[a] or {} return int(v.readyAt, math.maxinteger), int(v.joinedAt, 0) end
+  table.sort(eligible, function(a, b)
+    local ra, ja = since(a)
+    local rb, jb = since(b)
+    if ra ~= rb then return ra < rb end
+    if ja ~= jb then return ja < jb end
+    return a < b
+  end)
+  local out, taken, rest = {}, {}, {}
+  for k = 1, max // 4 do out[k] = eligible[k]; taken[eligible[k]] = true end
+  for _, a in ipairs(eligible) do if not taken[a] then rest[#rest + 1] = a end end
+  rankSort(rest)
+  for k = 1, max - #out do out[#out + 1] = rest[k] end
+  return rankSort(out)
 end
 
 local function price() return int(Timelock.params.requestPrice, 4) end
@@ -566,10 +596,21 @@ local function abandon(o)
   Timelock.opens[tostring(o.round)] = nil
 end
 
+--- A round may be abandoned (past abandonAfterMs) unless every validator it
+--- was given committed and its missing outputs can still be cracked (the
+--- Treasury pays the bounty). Abandoning such a round would let a withholder
+--- who has seen the other outputs void a value it dislikes (selective abort):
+--- it waits for its crack instead. A round short of commits was set before
+--- any output was revealed.
+local function abandonable(o)
+  for _, addr in ipairs(o.active or {}) do if not o.commits[addr] then return true end end
+  return int(Timelock.treasuryAtoms, 0) < int(Timelock.params.crackBounty, 10) * int(Timelock.unit, 1)
+end
+
 --- Run before every handler: close due commits, slash every output missing at
 --- a reveal deadline (each round is its own failure), abandon rounds still
---- unfinished abandonAfterMs after it. Rounds after a late one go on without
---- waiting: only the late round's value waits for its crack.
+--- unfinished abandonAfterMs after it (see abandonable). Rounds after a late
+--- one go on without waiting: only the late round's value waits for its crack.
 local function advance(now)
   closeIfDue(now)
   local rs = {}
@@ -586,7 +627,7 @@ local function advance(now)
       table.sort(addrs)
       for _, addr in ipairs(addrs) do fault(addr, r, "reveal", now) end
     end
-    if now >= o.revealDeadline + int(Timelock.params.abandonAfterMs, 360000) then abandon(o) end
+    if now >= o.revealDeadline + int(Timelock.params.abandonAfterMs, 1800000) and abandonable(o) then abandon(o) end
   end
   -- A round that never opens (too few validators, nobody committing) would
   -- hold its requests forever: past abandonAfterMs from the oldest, refund
@@ -645,7 +686,9 @@ local function finalize(base, o, now)
   -- process message for every covered round. Raw public reads remain possible,
   -- but are not the canonical delivery path.
   local bySubscriber, subscriberOrder = {}, {}
-  for _, sub in pairs(Timelock.subscriptions or {}) do
+  -- A subscription is deleted once its last round has passed (finalized or
+  -- not), so the map holds only live ones.
+  for subKey, sub in pairs(Timelock.subscriptions or {}) do
     if sub.active and r >= int(sub.startRound, 0) and r <= int(sub.endRound, -1) then
       local results = bySubscriber[sub.subscriber]
       if not results then
@@ -655,8 +698,8 @@ local function finalize(base, o, now)
       end
       results[#results + 1] = { subscriptionId = sub.id, round = r,
         value = rng.hex(rng.sha256("hyperbeam/rng/subscription/v1|" .. value .. "|" .. sub.id .. "|" .. key)) }
-      if r >= int(sub.endRound, 0) then sub.active = false end
     end
+    if r >= int(sub.endRound, 0) then Timelock.subscriptions[subKey] = nil end
   end
   for i, subscriber in ipairs(subscriberOrder) do
     outbox["rng-subscription-" .. i] = { target = subscriber, Action = "RNG-Subscription",
@@ -712,6 +755,14 @@ end
 
 local H = {}
 
+--- Drop a registered validator that has no work (never ready, or removed),
+--- its bond back in full: the Transfer, or nil when it had none.
+local function evict(addr, note)
+  local bond = int(Timelock.bonds[addr], 0)
+  Timelock.validators[addr], Timelock.bonds[addr] = nil, nil
+  return bond > 0 and transferOut(addr, bond, note) or nil
+end
+
 --- Mark a token reference handled. The token numbers its notices t1, t2, ...
 --- (TransferSeq); past CREDIT_KEEP the oldest folds into the floor.
 local function markCredited(seq)
@@ -754,22 +805,38 @@ H["Credit-Notice"] = function(base, msg, from, now)
     return reply(base, { funded = "treasury", amount = amount,
       treasuryAtoms = tostring(Timelock.treasuryAtoms) })
   end
+  -- Below one whole RNG the remainder cannot be credited: it goes back.
+  local dust = atoms - amount * int(Timelock.unit, 1)
+  local function withDust(outbox)
+    if dust > 0 and isAoAddress(msg.Sender) then outbox["rng-dust-refund"] = transferAtoms(msg.Sender, dust, "RNG credit remainder refund") end
+    return outbox
+  end
   if msg["X-Bond"] then
     -- Joining is permissionless: the first bond must bring it to the full
-    -- stake, and the registry must have room. Otherwise it goes back.
+    -- stake, and the registry must have room. Otherwise it goes back. A full
+    -- registry makes room by evicting (and refunding) its lowest-ranked entry
+    -- that has never sent Ready: registering alone does not hold a seat.
+    local outbox = {}
     if not Timelock.validators[who] then
       local refused = nil
       if int(Timelock.bonds[who], 0) + amount < int(Timelock.params.stake, 25000) then refused = "Bond-Below-Stake"
-      elseif count(Timelock.validators) >= int(Timelock.params.maxValidators, 256) then refused = "Registry-Full" end
+      elseif count(Timelock.validators) >= int(Timelock.params.maxValidators, 256) then
+        local idle = {}
+        for a, v in pairs(Timelock.validators) do if v.readyAt == nil then idle[#idle + 1] = a end end
+        if #idle == 0 then refused = "Registry-Full" else
+          local gone = rankSort(idle)[#idle]
+          local refund = evict(gone, "RNG bond refund: evicted, never ready")
+          if refund then outbox["rng-evicted-refund"] = refund end
+        end
+      end
       if refused then
-        local outbox = {}
         if isAoAddress(msg.Sender) then outbox["rng-refund"] = transferAtoms(msg.Sender, atoms, "RNG bond refund") end
         return reply(base, { error = refused, refunded = outbox["rng-refund"] and atoms or 0 }, outbox)
       end
       Timelock.validators[who] = { ready = false, paused = false, faults = 0, exiting = false, exitAt = 0, joinedAt = now }
     end
     add(Timelock.bonds, who, amount)
-    return reply(base, { bonded = amount, account = who, bond = Timelock.bonds[who] })
+    return reply(base, { bonded = amount, account = who, bond = Timelock.bonds[who] }, withDust(outbox))
   end
   if msg["X-Request-Id"] then
     -- Pay and request in one message: credit the payer, then request for it
@@ -782,12 +849,12 @@ H["Credit-Notice"] = function(base, msg, from, now)
     local ok, out = pcall(json.decode, res.results.output.data or "")
     out = ok and type(out) == "table" and out or {}
     out.credited, out.account, out.balance = amount, payer, int(Timelock.balances[payer], 0)
-    return reply(base, out, res.results.outbox)
+    return reply(base, out, withDust(res.results.outbox or {}))
   end
   add(Timelock.balances, who, amount)
   -- No RNG-Funded notice: `who` may be a wallet (replies go only to
   -- processes), and the balance is in the published state.
-  return reply(base, { credited = amount, account = who, balance = Timelock.balances[who] })
+  return reply(base, { credited = amount, account = who, balance = Timelock.balances[who] }, withDust({}))
 end
 
 H["Withdraw"] = function(base, msg, from)
@@ -859,6 +926,9 @@ H["Subscribe"] = function(base, msg, from, now)
   if Timelock.params.h == "" then return fail(base, "Not-Configured", from) end
   if Timelock.paused then return fail(base, "Paused", from) end
   if #activeValidators() < int(Timelock.params.minCommits, 2) then return fail(base, "Too-Few-Validators", from) end
+  local live = 0
+  for _, sub in pairs(Timelock.subscriptions) do if sub.subscriber == from then live = live + 1 end end
+  if live >= MAX_SUBSCRIPTIONS then return fail(base, "Too-Many-Subscriptions", from) end
   local batchRounds = int(Timelock.params.subscriptionRounds, 1000)
   local rounds = int(msg.Rounds, batchRounds)
   if rounds < 1 or rounds > 31536000 then return fail(base, "Bad-Rounds", from) end
@@ -1109,6 +1179,18 @@ H["Pause"] = function(base, msg, from)
   return reply(base, { paused = true, obligations = roundObligations(from) })
 end
 
+--- Anyone: evict a validator that registered IDLE_EVICT_MS ago and never sent
+--- Ready (it holds a registry seat and does no work). Its bond goes back.
+H["Evict-Idle"] = function(base, msg, from, now)
+  local a = msg.Validator or ""
+  local v = Timelock.validators[a]
+  if not v then return fail(base, "Unknown validator") end
+  if v.readyAt ~= nil then return fail(base, "Has-Been-Ready") end
+  if now - int(v.joinedAt, now) < IDLE_EVICT_MS then return fail(base, "Too-Early") end
+  local refund = evict(a, "RNG bond refund: evicted, never ready")
+  return reply(base, { evicted = a }, { ["rng-evicted-refund"] = refund })
+end
+
 ---------------------------------------------------------------------------
 -- Governance: the DAO (after Gov.Handover) or the deployer (before it)
 ---------------------------------------------------------------------------
@@ -1146,7 +1228,8 @@ local function badParams(p)
      or p.revealWindowMs < 10000 or p.revealWindowMs > 600000
      or p.commitWindowMs < 500 or p.commitWindowMs > 10000
      or p.abandonAfterMs < p.revealWindowMs
-     or p.slash < 1 or p.slash > p.stake or p.stake > 10000000
+     -- A fault takes at most a tenth of the stake: no setting turns slashing into confiscation.
+     or p.slash < 1 or p.slash * 10 > p.stake or p.stake > 10000000
      or p.rejoinBaseMs < p.revealWindowMs or p.rejoinCapMs < p.rejoinBaseMs or p.rejoinCapMs > 30 * DAY_MS
      or p.minCommits < 2 or p.minCommits > p.maxActive or p.maxActive > 128
      or p.maxValidators < p.maxActive or p.maxValidators > 1024
@@ -1157,10 +1240,82 @@ local function badParams(p)
      or p.fairWindowMs < 1
 end
 
+--- Queued governance: Set-Successor, Move-Reserve, Treasury-Spend,
+--- Fund-Reserve and the timelocked part of a Configure. Each waits
+--- GOV_DELAY_MS[kind]; anyone applies it once due, until GOV_EXPIRE_MS after.
+local function queuedSuccessor(pid)
+  for _, e in pairs(Timelock.gov.queue) do if e.kind == "Set-Successor" and e.successor == pid then return true end end
+  return false
+end
+
+--- Acks count only for the successor or one still queued to become it.
+local function forgetAcks()
+  for pid in pairs(Timelock.successorAcks) do
+    if pid ~= Timelock.successor and not queuedSuccessor(pid) then Timelock.successorAcks[pid] = nil end
+  end
+end
+
+--- The treasury outflow window: spends and reserve funding queued in it total
+--- at most 10 % of the treasury at its start.
+local function spendWindow(now)
+  local g = Timelock.gov
+  local w = g.window
+  if type(w) ~= "table" or now >= int(w.start, 0) + SPEND_WINDOW_MS then
+    w = { start = now, base = int(Timelock.treasuryAtoms, 0), used = 0 }
+    g.window = w
+  end
+  return w
+end
+
+--- Out of the queue unapplied (cancelled, superseded, expired, refused): a
+--- spend gives its share of the window back, a successor its ack.
+local function drop(e)
+  local g = Timelock.gov
+  g.queue[tostring(e.id)] = nil
+  local w = g.window
+  if e.spend and type(w) == "table" and int(e.windowStart, -1) == int(w.start, -2) then
+    w.used = math.max(0, int(w.used, 0) - int(e.quantity, 0))
+  end
+  forgetAcks()
+end
+
+local function pruneExpired(now)
+  local gone = {}
+  for _, e in pairs(Timelock.gov.queue) do if now > int(e.at, 0) + GOV_EXPIRE_MS then gone[#gone + 1] = e end end
+  for _, e in ipairs(gone) do drop(e) end
+end
+
+local function enqueue(kind, entry, now)
+  pruneExpired(now)
+  local g = Timelock.gov
+  local id = int(g.nextId, 1)
+  g.nextId = id + 1
+  entry.id, entry.kind, entry.queuedAt, entry.at = id, kind, now, now + GOV_DELAY_MS[kind]
+  g.queue[tostring(id)] = entry
+  return entry
+end
+
+--- Take `atoms` of the window's cap: the window, or nil past the cap.
+local function reserveSpend(atoms, now)
+  pruneExpired(now)
+  local w = spendWindow(now)
+  if (int(w.used, 0) + atoms) * 10 > int(w.base, 0) then return nil end
+  w.used = int(w.used, 0) + atoms
+  return w
+end
+
+local function isGuardian(from, now)
+  local guardian = Timelock.guardian or ""
+  return guardian ~= "" and from == guardian and now < int(Timelock.guardianUntil, 0)
+end
+
 --- Checked whole before any of it applies. A new T comes with h = g^(2^T)
 --- and hProof, checked as a crack of g. The first Configure that names the
 --- token is genesis: token, unit, self and predecessor are fixed from then on.
-H["Gov.Configure"] = function(base, msg, from)
+--- After genesis a change to stake, slash, commitWindowMs or revealWindowMs
+--- (what a bond is exposed to) is queued for GOV_DELAY_MS.Configure; the
+--- rest applies at once.
+H["Gov.Configure"] = function(base, msg, from, now)
   if not govOnly(msg, from) then return fail(base, "Not authorised") end
   local arg = govArgs(msg)
   local genesis = Timelock.token == ""
@@ -1181,6 +1336,16 @@ H["Gov.Configure"] = function(base, msg, from)
     end
   end
   if badParams(p) then return fail(base, "Bad-Parameter") end
+  local delayed = nil
+  if not genesis then
+    for k in pairs(TIMELOCKED_PARAMS) do
+      if p[k] ~= Timelock.params[k] then
+        delayed = delayed or {}
+        delayed[k], p[k] = p[k], Timelock.params[k]
+      end
+    end
+    if delayed and badParams(p) then return fail(base, "Bad-Parameter") end
+  end
   local h, hProof = arg("h"), arg("hProof")
   if p.T ~= Timelock.params.T or h ~= nil or hProof ~= nil then
     if not belowN(h) or not belowN(hProof)
@@ -1207,66 +1372,78 @@ H["Gov.Configure"] = function(base, msg, from)
     end
   end
   Timelock.params = p
-  return reply(base, { ok = true }, outbox)
+  local queued = delayed and enqueue("Configure", { params = delayed }, now) or nil
+  return reply(base, { ok = true, queued = queued }, outbox)
 end
 
---- One way: the DAO governs from here, and the deployer path is gone.
+--- One way: the DAO governs from here, and the deployer path is gone. Refused
+--- while anything is queued: nothing the deployer queued lands under the DAO.
 H["Gov.Handover"] = function(base, msg, from, now)
   if not isDeployer(msg) then return fail(base, "Not authorised") end
   local arg = govArgs(msg)
   local governor, guardian = arg("governor"), arg("guardian") or ""
-  if not isAoAddress(governor) then return fail(base, "Bad-Governor") end
+  if not isAoAddress(governor) or governor == Owner or governor == Timelock.self or governor == Timelock.token then
+    return fail(base, "Bad-Governor")
+  end
   if guardian ~= "" and not isAoAddress(guardian) then return fail(base, "Bad-Guardian") end
+  pruneExpired(now)
+  if next(Timelock.gov.queue) ~= nil then return fail(base, "Queue-Not-Empty") end
   Timelock.governor, Timelock.guardian = governor, guardian
   Timelock.guardianUntil = guardian ~= "" and now + GUARDIAN_MS or 0
   return reply(base, { governor = governor, guardian = guardian, guardianUntil = Timelock.guardianUntil })
 end
 
-local function queue(base, kind, entry, now)
-  local g = Timelock.gov
-  local id = int(g.nextId, 1)
-  g.nextId = id + 1
-  entry.id, entry.kind, entry.queuedAt, entry.at = id, kind, now, now + GOV_DELAY_MS[kind]
-  g.queue[tostring(id)] = entry
-  return reply(base, { queued = entry })
-end
-
 --- The beacon that replaces this one ("" clears it). Validator devices move
---- there once it has acknowledged this beacon as its predecessor.
+--- there once it has acknowledged this beacon as its predecessor. The newest
+--- Set-Successor supersedes any still queued.
 H["Gov.Set-Successor"] = function(base, msg, from, now)
   if not govOnly(msg, from) then return fail(base, "Not authorised") end
   local id = govArgs(msg)("successor")
   if id ~= "" and not isAoAddress(id) then return fail(base, "Bad-Successor") end
-  return queue(base, "Set-Successor", { successor = id }, now)
+  local older = {}
+  for _, e in pairs(Timelock.gov.queue) do if e.kind == "Set-Successor" then older[#older + 1] = e end end
+  for _, e in ipairs(older) do drop(e) end
+  return reply(base, { queued = enqueue("Set-Successor", { successor = id }, now) })
 end
 
---- The unspent Foundation reserve, to the successor as its reserve (X-Foundation).
+--- The unspent Foundation reserve, to the named successor as its reserve
+--- (X-Foundation). The successor is fixed at queue time: it must be the
+--- successor or queued to become it, and at apply it must be the successor
+--- and have acked since it was named.
 H["Gov.Move-Reserve"] = function(base, msg, from, now)
   if not govOnly(msg, from) then return fail(base, "Not authorised") end
-  return queue(base, "Move-Reserve", {}, now)
+  local to = govArgs(msg)("successor")
+  if not isAoAddress(to) or (to ~= Timelock.successor and not queuedSuccessor(to)) then return fail(base, "Bad-Successor") end
+  return reply(base, { queued = enqueue("Move-Reserve", { successor = to }, now) })
 end
 
-local function treasuryCapOk(atoms) return atoms * 10 <= int(Timelock.treasuryAtoms, 0) end
-
---- At most a tenth of the Treasury per action, and only after 48 h.
+--- Out of the treasury, after the delay, within the window's cap. Never to the
+--- DAO, this beacon or the token (atoms there are stranded or recycled).
 H["Gov.Treasury-Spend"] = function(base, msg, from, now)
   if not govOnly(msg, from) then return fail(base, "Not authorised") end
   local arg = govArgs(msg)
   local to, atoms = arg("recipient"), int(arg("quantity"), nil)
-  if not isAoAddress(to) then return fail(base, "Bad-Recipient") end
+  if not isAoAddress(to) or to == Timelock.governor or to == Timelock.self or to == Timelock.token then
+    return fail(base, "Bad-Recipient")
+  end
   if not atoms or atoms <= 0 then return fail(base, "Bad-Quantity") end
-  if not treasuryCapOk(atoms) then return fail(base, "Over-Treasury-Cap") end
-  return queue(base, "Treasury-Spend", { recipient = to, quantity = string.format("%d", atoms) }, now)
+  local w = reserveSpend(atoms, now)
+  if not w then return fail(base, "Over-Treasury-Cap") end
+  return reply(base, { queued = enqueue("Treasury-Spend",
+    { recipient = to, quantity = string.format("%d", atoms), spend = true, windowStart = w.start }, now) })
 end
 
-H["Gov.Fund-Reserve"] = function(base, msg, from)
+--- Treasury into the heartbeat reserve: the same delay and cap as a spend
+--- (the reserve can leave whole with Move-Reserve).
+H["Gov.Fund-Reserve"] = function(base, msg, from, now)
   if not govOnly(msg, from) then return fail(base, "Not authorised") end
   local atoms = int(govArgs(msg)("quantity"), nil)
   if not atoms or atoms <= 0 then return fail(base, "Bad-Quantity") end
   if atoms > int(Timelock.treasuryAtoms, 0) then return fail(base, "Insufficient-Treasury") end
-  Timelock.treasuryAtoms = int(Timelock.treasuryAtoms, 0) - atoms
-  Timelock.foundationReserveAtoms = int(Timelock.foundationReserveAtoms, 0) + atoms
-  return reply(base, { reserveAtoms = tostring(Timelock.foundationReserveAtoms), treasuryAtoms = tostring(Timelock.treasuryAtoms) })
+  local w = reserveSpend(atoms, now)
+  if not w then return fail(base, "Over-Treasury-Cap") end
+  return reply(base, { queued = enqueue("Fund-Reserve",
+    { quantity = string.format("%d", atoms), spend = true, windowStart = w.start }, now) })
 end
 
 --- Not while it has a commit in flight. The bond always goes back in full:
@@ -1287,9 +1464,7 @@ end
 --- The brake: no heartbeat, no new requests or subscriptions. The guardian
 --- may pull it until guardianUntil; only governance releases it.
 H["Gov.Pause"] = function(base, msg, from, now)
-  local guardian = Timelock.guardian or ""
-  local byGuardian = guardian ~= "" and from == guardian and now < int(Timelock.guardianUntil, 0)
-  if not byGuardian and not govOnly(msg, from) then return fail(base, "Not authorised") end
+  if not isGuardian(from, now) and not govOnly(msg, from) then return fail(base, "Not authorised") end
   if not Timelock.paused then
     Timelock.paused, Timelock.pausedHeartbeat = true, int(Timelock.params.heartbeat, 1)
     Timelock.params.heartbeat = 0
@@ -1311,29 +1486,39 @@ H["Gov.Clear-Guardian"] = function(base, msg, from)
   return reply(base, { guardian = "" })
 end
 
-H["Gov.Cancel"] = function(base, msg, from)
-  if not govOnly(msg, from) then return fail(base, "Not authorised") end
-  local id = tostring(int(govArgs(msg)("govId"), -1))
-  if not Timelock.gov.queue[id] then return fail(base, "Unknown-Gov-Id") end
-  Timelock.gov.queue[id] = nil
-  return reply(base, { cancelled = int(id, 0) })
+--- Governance, or the guardian until guardianUntil: drop a queued action.
+H["Gov.Cancel"] = function(base, msg, from, now)
+  local byGuardian = isGuardian(from, now)
+  if not byGuardian and not govOnly(msg, from) then return fail(base, "Not authorised") end
+  local e = Timelock.gov.queue[tostring(int(govArgs(msg)("govId"), -1))]
+  if not e then return fail(base, "Unknown-Gov-Id") end
+  drop(e)
+  return reply(base, { cancelled = e.id, by = byGuardian and "guardian" or "governance" })
 end
 
---- Anyone: runs a queued action once its delay has passed. A refused apply
---- (no acked successor, over the Treasury cap) stays queued.
+--- Anyone: runs a queued action once its delay has passed. One that can never
+--- apply (expired, over the treasury, its successor replaced, bad parameters)
+--- is dropped; one that may yet (successor not applied or not acked) stays.
 H["Gov.Apply"] = function(base, msg, from, now)
   local id = tostring(int(govArgs(msg)("govId"), -1))
   local e = Timelock.gov.queue[id]
   if not e then return fail(base, "Unknown-Gov-Id") end
   if now < int(e.at, 0) then return fail(base, "Too-Early") end
+  if now > int(e.at, 0) + GOV_EXPIRE_MS then drop(e); return fail(base, "Expired") end
   local out, outbox = { applied = e.id, kind = e.kind }, {}
   if e.kind == "Set-Successor" then
-    Timelock.successor = e.successor
+    Timelock.gov.queue[id] = nil
+    Timelock.successor, Timelock.successorSince = e.successor, int(e.queuedAt, 0)
+    forgetAcks()
     out.successor = e.successor
   elseif e.kind == "Move-Reserve" then
-    local to = Timelock.successor or ""
-    if not isAoAddress(to) then return fail(base, "No-Successor") end
-    if not Timelock.successorAcks[to] then return fail(base, "Successor-Not-Acked") end
+    local to = e.successor
+    if Timelock.successor ~= to then
+      if queuedSuccessor(to) then return fail(base, "No-Successor") end
+      drop(e)
+      return fail(base, "Successor-Changed")
+    end
+    if int(Timelock.successorAcks[to], -1) < int(Timelock.successorSince, 0) then return fail(base, "Successor-Not-Acked") end
     local atoms = int(Timelock.foundationReserveAtoms, 0)
     if atoms <= 0 then return fail(base, "Nothing-To-Move") end
     Timelock.foundationReserveAtoms = 0
@@ -1341,25 +1526,39 @@ H["Gov.Apply"] = function(base, msg, from, now)
     t["X-Foundation"] = "true"
     outbox["rng-reserve-move"] = t
     out.movedAtoms, out.to = tostring(atoms), to
-  elseif e.kind == "Treasury-Spend" then
+  elseif e.kind == "Treasury-Spend" or e.kind == "Fund-Reserve" then
     local atoms = int(e.quantity, 0)
-    if not treasuryCapOk(atoms) then return fail(base, "Over-Treasury-Cap") end
+    if atoms > int(Timelock.treasuryAtoms, 0) then drop(e); return fail(base, "Insufficient-Treasury") end
     Timelock.treasuryAtoms = int(Timelock.treasuryAtoms, 0) - atoms
-    outbox["rng-treasury-spend"] = transferAtoms(e.recipient, atoms, "RNG DAO Treasury spend")
-    out.spentAtoms, out.recipient = tostring(atoms), e.recipient
+    if e.kind == "Treasury-Spend" then
+      outbox["rng-treasury-spend"] = transferAtoms(e.recipient, atoms, "RNG DAO Treasury spend")
+      out.spentAtoms, out.recipient = tostring(atoms), e.recipient
+    else
+      Timelock.foundationReserveAtoms = int(Timelock.foundationReserveAtoms, 0) + atoms
+      out.reserveAtoms, out.treasuryAtoms = tostring(Timelock.foundationReserveAtoms), tostring(Timelock.treasuryAtoms)
+    end
+  elseif e.kind == "Configure" then
+    local p = {}
+    for k, v in pairs(Timelock.params) do p[k] = v end
+    local bad = false
+    for k, v in pairs(e.params or {}) do
+      if not TIMELOCKED_PARAMS[k] or int(v, nil) == nil then bad = true else p[k] = int(v, nil) end
+    end
+    if bad or badParams(p) then drop(e); return fail(base, "Bad-Parameter") end
+    Timelock.params = p
+    out.params = e.params
   end
   Timelock.gov.queue[id] = nil
   return reply(base, out, outbox)
 end
 
 --- From the successor (or one queued to become it), attested: it names this
---- beacon as its predecessor. Move-Reserve needs it.
-H["Successor-Ack"] = function(base, msg, from)
+--- beacon as its predecessor. Move-Reserve needs it, received since the
+--- successor was named.
+H["Successor-Ack"] = function(base, msg, from, now)
   if not FromProcess or not from then return fail(base, "Process-Required") end
-  local known = from == Timelock.successor
-  for _, e in pairs(Timelock.gov.queue) do if e.kind == "Set-Successor" and e.successor == from then known = true end end
-  if not known then return fail(base, "Not-A-Successor") end
-  Timelock.successorAcks[from] = true
+  if from ~= Timelock.successor and not queuedSuccessor(from) then return fail(base, "Not-A-Successor") end
+  Timelock.successorAcks[from] = now
   return reply(base, { acked = from })
 end
 
@@ -1395,11 +1594,14 @@ local ENVELOPE = {
 --- from-process) come only from the body the node verified; a `Tags` table
 --- adds tags but never replaces the body or an envelope field.
 local function caseInsensitive(raw)
-  local t = {}
-  for k, v in pairs(raw) do if k ~= "Tags" then t[k] = v end end
+  local t, named = {}, {}
+  for k, v in pairs(raw) do if k ~= "Tags" then t[k] = v; named[tostring(k):lower()] = true end end
+  -- A tag never shadows a body field in another case: the node's body keys
+  -- are lowercase ("quantity"), and a "Quantity" tag would otherwise win.
   if type(raw.Tags) == "table" then
     for k, v in pairs(raw.Tags) do
-      if t[k] == nil and not ENVELOPE[tostring(k):lower()] then t[k] = v end
+      local key = tostring(k):lower()
+      if not named[key] and not ENVELOPE[key] then t[k] = v; named[key] = true end
     end
   end
   local lower = {}
@@ -1522,10 +1724,15 @@ local function info(now, healthNow)
       crackBounty = int(Timelock.params.crackBounty, 10) },
     self = Timelock.self,
     successor = Timelock.successor or "", predecessor = Timelock.predecessor or "",
-    successorAck = Timelock.successorAcks[Timelock.successor or ""] == true,
+    successorAck = (Timelock.successor or "") ~= ""
+      and int(Timelock.successorAcks[Timelock.successor], -1) >= int(Timelock.successorSince, 0),
     governor = Timelock.governor or "", guardian = Timelock.guardian or "",
     guardianUntil = int(Timelock.guardianUntil, 0), paused = Timelock.paused == true,
     govQueue = govQueue, transferSeq = int(Timelock.transferSeq, 0),
+    -- The treasury outflow cap: queued spends and reserve funding since `start`
+    -- (`used`) stay within a tenth of the treasury then (`base`), in atoms.
+    treasuryWindow = type(Timelock.gov.window) == "table" and { start = int(Timelock.gov.window.start, 0),
+      base = tostring(int(Timelock.gov.window.base, 0)), used = tostring(int(Timelock.gov.window.used, 0)) } or nil,
     -- What this beacon accepts beyond the per-step actions. `act': H["Act"].
     -- `ready': validators say Ready/Pause and every failed duty is slashed.
     -- `bond-join': a validator joins by bonding the stake (X-Bond). `gov': Gov.*.
@@ -1566,10 +1773,30 @@ function compute(base, req)
     local seq = Timelock.transferSeq
     local ok, out = pcall(function()
       advance(now)
-      return handler(base, msg, actor(msg, base), now)
+      local from = actor(msg, base)
+      -- The DAO executes a proposal once: a redelivered Gov.* with the same
+      -- X-Dao-Proposal from the governor does nothing.
+      local proposal = msg["X-Dao-Proposal"]
+      if proposal ~= nil and tostring(msg.Action):lower():sub(1, 4) == "gov." and isGovernor(from) then
+        local g = Timelock.gov
+        g.executed = type(g.executed) == "table" and g.executed or {}
+        local key = from .. "|" .. tostring(proposal)
+        if g.executed[key] then return reply(base, { duplicate = true, proposal = tostring(proposal) }) end
+        g.executed[key] = true
+      end
+      return handler(base, msg, from, now)
     end)
-    -- A handler that failed sends nothing, so it takes no sequence number.
-    if not ok then Timelock.transferSeq = seq end
+    if not ok then
+      -- A handler that failed sends nothing, so it takes no sequence number,
+      -- and leaves no half-applied state: where the published state is the
+      -- previous message's (lua@5.3a), it comes back from there. On
+      -- lua-patch@1.0 the checkpoint is older, so only transferSeq is restored.
+      Timelock.transferSeq = seq
+      if Lua53bPatchMode ~= true and type(base.timelockstate) == "string" then
+        restore(base, true)
+        Notices, GuardsChanged, SeenDirty = {}, false, {}
+      end
+    end
     result = ok and out or fail(base, tostring(out))
   end
   for k, v in pairs(Notices) do result.results.outbox[k] = v end

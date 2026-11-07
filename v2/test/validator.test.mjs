@@ -134,6 +134,15 @@ test('reveals from the stored secret when the beacon shows only a 16-hex prefix'
   assert.deepEqual(plan(info, ctx(dir)).actions, []);
 });
 
+test('reveals only once the beacon clock is past commitDeadline, whatever phase the node reports', () => {
+  const dir = tmp(), s = secretStore(dir), a = tl.newAlpha(), c = tl.commit(a);
+  s.save(3, c, a);
+  const info = baseInfo({ revealing: [{ round: 3, phase: 'reveal', commitDeadline: 105000, committed: { [ME]: c.slice(0, 16) }, revealed: [] }],
+    open: { round: 4, phase: 'commit', committed: { [ME]: 'x' }, active: [ME] } });
+  assert.deepEqual(plan(info, ctx(dir, { beaconNow: 104999 })).actions, []);
+  assert.deepEqual(kinds(plan(info, ctx(dir, { beaconNow: 105000 }))), ['Reveal']);
+});
+
 test('Act batches the commit and every reveal into one message', () => {
   const dir = tmp(), s = secretStore(dir);
   const secrets = [5, 6].map((r) => { const a = tl.newAlpha(), c = tl.commit(a); s.save(r, c, a); return { r, a, c }; });
@@ -292,6 +301,43 @@ test('rejoin after a fault needs the full stake back: hint, or top up when confi
   assert.deepEqual(node.transfers, [{ token: TOKEN, tags: { Recipient: BEACON, Quantity: String(1000 * UNIT), 'X-Bond': 'true' } }]);
 });
 
+test('auto top-up only on the configured beacon, its pinned token, and a bounded stake', async () => {
+  // A stake above 10^7 RNG (e.g. set by a hostile governance change): command logged, nothing sent.
+  let node = mockNode();
+  notReady(node, { bond: 24000, earnedAtoms: '0', faults: 1 });
+  node.infos[BEACON].params.stake = 10_000_001;
+  let lines = [];
+  let v = createValidator({ cfg: { beacon: BEACON, dataDir: tmp(), topUp: true }, me: ME, io: node.io, log: (l) => lines.push(l) });
+  await run(v, node, 3, 500);
+  assert.equal(node.transfers.length, 0);
+  assert.ok(lines.some((l) => /not topping up automatically \(stake 10000001/.test(l) && /run `bond 9976001`/.test(l)), lines.join('\n'));
+  // The beacon switches its token after the pin: no transfer to the new one.
+  node = mockNode();
+  notReady(node, { bond: 25000, earnedAtoms: '0', faults: 1 });
+  lines = [];
+  v = createValidator({ cfg: { beacon: BEACON, dataDir: tmp(), topUp: true }, me: ME, io: node.io, log: (l) => lines.push(l) });
+  await run(v, node, 1, 500);
+  assert.equal(v.state.token, TOKEN);
+  node.infos[BEACON].validators[0].bond = 24000;
+  node.infos[BEACON].token = 'ev'.padEnd(43, '0');
+  await run(v, node, 3, 500);
+  assert.equal(node.transfers.length, 0);
+  assert.ok(lines.some((l) => /token is not the pinned one/.test(l)));
+  // On a successor the validator reached by following: never automatic.
+  node = mockNode();
+  node.infos[NEXT] = baseInfo({ predecessor: BEACON });
+  const dir = tmp();
+  fs.writeFileSync(path.join(dir, 'beacon.json'), JSON.stringify({ configured: BEACON, beacon: NEXT, token: TOKEN }));
+  Object.assign(node.infos[NEXT].validators[0], { ready: false, bond: 24000, earnedAtoms: '0', faults: 1 });
+  node.infos[NEXT].open = { round: 7, phase: 'commit', committed: {}, active: [OTHER] };
+  lines = [];
+  v = createValidator({ cfg: { beacon: BEACON, dataDir: dir, topUp: true }, me: ME, io: node.io, log: (l) => lines.push(l) });
+  assert.equal(v.state.beacon, NEXT);
+  await run(v, node, 3, 500);
+  assert.equal(node.transfers.length, 0);
+  assert.ok(lines.some((l) => /not topping up automatically \(successor beacon\).*run `bond 1000`/.test(l)), lines.join('\n'));
+});
+
 test('exit: Exit, finish owed reveals, Finalize-Exit, then done', async () => {
   const node = mockNode();
   const dir = tmp(), s = secretStore(path.join(dir, 'secrets')), a = tl.newAlpha(), c = tl.commit(a);
@@ -326,7 +372,7 @@ test('follows a successor only when it names this beacon back and the ack is in'
   await step(3);
   assert.ok(node.sentActions(BEACON).includes('Pause'));
   assert.equal(v.state.beacon, NEXT);
-  assert.deepEqual(JSON.parse(fs.readFileSync(path.join(dir, 'beacon.json'), 'utf8')), { configured: BEACON, beacon: NEXT });
+  assert.deepEqual(JSON.parse(fs.readFileSync(path.join(dir, 'beacon.json'), 'utf8')), { configured: BEACON, beacon: NEXT, token: TOKEN });
   // A restart stays on the successor.
   assert.equal(createValidator({ cfg: { beacon: BEACON, dataDir: dir }, me: ME, io: node.io }).state.beacon, NEXT);
 });

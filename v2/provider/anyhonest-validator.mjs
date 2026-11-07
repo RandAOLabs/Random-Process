@@ -28,6 +28,9 @@ import { pathToFileURL } from 'node:url';
 import * as tl from './anyhonest.mjs';
 
 const isPid = (s) => typeof s === 'string' && /^[A-Za-z0-9_-]{43}$/.test(s);
+/** The most RNG an automatic top-up will ever cover: a beacon (or a hostile
+ *  successor) asking for a larger stake gets a logged command instead. */
+export const MAX_TOP_UP_STAKE = 10_000_000;
 const num = (v, d = 0) => (Number.isFinite(Number(v)) && v !== null && v !== '' ? Number(v) : d);
 const truthy = (v) => !(v === undefined || v === null || v === false || v === 0 || v === '0' || v === '');
 const list = (v) => (Array.isArray(v) ? v : []);
@@ -207,6 +210,8 @@ export function plan(info, ctx) {
   for (const x of rounds) {
     const shown = obj(x.committed)[me], r = num(x.round);
     if (x.phase !== 'reveal' || typeof shown !== 'string' || list(x.revealed).includes(me) || !D('Reveal', r, 3000)) continue;
+    // The phase is the node's word; the beacon clock must agree commits closed.
+    if (beaconNow < num(x.commitDeadline)) continue;
     const alpha = secrets.secretFor(r, shown);
     if (alpha) actions.push({ kind: 'Reveal', round: r, data: { round: r, alpha } });
     else ctx.log?.(`round ${r}: no secret on disk for our commit; cannot reveal`);
@@ -264,9 +269,13 @@ export function createValidator({ cfg, me, io, log = () => {} }) {
   const followFile = path.join(dir, 'beacon.json');
   const flag = (f) => fs.existsSync(path.join(dir, f));
   let beacon = cfg.beacon;
+  // The token is pinned from the ORIGINAL configured beacon: a successor
+  // naming another token is never paid automatically.
+  let pinnedToken = null;
   try {
     const f = JSON.parse(fs.readFileSync(followFile, 'utf8'));
     if (f.configured === cfg.beacon && isPid(f.beacon)) beacon = f.beacon;
+    if (f.configured === cfg.beacon && isPid(f.token)) pinnedToken = f.token;
   } catch { /* none yet */ }
   const st = {
     me, sent: new Map(), clock: new Clock(), health: new Health(),
@@ -274,6 +283,7 @@ export function createValidator({ cfg, me, io, log = () => {} }) {
     registry: { at: -Infinity, entry: null }, successor: { at: -Infinity, id: null },
     lastProbe: -Infinity, lastTopUp: -Infinity, wasExiting: false, done: false, status: { address: me },
     get beacon() { return beacon; },
+    get token() { return pinnedToken; },
   };
 
   async function send(action, data, keys, now) {
@@ -290,6 +300,7 @@ export function createValidator({ cfg, me, io, log = () => {} }) {
     const atSlot = num(await io.readAtSlot(beacon));
     const info = await io.readInfo(beacon);
     const now = io.now();
+    if (!pinnedToken && beacon === cfg.beacon && isPid(info.token)) pinnedToken = info.token;
     st.clock.observe(now, info.at);
     st.health.observe(atSlot, now);
     const beaconNow = st.clock.beaconNow(now);
@@ -332,7 +343,15 @@ export function createValidator({ cfg, me, io, log = () => {} }) {
     // validator wallet only when configured to; otherwise say what to run.
     if (waiting && shortfall > 0) {
       // Unpublished earnings: Ready may still be refilled by the beacon, so no top-up.
-      if (cfg.topUp && mine.earnedAtoms !== undefined && isPid(info.token) && now - st.lastTopUp > 60_000) {
+      // Never automatically on a successor, to another token, or past the stake bound.
+      const autoTopUp = beacon === cfg.beacon && isPid(info.token) && info.token === pinnedToken
+        && stake <= MAX_TOP_UP_STAKE;
+      if (cfg.topUp && !autoTopUp && now - st.lastTopUp > 60_000) {
+        st.lastTopUp = now;
+        log(`not topping up automatically (${beacon !== cfg.beacon ? 'successor beacon'
+          : stake > MAX_TOP_UP_STAKE ? `stake ${stake} > ${MAX_TOP_UP_STAKE}` : 'token is not the pinned one'}): `
+          + `bond ${bond} + earnings ${earned} < stake ${stake}: run \`bond ${shortfall}\` to rejoin`);
+      } else if (cfg.topUp && mine.earnedAtoms !== undefined && now - st.lastTopUp > 60_000) {
         st.lastTopUp = now;
         log(`topping up bond by ${shortfall} RNG`);
         try { await io.transfer(info.token, bondTags(beacon, shortfall, unit)); } catch (e) { log(`top-up: ${e.message}`); }
@@ -349,7 +368,7 @@ export function createValidator({ cfg, me, io, log = () => {} }) {
     if (moving && obligations(info, me).length === 0) {
       const next = st.successor.id;
       log(`following successor ${next}; bond again there (\`bond\`), and \`exit\` here with --beacon ${beacon}`);
-      fs.writeFileSync(`${followFile}.tmp`, JSON.stringify({ configured: cfg.beacon, beacon: next }));
+      fs.writeFileSync(`${followFile}.tmp`, JSON.stringify({ configured: cfg.beacon, beacon: next, token: pinnedToken }));
       fs.renameSync(`${followFile}.tmp`, followFile);
       beacon = next;
       st.sent.clear(); st.successor = { at: -Infinity, id: null }; st.registry = { at: -Infinity, entry: null };

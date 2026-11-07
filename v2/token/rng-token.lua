@@ -568,6 +568,36 @@ H["Transfer"] = function(base, msg)
                        TransferSequence = flow and asString(flow.sequence) or nil }, outbox)
 end
 
+--- A message must be signed for THIS token: a Transfer signed for another
+--- token (an old one, a test one) is refused, not replayed.
+-- BEGIN target door (game/kernel/door.lua; copies checked by target-door.test.mjs)
+function TargetRefusal(msg, req)
+  local c = type(msg) == "table" and (msg.commitments or msg.Commitments) or nil
+  if type(c) ~= "table" or next(c) == nil then return nil end
+  local algs = { ["rsa-pss-sha512"] = true, ["rsa-pss-sha256"] = true }
+  local signatures, ids = {}, {}
+  for id, s in pairs(c) do
+    if type(s) == "table" and s.committer and algs[s.type or s.alg] then
+      signatures[#signatures + 1] = s
+      ids[#ids + 1] = id
+    end
+  end
+  if #signatures == 0 then return "Refused: not signed" end
+  local self = type(req) == "table" and req.process or nil
+  if type(self) ~= "string" or #self ~= 43 then return "Refused: this process id is unknown" end
+  if #signatures == 1 and ids[1] == self then return nil end
+  if msg.target ~= self then return "Refused: not signed for this process" end
+  for _, s in ipairs(signatures) do
+    local bound = false
+    for _, key in pairs(type(s.committed) == "table" and s.committed or {}) do
+      if key == "target" then bound = true end
+    end
+    if not bound then return "Refused: the signature does not commit target" end
+  end
+  return nil
+end
+-- END target door
+
 local ENVELOPE = {
   target = true, id = true, owner = true, signature = true, anchor = true,
   commitments = true, from = true, type = true, variant = true,
@@ -575,9 +605,21 @@ local ENVELOPE = {
   epoch = true, accept = true, scheduler = true, subject = true,
   ["from-process"] = true, ["data-protocol"] = true, ["content-type"] = true,
   ["accept-bundle"] = true, ["random-seed"] = true, ["hashpath"] = true,
+  fromprocess = true, tags = true,
 }
 
-local function caseInsensitive(t)
+--- The message as handlers see it (the beacon's rule, anyhonest.lua). Envelope
+--- fields (commitments, from-process) come only from the body the node
+--- verified; a `Tags` table adds tags but never replaces the body or an
+--- envelope field, so it cannot forge a signer or a process payer.
+local function caseInsensitive(raw)
+  local t = {}
+  for k, v in pairs(raw) do if k ~= "Tags" then t[k] = v end end
+  if type(raw.Tags) == "table" then
+    for k, v in pairs(raw.Tags) do
+      if t[k] == nil and not ENVELOPE[tostring(k):lower()] then t[k] = v end
+    end
+  end
   local lower = {}
   for k, v in pairs(t) do
     local key = tostring(k):lower()
@@ -618,12 +660,16 @@ function compute(base, req, opts)
   local beforeTransferSeq = int(TransferSeq, 0)
   local beforeStreamRevision = int(TransferStreamRevision, 0)
   local raw = (req and req.body) or {}
-  local msg = caseInsensitive(raw.Tags or raw)
+  raw = type(raw) == "table" and raw or {}
+  local msg = caseInsensitive(raw)
   local action = msg.Action or msg.action or "none"
   local handler = resolveHandler(action)
+  local refused = TargetRefusal(raw, req)
   local result
   if problem then
     result = fail(base, problem)
+  elseif refused then
+    result = fail(base, refused)
   elseif not handler then
     result = fail(base, "unknown action '" .. tostring(action) .. "'")
   else

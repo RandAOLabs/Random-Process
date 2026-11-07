@@ -1,6 +1,10 @@
 {
   "title": "Treasury spend",
-  "body": "Queues Gov.Treasury-Spend for 48 hours. At most 10% of the treasury per action. Quantity is in atoms (10^6 per RNG).",
+  "body": "Queues Gov.Treasury-Spend for 10 days. Spends and Fund-Reserve together are capped at 10% of the treasury per 30-day window. Never to the DAO, the beacon or the token. Quantity is in atoms (10^6 per RNG).",
   "execProcess": "$BEACON",
-  "execTags": { "Action": "Gov.Treasury-Spend", "Recipient": "$RECIPIENT", "Quantity": "$QUANTITY" }
+  "execTags": {
+    "Action": "Gov.Treasury-Spend",
+    "Recipient": "$RECIPIENT",
+    "Quantity": "$QUANTITY"
+  }
 }
